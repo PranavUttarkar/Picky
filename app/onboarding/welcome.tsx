@@ -19,21 +19,26 @@ export default function Welcome() {
     setLoading(true);
     const password = "picky-tamu"; // dev password to avoid email confirmation
     // 1) Try sign-in
-    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+    const { data: signInData, error: signInError } =
+      await supabase.auth.signInWithPassword({ email, password });
     if (!signInError && signInData.session) {
       setLoading(false);
       router.replace("/onboarding/interests");
       return;
     }
     // 2) If sign-in failed, try to sign up (no email confirm if disabled in project settings)
-    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({ email, password });
+    const { data: signUpData, error: signUpError } = await supabase.auth.signUp(
+      { email, password }
+    );
     if (!signUpError && signUpData?.session) {
       setLoading(false);
       router.replace("/onboarding/interests");
       return;
     }
     // 3) If user exists or confirmation required, try sign-in again; otherwise show helpful message
-    const { data: si2, error: si2Err } = await supabase.auth.signInWithPassword({ email, password });
+    const { data: si2, error: si2Err } = await supabase.auth.signInWithPassword(
+      { email, password }
+    );
     setLoading(false);
     if (!si2Err && si2.session) {
       router.replace("/onboarding/interests");
@@ -99,7 +104,9 @@ export default function Welcome() {
           alignItems: "center",
         }}
       >
-        <Text style={{ color: "#000", fontWeight: "700" }}>{loading ? "Signing in…" : "Continue with TAMU email"}</Text>
+        <Text style={{ color: "#000", fontWeight: "700" }}>
+          {loading ? "Signing in…" : "Continue with TAMU email"}
+        </Text>
       </Pressable>
       <Pressable
         onPress={() => router.replace("/onboarding/interests")}
