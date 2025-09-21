@@ -1,0 +1,2 @@
+-- Optional: view to compute event match score per user (placeholder)
+-- In app we compute match% on client for now.

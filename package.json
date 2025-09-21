@@ -1,0 +1,41 @@
+{
+  "name": "picky",
+  "version": "0.1.0",
+  "private": true,
+  "main": "expo-router/entry",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "web": "expo start --web",
+    "lint": "echo 'add eslint later'",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@react-native-async-storage/async-storage": "1.23.1",
+    "@supabase/supabase-js": "^2.45.1",
+    "dayjs": "^1.11.13",
+    "expo": "~52.0.0",
+    "expo-asset": "~11.0.5",
+    "expo-calendar": "~14.0.6",
+    "expo-constants": "~17.0.8",
+    "expo-font": "~13.0.4",
+    "expo-linking": "~7.0.5",
+    "expo-notifications": "~0.29.14",
+    "expo-router": "~4.0.21",
+    "expo-secure-store": "~14.0.1",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "react-native": "0.76.9",
+    "react-native-gesture-handler": "~2.20.2",
+    "react-native-safe-area-context": "4.12.0",
+    "react-native-screens": "~4.4.0",
+    "react-native-url-polyfill": "^2.0.0",
+    "react-native-web": "~0.19.13"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.5",
+    "@types/react": "18.3.8",
+    "typescript": "5.6.3"
+  }
+}
