@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { View, Text, TextInput, Pressable } from "react-native";
-import { Link, router } from "expo-router";
+import { router } from "expo-router";
 import { supabase } from "@/services/supabase";
 import { useThemeColors } from "@/theme/ThemeProvider";
 
@@ -17,13 +17,33 @@ export default function Welcome() {
       return;
     }
     setLoading(true);
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: "picky://(tabs)/home" },
-    });
+    const password = "picky-tamu"; // dev password to avoid email confirmation
+    // 1) Try sign-in
+    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+    if (!signInError && signInData.session) {
+      setLoading(false);
+      router.replace("/onboarding/interests");
+      return;
+    }
+    // 2) If sign-in failed, try to sign up (no email confirm if disabled in project settings)
+    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({ email, password });
+    if (!signUpError && signUpData?.session) {
+      setLoading(false);
+      router.replace("/onboarding/interests");
+      return;
+    }
+    // 3) If user exists or confirmation required, try sign-in again; otherwise show helpful message
+    const { data: si2, error: si2Err } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
-    if (error) setError(error.message);
-    else setError("Check your TAMU email for the magic link.");
+    if (!si2Err && si2.session) {
+      router.replace("/onboarding/interests");
+    } else {
+      setError(
+        signUpError?.message ||
+          signInError?.message ||
+          "Sign-in failed. If email confirmation is enabled in Supabase Auth settings, please disable confirmations for dev, or use an existing account."
+      );
+    }
   };
 
   return (
@@ -79,9 +99,7 @@ export default function Welcome() {
           alignItems: "center",
         }}
       >
-        <Text style={{ color: "#000", fontWeight: "700" }}>
-          {loading ? "Sending…" : "Sign in with TAMU email"}
-        </Text>
+        <Text style={{ color: "#000", fontWeight: "700" }}>{loading ? "Signing in…" : "Continue with TAMU email"}</Text>
       </Pressable>
       <Pressable
         onPress={() => router.replace("/onboarding/interests")}
