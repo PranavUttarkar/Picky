@@ -380,7 +380,7 @@ export default function Home() {
   const Container: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     scheme === 'light' ? (
       <LinearGradient
-        colors={["#e9fdf5", "#f9fafb"]}
+        colors={['#e9fdf5', '#f9fafb']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={{ flex: 1 }}
@@ -685,7 +685,7 @@ export default function Home() {
                     </Pressable>
                   );
                 })}
-                {(activeTags.length || query.length) ? (
+                {activeTags.length || query.length ? (
                   <Pressable
                     onPress={() => {
                       setActiveTags([]);
@@ -872,7 +872,7 @@ export default function Home() {
             </View>
           </Pressable>
         )}
-  />
+      />
 
       {/* Event Details Modal */}
       <Modal

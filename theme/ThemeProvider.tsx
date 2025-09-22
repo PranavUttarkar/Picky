@@ -1,28 +1,35 @@
-import React, { PropsWithChildren, createContext, useContext, useEffect, useMemo, useState } from "react";
-import { useColorScheme } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { SafeAreaProvider } from "react-native-safe-area-context";
+import React, {
+  PropsWithChildren,
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
+import { useColorScheme } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 export const Colors = {
   light: {
-    background: "#f9fafb",
-    card: "#ffffff",
-    text: "#111827",
-    muted: "#6b7280",
-    primary: "#10b981",
-    accent: "#f59e0b",
+    background: '#f9fafb',
+    card: '#ffffff',
+    text: '#111827',
+    muted: '#6b7280',
+    primary: '#10b981',
+    accent: '#f59e0b',
   },
   dark: {
-    background: "#0b1220",
-    card: "#111827",
-    text: "#f9fafb",
-    muted: "#9ca3af",
-    primary: "#22d3ee",
-    accent: "#f59e0b",
+    background: '#0b1220',
+    card: '#111827',
+    text: '#f9fafb',
+    muted: '#9ca3af',
+    primary: '#22d3ee',
+    accent: '#f59e0b',
   },
 };
 
-type Scheme = "light" | "dark";
+type Scheme = 'light' | 'dark';
 
 type ThemeContextValue = {
   scheme: Scheme;
@@ -31,21 +38,21 @@ type ThemeContextValue = {
   colors: typeof Colors.light;
 };
 
-const THEME_KEY = "picky.theme";
+const THEME_KEY = 'picky.theme';
 
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 
 export function ThemeProvider({ children }: PropsWithChildren) {
   // Prefer user-selected theme; fallback to system if none stored
-  const systemScheme = useColorScheme() ?? "light";
-  const [scheme, setSchemeState] = useState<Scheme>(systemScheme === "dark" ? "dark" : "light");
+  const systemScheme = useColorScheme() ?? 'light';
+  const [scheme, setSchemeState] = useState<Scheme>(systemScheme === 'dark' ? 'dark' : 'light');
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
     (async () => {
       try {
         const stored = await AsyncStorage.getItem(THEME_KEY);
-        if (stored === "light" || stored === "dark") {
+        if (stored === 'light' || stored === 'dark') {
           setSchemeState(stored);
         }
       } finally {
@@ -61,13 +68,13 @@ export function ThemeProvider({ children }: PropsWithChildren) {
     } catch {}
   };
 
-  const toggleScheme = () => setScheme(scheme === "light" ? "dark" : "light");
+  const toggleScheme = () => setScheme(scheme === 'light' ? 'dark' : 'light');
 
-  const colors = useMemo(() => (scheme === "dark" ? Colors.dark : Colors.light), [scheme]);
+  const colors = useMemo(() => (scheme === 'dark' ? Colors.dark : Colors.light), [scheme]);
 
   const value = useMemo<ThemeContextValue>(
     () => ({ scheme, setScheme, toggleScheme, colors }),
-    [scheme, colors]
+    [scheme, colors],
   );
 
   // Render ASAP to avoid layout shift; consumers can read colors immediately once ready
@@ -80,7 +87,7 @@ export function ThemeProvider({ children }: PropsWithChildren) {
 
 export const useTheme = () => {
   const ctx = useContext(ThemeContext);
-  if (!ctx) throw new Error("useTheme must be used within ThemeProvider");
+  if (!ctx) throw new Error('useTheme must be used within ThemeProvider');
   return ctx;
 };
 

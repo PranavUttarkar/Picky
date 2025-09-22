@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
-import { View, Text, FlatList, Pressable } from "react-native";
-import { useTheme, useThemeColors } from "@/theme/ThemeProvider";
-import { LinearGradient } from "expo-linear-gradient";
-import { supabase } from "@/services/supabase";
-import { router } from "expo-router";
+import { useEffect, useState } from 'react';
+import { View, Text, FlatList, Pressable } from 'react-native';
+import { useTheme, useThemeColors } from '@/theme/ThemeProvider';
+import { LinearGradient } from 'expo-linear-gradient';
+import { supabase } from '@/services/supabase';
+import { router } from 'expo-router';
 
 export default function Groups() {
   const c = useThemeColors();
@@ -13,20 +13,20 @@ export default function Groups() {
     (async () => {
       const user = (await supabase.auth.getUser()).data.user;
       if (!user) {
-        router.replace("/onboarding/welcome");
+        router.replace('/onboarding/welcome');
         return;
       }
       const { data } = await supabase
-        .from("group_members")
-        .select("group:groups(id,name)")
-        .eq("user_id", user.id);
+        .from('group_members')
+        .select('group:groups(id,name)')
+        .eq('user_id', user.id);
       setGroups((data ?? []).map((r: any) => r.group));
     })();
   }, []);
   const Container: React.FC<{ children: React.ReactNode }> = ({ children }) =>
-    scheme === "light" ? (
+    scheme === 'light' ? (
       <LinearGradient
-        colors={["#e9fdf5", "#f9fafb"]}
+        colors={['#e9fdf5', '#f9fafb']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={{ flex: 1 }}
@@ -52,9 +52,7 @@ export default function Groups() {
               marginBottom: 8,
             }}
           >
-            <Text style={{ color: c.text, fontWeight: "800" }}>
-              {item.name}
-            </Text>
+            <Text style={{ color: c.text, fontWeight: '800' }}>{item.name}</Text>
           </Pressable>
         )}
       />

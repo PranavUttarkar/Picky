@@ -1,7 +1,7 @@
-import { Stack } from "expo-router";
-import { useColorScheme } from "react-native";
-import { ThemeProvider } from "@/theme/ThemeProvider";
-import { useFonts, Pacifico_400Regular } from "@expo-google-fonts/pacifico";
+import { Stack } from 'expo-router';
+import { useColorScheme } from 'react-native';
+import { ThemeProvider } from '@/theme/ThemeProvider';
+import { useFonts, Pacifico_400Regular } from '@expo-google-fonts/pacifico';
 
 export default function RootLayout() {
   const scheme = useColorScheme();

@@ -27,7 +27,7 @@ export default function Saved() {
   const Container: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     scheme === 'light' ? (
       <LinearGradient
-        colors={["#e9fdf5", "#f9fafb"]}
+        colors={['#e9fdf5', '#f9fafb']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={{ flex: 1 }}
