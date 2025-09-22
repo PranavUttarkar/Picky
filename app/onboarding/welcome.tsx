@@ -2,6 +2,7 @@ import { useState } from "react";
 import { View, Text, TextInput, Pressable } from "react-native";
 import { router } from "expo-router";
 import { supabase } from "@/services/supabase";
+import { ensureProfile } from "@/services/profile";
 import { useThemeColors } from "@/theme/ThemeProvider";
 
 export default function Welcome() {
@@ -22,6 +23,7 @@ export default function Welcome() {
     const { data: signInData, error: signInError } =
       await supabase.auth.signInWithPassword({ email, password });
     if (!signInError && signInData.session) {
+      await ensureProfile();
       setLoading(false);
       router.replace("/onboarding/interests");
       return;
@@ -31,6 +33,7 @@ export default function Welcome() {
       { email, password }
     );
     if (!signUpError && signUpData?.session) {
+      await ensureProfile();
       setLoading(false);
       router.replace("/onboarding/interests");
       return;
@@ -41,6 +44,7 @@ export default function Welcome() {
     );
     setLoading(false);
     if (!si2Err && si2.session) {
+      await ensureProfile();
       router.replace("/onboarding/interests");
     } else {
       setError(
