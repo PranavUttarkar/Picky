@@ -5,54 +5,88 @@ import { supabase } from "@/services/supabase";
 import { ensureProfile } from "@/services/profile";
 import { useThemeColors } from "@/theme/ThemeProvider";
 
+type Mode = "signIn" | "signUp";
+
 export default function Welcome() {
   const c = useThemeColors();
+  const [mode, setMode] = useState<Mode>("signUp");
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
 
-  const signIn = async () => {
+  const onSubmit = async () => {
     setError(null);
-    if (!email.endsWith("@tamu.edu")) {
-      setError("Please use your TAMU email (@tamu.edu)");
+    setInfo(null);
+    const trimmedEmail = email.trim().toLowerCase();
+    // Allow any email domain
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters");
+      return;
+    }
+    if (mode === "signUp" && password !== confirm) {
+      setError("Passwords do not match");
       return;
     }
     setLoading(true);
-    const password = "picky-tamu"; // dev password to avoid email confirmation
-    // 1) Try sign-in
-    const { data: signInData, error: signInError } =
-      await supabase.auth.signInWithPassword({ email, password });
-    if (!signInError && signInData.session) {
-      await ensureProfile();
+
+    try {
+      if (mode === "signIn") {
+        const { data, error: err } = await supabase.auth.signInWithPassword({
+          email: trimmedEmail,
+          password,
+        });
+        if (err) throw err;
+        if (data.session) {
+          await ensureProfile();
+          router.replace("/onboarding/interests");
+        } else {
+          // Rare: no session; show fallback message
+          setInfo("Signed in. If you aren't redirected, please try again.");
+        }
+      } else {
+        const { data, error: err } = await supabase.auth.signUp({
+          email: trimmedEmail,
+          password,
+        });
+        if (err) {
+          // Common Supabase message when account exists
+          if (err.message?.toLowerCase().includes("already registered")) {
+            setError(
+              "An account with this email already exists. Try signing in."
+            );
+          } else {
+            setError(err.message);
+          }
+        } else if (data.session) {
+          // Email confirmations disabled -> session immediately available
+          await ensureProfile();
+          router.replace("/onboarding/interests");
+        } else {
+          // Email confirmations enabled
+          setInfo(
+            "We sent a confirmation email. Please verify your address, then come back to sign in."
+          );
+        }
+      }
+    } catch (e: any) {
+      setError(e?.message || "Something went wrong. Please try again.");
+    } finally {
       setLoading(false);
-      router.replace("/onboarding/interests");
-      return;
     }
-    // 2) If sign-in failed, try to sign up (no email confirm if disabled in project settings)
-    const { data: signUpData, error: signUpError } = await supabase.auth.signUp(
-      { email, password }
-    );
-    if (!signUpError && signUpData?.session) {
-      await ensureProfile();
-      setLoading(false);
-      router.replace("/onboarding/interests");
-      return;
-    }
-    // 3) If user exists or confirmation required, try sign-in again; otherwise show helpful message
-    const { data: si2, error: si2Err } = await supabase.auth.signInWithPassword(
-      { email, password }
-    );
-    setLoading(false);
-    if (!si2Err && si2.session) {
-      await ensureProfile();
-      router.replace("/onboarding/interests");
-    } else {
-      setError(
-        signUpError?.message ||
-          signInError?.message ||
-          "Sign-in failed. If email confirmation is enabled in Supabase Auth settings, please disable confirmations for dev, or use an existing account."
-      );
-    }
+  };
+
+  const startSignUp = () => {
+    setMode("signUp");
+    setError(null);
+    setInfo(null);
+  };
+  const startSignIn = () => {
+    setMode("signIn");
+    setError(null);
+    setInfo(null);
   };
 
   return (
@@ -78,11 +112,46 @@ export default function Welcome() {
       <Text style={{ color: c.muted, fontSize: 16, marginBottom: 24 }}>
         Discover events. Decide together.
       </Text>
+
+      {/* Simple actions: Create account / Sign in */}
+      {/* <View style={{ width: "100%", marginBottom: 8 }}>
+        <View style={{ flexDirection: "row", gap: 8, marginBottom: 8 }}>
+          <Pressable
+            onPress={startSignUp}
+            style={{
+              flex: 1,
+              backgroundColor: mode === "signUp" ? c.primary : c.card,
+              paddingVertical: 10,
+              borderRadius: 8,
+              alignItems: "center",
+            }}
+          >
+            <Text style={{ color: mode === "signUp" ? "#000" : c.text, fontWeight: "700" }}>
+              Create account
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={startSignIn}
+            style={{
+              flex: 1,
+              backgroundColor: mode === "signIn" ? c.primary : c.card,
+              paddingVertical: 10,
+              borderRadius: 8,
+              alignItems: "center",
+            }}
+          >
+            <Text style={{ color: mode === "signIn" ? "#000" : c.text, fontWeight: "700" }}>
+              Sign in
+            </Text>
+          </Pressable>
+        </View>
+      </View> */}
+
       <TextInput
         value={email}
         onChangeText={setEmail}
         autoCapitalize="none"
-        placeholder="yourname@tamu.edu"
+        placeholder="your@email.com"
         placeholderTextColor={c.muted}
         keyboardType="email-address"
         style={{
@@ -94,11 +163,46 @@ export default function Welcome() {
           marginBottom: 12,
         }}
       />
+      <TextInput
+        value={password}
+        onChangeText={setPassword}
+        secureTextEntry
+        placeholder={mode === "signUp" ? "Create a password" : "Password"}
+        placeholderTextColor={c.muted}
+        style={{
+          width: "100%",
+          padding: 14,
+          backgroundColor: c.card,
+          color: c.text,
+          borderRadius: 12,
+          marginBottom: 12,
+        }}
+      />
+      {mode === "signUp" && (
+        <TextInput
+          value={confirm}
+          onChangeText={setConfirm}
+          secureTextEntry
+          placeholder="Confirm password"
+          placeholderTextColor={c.muted}
+          style={{
+            width: "100%",
+            padding: 14,
+            backgroundColor: c.card,
+            color: c.text,
+            borderRadius: 12,
+            marginBottom: 12,
+          }}
+        />
+      )}
+
       {error && (
         <Text style={{ color: c.accent, marginBottom: 8 }}>{error}</Text>
       )}
+      {info && <Text style={{ color: c.muted, marginBottom: 8 }}>{info}</Text>}
+
       <Pressable
-        onPress={signIn}
+        onPress={onSubmit}
         disabled={loading}
         style={{
           width: "100%",
@@ -109,14 +213,26 @@ export default function Welcome() {
         }}
       >
         <Text style={{ color: "#000", fontWeight: "700" }}>
-          {loading ? "Signing in…" : "Continue with TAMU email"}
+          {loading
+            ? mode === "signIn"
+              ? "Signing in…"
+              : "Signing up…"
+            : mode === "signIn"
+            ? "Sign In"
+            : "Create account"}
         </Text>
       </Pressable>
+
+      {/* Helper link to switch if needed */}
       <Pressable
-        onPress={() => router.replace("/onboarding/interests")}
+        onPress={mode === "signIn" ? startSignUp : startSignIn}
         style={{ marginTop: 16 }}
       >
-        <Text style={{ color: c.muted }}>Skip for now</Text>
+        <Text style={{ color: c.muted }}>
+          {mode === "signIn"
+            ? "Don't have an account? Create one"
+            : "Already have an account? Sign in"}
+        </Text>
       </Pressable>
     </View>
   );

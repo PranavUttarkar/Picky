@@ -5,6 +5,7 @@ import dayjs from "dayjs";
 import * as Calendar from "expo-calendar";
 import { useThemeColors } from "@/theme/ThemeProvider";
 import { supabase } from "@/services/supabase";
+import { router } from "expo-router";
 
 export default function EventDetails() {
   const c = useThemeColors();
@@ -14,6 +15,13 @@ export default function EventDetails() {
   useEffect(() => {
     const eid = parseInt(String(id), 10);
     if (!eid) return;
+    (async () => {
+      const user = (await supabase.auth.getUser()).data.user;
+      if (!user) {
+        router.replace("/onboarding/welcome");
+        return;
+      }
+    })();
     supabase
       .from("events")
       .select("*")

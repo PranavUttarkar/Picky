@@ -10,7 +10,10 @@ export default function Groups() {
   useEffect(() => {
     (async () => {
       const user = (await supabase.auth.getUser()).data.user;
-      if (!user) return;
+      if (!user) {
+        router.replace("/onboarding/welcome");
+        return;
+      }
       const { data } = await supabase
         .from("group_members")
         .select("group:groups(id,name)")

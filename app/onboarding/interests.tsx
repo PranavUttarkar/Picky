@@ -31,7 +31,7 @@ export default function Interests() {
   };
 
   const save = async () => {
-    if (selected.length < 5) return;
+    if (selected.length < 2) return;
     setSaving(true);
     const user = (await supabase.auth.getUser()).data.user;
     if (user) {
@@ -56,7 +56,7 @@ export default function Interests() {
         Pick your interests
       </Text>
       <Text style={{ color: c.muted, marginBottom: 16 }}>
-        Choose at least 5 to personalize your feed.
+        Choose at least 2 to personalize your feed.
       </Text>
       <FlatList
         data={DEFAULTS}
@@ -88,10 +88,10 @@ export default function Interests() {
       />
       <Pressable
         onPress={save}
-        disabled={selected.length < 5 || saving}
+        disabled={selected.length < 2 || saving}
         style={{
           marginTop: 16,
-          backgroundColor: selected.length < 5 ? c.muted : c.primary,
+          backgroundColor: selected.length < 2 ? c.muted : c.primary,
           padding: 14,
           borderRadius: 12,
           alignItems: "center",

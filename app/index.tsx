@@ -23,6 +23,6 @@ export default function Index() {
   }, []);
 
   if (loading) return null;
-  if (!session) return <Redirect href="/onboarding/welcome" />;
+  if (!session) return <Redirect href="/(tabs)/home" />;
   return <Redirect href="/(tabs)/home" />;
 }

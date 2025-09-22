@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { View, Text, FlatList, Pressable } from "react-native";
 import { useThemeColors } from "@/theme/ThemeProvider";
 import { supabase } from "@/services/supabase";
+import { router } from "expo-router";
 
 type Event = {
   id: number;
@@ -16,7 +17,7 @@ export default function Saved() {
   useEffect(() => {
     (async () => {
       const user = (await supabase.auth.getUser()).data.user;
-      if (!user) return;
+      if (!user) return router.replace("/onboarding/welcome");
       const { data } = await supabase
         .from("saved_events")
         .select("event:events(id,title,date_time,location)")

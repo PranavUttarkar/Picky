@@ -1,9 +1,17 @@
 import { View, Text, Pressable } from "react-native";
 import { useThemeColors } from "@/theme/ThemeProvider";
 import { supabase } from "@/services/supabase";
+import { useEffect } from "react";
+import { router } from "expo-router";
 
 export default function Profile() {
   const c = useThemeColors();
+  useEffect(() => {
+    (async () => {
+      const user = (await supabase.auth.getUser()).data.user;
+      if (!user) router.replace("/onboarding/welcome");
+    })();
+  }, []);
   return (
     <View style={{ flex: 1, backgroundColor: c.background, padding: 16 }}>
       <Text
