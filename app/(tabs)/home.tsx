@@ -11,6 +11,7 @@ import {
   SafeAreaView,
   Alert,
   Linking,
+  Platform,
 } from 'react-native';
 import dayjs from 'dayjs';
 import { useTheme, useThemeColors } from '@/theme/ThemeProvider';
@@ -18,8 +19,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/services/supabase';
 import { router } from 'expo-router';
 import type { Event } from '@/types/models';
-
-// Event type shared from types/models
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 export default function Home() {
   const c = useThemeColors();
@@ -33,6 +34,10 @@ export default function Home() {
   const [activeTags, setActiveTags] = useState<string[]>([]);
   const [mode, setMode] = useState<'all' | 'personalized'>('all');
   const [isAdmin, setIsAdmin] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [page, setPage] = useState(0);
+  const [isFetching, setIsFetching] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
 
   // Modal state for event details
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
@@ -50,6 +55,8 @@ export default function Home() {
   const [fLocation, setFLocation] = useState('');
   const [fTagsCsv, setFTagsCsv] = useState('');
   const [fRsvp, setFRsvp] = useState('');
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
 
   // Generate a healthy set of dummy events (negative IDs) to fill the feed
   const makeDummyEvents = (): Event[] => {
@@ -126,32 +133,133 @@ export default function Home() {
         date_time: dt.toISOString(),
         location: cities[i % cities.length],
         tags: tagSets[i % tagSets.length],
-      };
+      } as unknown as Event;
     });
     return dummies;
   };
 
-  const loadEvents = async () => {
-    const { data } = await supabase
+  // Pagination + caching
+  const PAGE_SIZE = 10;
+  const CACHE_KEY = 'events_cache_v1';
+  const MIN_FEED = 12; // ensure at least this many items by adding placeholders
+
+  const saveCache = async (items: Event[]) => {
+    try {
+      const payload = { ts: Date.now(), items };
+      await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(payload));
+    } catch {}
+  };
+
+  const loadCache = async () => {
+    try {
+      const raw = await AsyncStorage.getItem(CACHE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed?.items)) {
+        setEvents(parsed.items as Event[]);
+      }
+    } catch {}
+  };
+
+  const fetchPage = async (pageIndex: number): Promise<Event[]> => {
+    const from = pageIndex * PAGE_SIZE;
+    const to = from + PAGE_SIZE - 1;
+    const { data, error } = await supabase
       .from('events')
-      .select('*')
+      .select('id,title,description,image_url,date_time,location,tags')
       .gte('date_time', new Date().toISOString())
-      .order('date_time', { ascending: true });
-    const real = (data ?? []) as Event[];
-    const MIN = 16;
-    if (real.length >= MIN) {
-      setEvents(real);
-    } else {
-      const dummies = makeDummyEvents();
-      const need = Math.max(0, MIN - real.length);
-      const toAdd = dummies.slice(0, need);
-      setEvents([...real, ...toAdd]);
+      .order('date_time', { ascending: true })
+      .range(from, to);
+    if (error) return [] as Event[];
+    return (data ?? []) as Event[];
+  };
+
+  const loadFirstPage = async () => {
+    setIsFetching(true);
+    try {
+      const first = await fetchPage(0);
+      const dummiesAll = makeDummyEvents();
+      if (first.length === 0) {
+        // No real upcoming events; show a healthy set of dummies to demo UX
+        const dummies = dummiesAll.slice(0, MIN_FEED);
+        setEvents(dummies);
+        setHasMore(false);
+      } else {
+        const hasMoreNow = first.length === PAGE_SIZE;
+        let initial: Event[] = first as Event[];
+        if (!hasMoreNow && first.length < MIN_FEED) {
+          const existingIds = new Set((first as any[]).map((e) => e.id));
+          const toAdd = dummiesAll
+            .filter((d) => !existingIds.has(d.id))
+            .slice(0, MIN_FEED - first.length);
+          initial = [...first, ...toAdd] as Event[];
+        }
+        setEvents(initial);
+        setHasMore(hasMoreNow);
+        await saveCache(first);
+      }
+      setPage(1);
+    } finally {
+      setIsFetching(false);
     }
   };
 
+  const loadNextPage = async () => {
+    if (isFetching || !hasMore) return;
+    setIsFetching(true);
+    try {
+      const next = await fetchPage(page);
+      if (next.length === 0) {
+        setHasMore(false);
+        // Top-up with placeholders if needed
+        setEvents((prev) => {
+          const merged = [...prev] as Event[];
+          const dummiesAll = makeDummyEvents();
+          const existingIds = new Set((merged as any[]).map((e) => e.id));
+          const needed = Math.max(0, MIN_FEED - merged.length);
+          const toAdd = dummiesAll.filter((d) => !existingIds.has(d.id)).slice(0, needed);
+          return [...merged, ...toAdd] as Event[];
+        });
+      } else {
+        setEvents((prev) => {
+          const mergedBase = [
+            ...prev.filter((e: any) => e.id < 0),
+            ...prev.filter((e: any) => e.id > 0),
+            ...next.filter((e: any) => e.id > 0),
+          ] as Event[];
+          let final = mergedBase;
+          if (next.length < PAGE_SIZE) {
+            const dummiesAll = makeDummyEvents();
+            const existingIds = new Set((final as any[]).map((e) => e.id));
+            const needed = Math.max(0, MIN_FEED - final.length);
+            const toAdd = dummiesAll.filter((d) => !existingIds.has(d.id)).slice(0, needed);
+            final = [...final, ...toAdd] as Event[];
+          }
+          // Save only real events to cache
+          saveCache(final.filter((e: any) => e.id > 0));
+          return final;
+        });
+        if (next.length < PAGE_SIZE) setHasMore(false);
+        setPage((p) => p + 1);
+      }
+    } finally {
+      setIsFetching(false);
+    }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    setPage(0);
+    setHasMore(true);
+    await loadFirstPage();
+    setRefreshing(false);
+  };
+
   useEffect(() => {
-    // Load events initially
-    loadEvents();
+    // Load cached first for instant paint, then fetch
+    loadCache().finally(() => {
+      loadFirstPage();
+    });
     // Load user-specific info
     (async () => {
       const user = (await supabase.auth.getUser()).data.user;
@@ -185,6 +293,7 @@ export default function Home() {
       }
     })();
   }, []);
+
   const requireAuth = async (): Promise<boolean> => {
     const user = (await supabase.auth.getUser()).data.user;
     if (!user) {
@@ -238,15 +347,15 @@ export default function Home() {
 
   // Build tag universe from currently loaded events
   const allTags: string[] = Array.from(
-    new Set(events.flatMap((e) => (e.tags ?? []).map((t) => t))),
+    new Set(events.flatMap((e: any) => (e.tags ?? []).map((t: string) => t))),
   ).sort((a, b) => a.localeCompare(b));
 
   // Derived filtered list based on text and tag filters
-  const filteredBase = events.filter((e) => {
+  const filteredBase = events.filter((e: any) => {
     // Tag match: all queryTags must be present (case-insensitive)
-    const lowerEventTags = (e.tags ?? []).map((t) => t.toLowerCase());
+    const lowerEventTags = (e.tags ?? []).map((t: string) => t.toLowerCase());
     if (queryTags.length) {
-      const et = (e.tags ?? []).map((t) => t.toLowerCase());
+      const et = (e.tags ?? []).map((t: string) => t.toLowerCase());
       for (const t of queryTags) if (!et.includes(t)) return false;
     }
     // Also apply active tag chip filters (AND logic)
@@ -263,7 +372,7 @@ export default function Home() {
   });
 
   // Apply mode-specific sorting/filtering
-  const filtered = [...filteredBase].sort((a, b) => {
+  const filtered = [...filteredBase].sort((a: any, b: any) => {
     if (mode === 'personalized') {
       return match(b.id, b.tags) - match(a.id, a.tags);
     }
@@ -326,7 +435,7 @@ export default function Home() {
       }
     }
     resetForm();
-    await loadEvents();
+    await onRefresh();
     Alert.alert('Success', editingId ? 'Event updated' : 'Event created');
   };
 
@@ -342,7 +451,7 @@ export default function Home() {
             Alert.alert('Delete failed', error.message);
             return;
           }
-          await loadEvents();
+          await onRefresh();
         },
       },
     ]);
@@ -391,12 +500,86 @@ export default function Home() {
       <View style={{ flex: 1, backgroundColor: c.background, padding: 12 }}>{children}</View>
     );
 
+  // Web-friendly date/time fallback
+  const DateTimeInputsWeb = () => (
+    <View style={{ flexDirection: 'row', gap: 8 }}>
+      <TextInput
+        value={dayjs(fDateTime).format('YYYY-MM-DD')}
+        onChangeText={(val) => {
+          const d = dayjs(val, 'YYYY-MM-DD');
+          if (d.isValid())
+            setFDateTime(
+              d
+                .hour(dayjs(fDateTime).hour())
+                .minute(dayjs(fDateTime).minute())
+                .second(0)
+                .millisecond(0)
+                .toISOString(),
+            );
+        }}
+        placeholder="YYYY-MM-DD"
+        style={{
+          flex: 1,
+          color: c.text,
+          backgroundColor: '#00000010',
+          padding: 10,
+          borderRadius: 8,
+        }}
+        inputMode="numeric"
+      />
+      <TextInput
+        value={dayjs(fDateTime).format('HH:mm')}
+        onChangeText={(val) => {
+          const [hh, mm] = val.split(':');
+          const h = Number(hh);
+          const m = Number(mm);
+          if (!Number.isNaN(h) && !Number.isNaN(m)) {
+            const merged = dayjs(fDateTime).hour(h).minute(m).second(0).millisecond(0);
+            setFDateTime(merged.toISOString());
+          }
+        }}
+        placeholder="HH:mm"
+        style={{
+          flex: 1,
+          color: c.text,
+          backgroundColor: '#00000010',
+          padding: 10,
+          borderRadius: 8,
+        }}
+        inputMode="numeric"
+      />
+    </View>
+  );
+
+  // Gradient bordered match badge
+  const MatchBadge: React.FC<{ value: number }> = ({ value }) => (
+    <LinearGradient
+      colors={['#34d399', '#3b82f6']}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={{ padding: 1.5, borderRadius: 999 }}
+    >
+      <View
+        style={{
+          backgroundColor: scheme === 'light' ? 'rgba(255,255,255,0.9)' : 'rgba(0,0,0,0.6)',
+          paddingHorizontal: 10,
+          paddingVertical: 4,
+          borderRadius: 999,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <Text style={{ color: c.text, fontWeight: '800' }}>Match {value}%</Text>
+      </View>
+    </LinearGradient>
+  );
+
   return (
     <Container>
       <FlatList
         ref={listRef}
         data={filtered}
-        keyExtractor={(e) => String(e.id)}
+        keyExtractor={(e: any) => String(e.id)}
         ListHeaderComponent={() => (
           <View style={{ paddingBottom: 12 }}>
             {/* Admin panel */}
@@ -459,19 +642,80 @@ export default function Home() {
                         borderRadius: 8,
                       }}
                     />
-                    <TextInput
-                      placeholder="Date/time ISO (e.g. 2025-09-22T18:00:00Z)"
-                      placeholderTextColor={c.muted}
-                      value={fDateTime}
-                      onChangeText={setFDateTime}
-                      style={{
-                        color: c.text,
-                        backgroundColor: '#00000010',
-                        padding: 10,
-                        borderRadius: 8,
-                      }}
-                      autoCapitalize="none"
-                    />
+                    {/* Date & Time pickers */}
+                    {Platform.OS === 'web' ? (
+                      <DateTimeInputsWeb />
+                    ) : (
+                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                        <Pressable
+                          onPress={() => setShowDatePicker(true)}
+                          style={{
+                            flex: 1,
+                            backgroundColor: '#00000010',
+                            padding: 10,
+                            borderRadius: 8,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                          accessibilityRole="button"
+                          accessibilityLabel="Select date"
+                        >
+                          <Text style={{ color: c.text, fontWeight: '700' }}>
+                            {dayjs(fDateTime).format('YYYY-MM-DD')}
+                          </Text>
+                        </Pressable>
+                        <Pressable
+                          onPress={() => setShowTimePicker(true)}
+                          style={{
+                            flex: 1,
+                            backgroundColor: '#00000010',
+                            padding: 10,
+                            borderRadius: 8,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                          accessibilityRole="button"
+                          accessibilityLabel="Select time"
+                        >
+                          <Text style={{ color: c.text, fontWeight: '700' }}>
+                            {dayjs(fDateTime).format('h:mm A')}
+                          </Text>
+                        </Pressable>
+                      </View>
+                    )}
+                    {showDatePicker ? (
+                      <DateTimePicker
+                        mode="date"
+                        value={new Date(fDateTime)}
+                        onChange={(evt, selectedDate) => {
+                          setShowDatePicker(false);
+                          if (!selectedDate) return;
+                          const current = dayjs(fDateTime);
+                          const merged = current
+                            .year(selectedDate.getFullYear())
+                            .month(selectedDate.getMonth())
+                            .date(selectedDate.getDate());
+                          setFDateTime(merged.toISOString());
+                        }}
+                      />
+                    ) : null}
+                    {showTimePicker ? (
+                      <DateTimePicker
+                        mode="time"
+                        value={new Date(fDateTime)}
+                        onChange={(evt, selectedTime) => {
+                          setShowTimePicker(false);
+                          if (!selectedTime) return;
+                          const current = dayjs(fDateTime);
+                          const merged = current
+                            .hour(selectedTime.getHours())
+                            .minute(selectedTime.getMinutes())
+                            .second(0)
+                            .millisecond(0);
+                          setFDateTime(merged.toISOString());
+                        }}
+                      />
+                    ) : null}
                     <TextInput
                       placeholder="Location"
                       placeholderTextColor={c.muted}
@@ -541,9 +785,9 @@ export default function Home() {
                     {/* Quick list to edit/delete */}
                     <View style={{ marginTop: 8, gap: 8 }}>
                       {events
-                        .filter((e) => e.id > 0)
+                        .filter((e: any) => e.id > 0)
                         .slice(0, 8)
-                        .map((e) => (
+                        .map((e: any) => (
                           <View
                             key={e.id}
                             style={{
@@ -654,6 +898,65 @@ export default function Home() {
               })}
             </View>
 
+            {/* Your interests (from onboarding) */}
+            {myTags.length ? (
+              <View
+                style={{
+                  backgroundColor: c.card,
+                  borderRadius: 12,
+                  padding: 12,
+                  marginBottom: 12,
+                  borderWidth: 1,
+                  borderColor: '#00000020',
+                }}
+              >
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    marginBottom: 8,
+                  }}
+                >
+                  <Text style={{ color: c.text, fontWeight: '800' }}>Your interests</Text>
+                  <Pressable
+                    onPress={() => router.push('/onboarding/interests')}
+                    style={{
+                      backgroundColor: '#00000020',
+                      paddingHorizontal: 10,
+                      paddingVertical: 6,
+                      borderRadius: 8,
+                    }}
+                  >
+                    <Text style={{ color: c.text }}>Edit</Text>
+                  </Pressable>
+                </View>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                  {myTags.map((t) => {
+                    const active = activeTags.includes(t);
+                    return (
+                      <Pressable
+                        key={t}
+                        onPress={() =>
+                          setActiveTags((prev) =>
+                            prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t],
+                          )
+                        }
+                        style={{
+                          backgroundColor: active ? c.primary : '#00000020',
+                          paddingHorizontal: 10,
+                          paddingVertical: 6,
+                          borderRadius: 999,
+                        }}
+                      >
+                        <Text style={{ color: active ? '#000' : c.text, fontSize: 12 }}>#{t}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+            ) : null}
+
             {/* Tag chips */}
             {allTags.length ? (
               <View
@@ -724,6 +1027,13 @@ export default function Home() {
           </View>
         )}
         contentContainerStyle={{ gap: 12, paddingBottom: 32 }}
+        refreshing={refreshing}
+        onRefresh={onRefresh}
+        onEndReachedThreshold={0.25}
+        onEndReached={loadNextPage}
+        initialNumToRender={8}
+        windowSize={10}
+        removeClippedSubviews
         ListEmptyComponent={
           <View style={{ paddingTop: 48, alignItems: 'center' }}>
             <Text style={{ color: c.muted, marginBottom: 8 }}>No events match your filters</Text>
@@ -770,7 +1080,7 @@ export default function Home() {
                   marginTop: 8,
                 }}
               >
-                {(item.tags ?? []).map((t) => (
+                {(item.tags ?? []).map((t: string) => (
                   <View
                     key={t}
                     style={{
@@ -792,9 +1102,7 @@ export default function Home() {
                   alignItems: 'center',
                 }}
               >
-                <Text style={{ color: c.text, fontWeight: '700' }}>
-                  Match {match(item.id, item.tags)}%
-                </Text>
+                <MatchBadge value={match(item.id, item.tags)} />
                 <View style={{ flexDirection: 'row', gap: 8 }}>
                   <Pressable
                     onPress={() => toggleSave(item.id)}
