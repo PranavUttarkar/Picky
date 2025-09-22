@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -30,6 +30,7 @@ type Event = {
 
 export default function Home() {
   const c = useThemeColors();
+  const listRef = useRef<FlatList<Event>>(null);
   const [events, setEvents] = useState<Event[]>([]);
   const [myTags, setMyTags] = useState<string[]>([]);
   const [scores, setScores] = useState<Record<number, number>>({});
@@ -44,7 +45,7 @@ export default function Home() {
   const [detailsOpen, setDetailsOpen] = useState(false);
 
   // Admin form state
-  const [adminOpen, setAdminOpen] = useState(true);
+  const [adminOpen, setAdminOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [fTitle, setFTitle] = useState("");
   const [fDesc, setFDesc] = useState("");
@@ -391,6 +392,21 @@ export default function Home() {
     setDetailsOpen(true);
   };
 
+  const prefillForEdit = (e: Event) => {
+    if (e.id <= 0) return;
+    setAdminOpen(true);
+    setEditingId(e.id);
+    setFTitle(e.title);
+    setFDesc(e.description ?? "");
+    setFImage(e.image_url ?? "");
+    setFDateTime(e.date_time);
+    setFLocation(e.location ?? "");
+    setFTagsCsv((e.tags ?? []).join(", "));
+    setFRsvp(e.rsvp_url ?? "");
+    // Scroll to top to reveal the admin panel
+    listRef.current?.scrollToOffset?.({ offset: 0, animated: true });
+  };
+
   return (
     <View style={{ flex: 1, backgroundColor: c.background, padding: 12 }}>
       {/* Admin panel */}
@@ -723,6 +739,7 @@ export default function Home() {
         )}
       </View>
       <FlatList
+        ref={listRef}
         data={filtered}
         keyExtractor={(e) => String(e.id)}
         contentContainerStyle={{ gap: 12, paddingBottom: 32 }}
@@ -857,6 +874,36 @@ export default function Home() {
                       </Text>
                     </View>
                   )}
+                  {isAdmin && item.id > 0 ? (
+                    <>
+                      <Pressable
+                        onPress={() => prefillForEdit(item)}
+                        style={{
+                          backgroundColor: "#00000030",
+                          paddingHorizontal: 12,
+                          paddingVertical: 8,
+                          borderRadius: 10,
+                        }}
+                      >
+                        <Text style={{ color: c.text, fontWeight: "700" }}>
+                          Edit
+                        </Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => deleteEvent(item.id)}
+                        style={{
+                          backgroundColor: "#ff444433",
+                          paddingHorizontal: 12,
+                          paddingVertical: 8,
+                          borderRadius: 10,
+                        }}
+                      >
+                        <Text style={{ color: "#ff5555", fontWeight: "700" }}>
+                          Delete
+                        </Text>
+                      </Pressable>
+                    </>
+                  ) : null}
                 </View>
               </View>
             </View>

@@ -32,7 +32,8 @@ export default function Saved() {
         data={items}
         keyExtractor={(e) => String(e.id)}
         renderItem={({ item }) => (
-          <View
+          <Pressable
+            onPress={() => router.push(`/events/${item.id}`)}
             style={{
               backgroundColor: c.card,
               padding: 12,
@@ -44,7 +45,7 @@ export default function Saved() {
               {item.title}
             </Text>
             <Text style={{ color: c.muted }}>{item.location}</Text>
-          </View>
+          </Pressable>
         )}
       />
     </View>

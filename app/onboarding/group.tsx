@@ -155,6 +155,21 @@ export default function OnboardingGroup() {
               {loading ? "Creating…" : "Create group"}
             </Text>
           </Pressable>
+          <Pressable
+            onPress={() => router.replace("/(tabs)/home")}
+            disabled={loading}
+            style={{
+              marginTop: 12,
+              backgroundColor: "#00000030",
+              padding: 14,
+              borderRadius: 12,
+              alignItems: "center",
+            }}
+          >
+            <Text style={{ color: c.text, fontWeight: "700" }}>
+              Skip for now
+            </Text>
+          </Pressable>
         </View>
       ) : (
         <View>
@@ -187,6 +202,21 @@ export default function OnboardingGroup() {
           >
             <Text style={{ color: "#000", fontWeight: "700" }}>
               {loading ? "Joining…" : "Join group"}
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={() => router.replace("/(tabs)/home")}
+            disabled={loading}
+            style={{
+              marginTop: 12,
+              backgroundColor: "#00000030",
+              padding: 14,
+              borderRadius: 12,
+              alignItems: "center",
+            }}
+          >
+            <Text style={{ color: c.text, fontWeight: "700" }}>
+              Skip for now
             </Text>
           </Pressable>
         </View>
