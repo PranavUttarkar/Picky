@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import { View, Text, FlatList, Pressable } from "react-native";
-import { useThemeColors } from "@/theme/ThemeProvider";
+import { useTheme, useThemeColors } from "@/theme/ThemeProvider";
+import { LinearGradient } from "expo-linear-gradient";
 import { supabase } from "@/services/supabase";
 import { router } from "expo-router";
 
 export default function Groups() {
   const c = useThemeColors();
+  const { scheme } = useTheme();
   const [groups, setGroups] = useState<any[]>([]);
   useEffect(() => {
     (async () => {
@@ -21,8 +23,22 @@ export default function Groups() {
       setGroups((data ?? []).map((r: any) => r.group));
     })();
   }, []);
+  const Container: React.FC<{ children: React.ReactNode }> = ({ children }) =>
+    scheme === "light" ? (
+      <LinearGradient
+        colors={["#e9fdf5", "#f9fafb"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={{ flex: 1 }}
+      >
+        <View style={{ flex: 1, padding: 16 }}>{children}</View>
+      </LinearGradient>
+    ) : (
+      <View style={{ flex: 1, backgroundColor: c.background, padding: 16 }}>{children}</View>
+    );
+
   return (
-    <View style={{ flex: 1, backgroundColor: c.background, padding: 16 }}>
+    <Container>
       <FlatList
         data={groups}
         keyExtractor={(g) => String(g.id)}
@@ -42,6 +58,6 @@ export default function Groups() {
           </Pressable>
         )}
       />
-    </View>
+    </Container>
   );
 }

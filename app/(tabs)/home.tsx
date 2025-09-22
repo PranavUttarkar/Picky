@@ -13,7 +13,8 @@ import {
   Linking,
 } from 'react-native';
 import dayjs from 'dayjs';
-import { useThemeColors } from '@/theme/ThemeProvider';
+import { useTheme, useThemeColors } from '@/theme/ThemeProvider';
+import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/services/supabase';
 import { router } from 'expo-router';
 import type { Event } from '@/types/models';
@@ -22,6 +23,7 @@ import type { Event } from '@/types/models';
 
 export default function Home() {
   const c = useThemeColors();
+  const { scheme } = useTheme();
   const listRef = useRef<FlatList<Event>>(null);
   const [events, setEvents] = useState<Event[]>([]);
   const [myTags, setMyTags] = useState<string[]>([]);
@@ -375,331 +377,352 @@ export default function Home() {
     listRef.current?.scrollToOffset?.({ offset: 0, animated: true });
   };
 
-  return (
-    <View style={{ flex: 1, backgroundColor: c.background, padding: 12 }}>
-      {/* Admin panel */}
-      {isAdmin ? (
-        <View
-          style={{
-            backgroundColor: c.card,
-            borderRadius: 12,
-            padding: 12,
-            marginBottom: 12,
-            borderWidth: 1,
-            borderColor: '#00000020',
-          }}
-        >
-          <Pressable onPress={() => setAdminOpen((v) => !v)}>
-            <Text style={{ color: c.text, fontWeight: '800', fontSize: 16 }}>
-              Admin: Manage Events {adminOpen ? '▲' : '▼'}
-            </Text>
-          </Pressable>
-          {adminOpen ? (
-            <View style={{ marginTop: 8, gap: 8 }}>
-              {editingId ? (
-                <Text style={{ color: c.muted }}>Editing event #{editingId}</Text>
-              ) : null}
-              <TextInput
-                placeholder="Title"
-                placeholderTextColor={c.muted}
-                value={fTitle}
-                onChangeText={setFTitle}
-                style={{
-                  color: c.text,
-                  backgroundColor: '#00000010',
-                  padding: 10,
-                  borderRadius: 8,
-                }}
-              />
-              <TextInput
-                placeholder="Description"
-                placeholderTextColor={c.muted}
-                value={fDesc}
-                onChangeText={setFDesc}
-                multiline
-                style={{
-                  color: c.text,
-                  backgroundColor: '#00000010',
-                  padding: 10,
-                  borderRadius: 8,
-                  minHeight: 60,
-                }}
-              />
-              <TextInput
-                placeholder="Image URL"
-                placeholderTextColor={c.muted}
-                value={fImage}
-                onChangeText={setFImage}
-                style={{
-                  color: c.text,
-                  backgroundColor: '#00000010',
-                  padding: 10,
-                  borderRadius: 8,
-                }}
-              />
-              <TextInput
-                placeholder="Date/time ISO (e.g. 2025-09-22T18:00:00Z)"
-                placeholderTextColor={c.muted}
-                value={fDateTime}
-                onChangeText={setFDateTime}
-                style={{
-                  color: c.text,
-                  backgroundColor: '#00000010',
-                  padding: 10,
-                  borderRadius: 8,
-                }}
-                autoCapitalize="none"
-              />
-              <TextInput
-                placeholder="Location"
-                placeholderTextColor={c.muted}
-                value={fLocation}
-                onChangeText={setFLocation}
-                style={{
-                  color: c.text,
-                  backgroundColor: '#00000010',
-                  padding: 10,
-                  borderRadius: 8,
-                }}
-              />
-              <TextInput
-                placeholder="Tags (comma-separated)"
-                placeholderTextColor={c.muted}
-                value={fTagsCsv}
-                onChangeText={setFTagsCsv}
-                style={{
-                  color: c.text,
-                  backgroundColor: '#00000010',
-                  padding: 10,
-                  borderRadius: 8,
-                }}
-                autoCapitalize="none"
-              />
-              <TextInput
-                placeholder="RSVP URL (optional)"
-                placeholderTextColor={c.muted}
-                value={fRsvp}
-                onChangeText={setFRsvp}
-                style={{
-                  color: c.text,
-                  backgroundColor: '#00000010',
-                  padding: 10,
-                  borderRadius: 8,
-                }}
-                autoCapitalize="none"
-              />
-              <View style={{ flexDirection: 'row', gap: 8 }}>
-                <Pressable
-                  onPress={upsertEvent}
-                  style={{
-                    backgroundColor: c.primary,
-                    paddingHorizontal: 12,
-                    paddingVertical: 10,
-                    borderRadius: 10,
-                  }}
-                >
-                  <Text style={{ color: '#000', fontWeight: '700' }}>
-                    {editingId ? 'Update Event' : 'Create Event'}
-                  </Text>
-                </Pressable>
-                {editingId ? (
-                  <Pressable
-                    onPress={resetForm}
-                    style={{
-                      backgroundColor: '#00000030',
-                      paddingHorizontal: 12,
-                      paddingVertical: 10,
-                      borderRadius: 10,
-                    }}
-                  >
-                    <Text style={{ color: c.text, fontWeight: '700' }}>Cancel</Text>
-                  </Pressable>
-                ) : null}
-              </View>
-              {/* Quick list to edit/delete */}
-              <View style={{ marginTop: 8, gap: 8 }}>
-                {events
-                  .filter((e) => e.id > 0)
-                  .slice(0, 8)
-                  .map((e) => (
-                    <View
-                      key={e.id}
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                      }}
-                    >
-                      <Text style={{ color: c.text }}>
-                        #{e.id} · {e.title}
-                      </Text>
-                      <View style={{ flexDirection: 'row', gap: 6 }}>
-                        <Pressable
-                          onPress={() => {
-                            setEditingId(e.id);
-                            setFTitle(e.title);
-                            setFDesc(e.description ?? '');
-                            setFImage(e.image_url ?? '');
-                            setFDateTime(e.date_time);
-                            setFLocation(e.location ?? '');
-                            setFTagsCsv((e.tags ?? []).join(', '));
-                            setFRsvp(e.rsvp_url ?? '');
-                          }}
-                          style={{
-                            backgroundColor: '#00000030',
-                            paddingHorizontal: 10,
-                            paddingVertical: 6,
-                            borderRadius: 8,
-                          }}
-                        >
-                          <Text style={{ color: c.text }}>Edit</Text>
-                        </Pressable>
-                        <Pressable
-                          onPress={() => deleteEvent(e.id)}
-                          style={{
-                            backgroundColor: '#ff444433',
-                            paddingHorizontal: 10,
-                            paddingVertical: 6,
-                            borderRadius: 8,
-                          }}
-                        >
-                          <Text style={{ color: '#ff5555' }}>Delete</Text>
-                        </Pressable>
-                      </View>
-                    </View>
-                  ))}
-              </View>
-            </View>
-          ) : null}
-        </View>
-      ) : null}
-      {/* Search input with hashtag support */}
-      <View
-        style={{
-          backgroundColor: c.card,
-          borderRadius: 12,
-          paddingHorizontal: 12,
-          paddingVertical: 8,
-          marginBottom: 12,
-          borderWidth: 1,
-          borderColor: '#00000020',
-        }}
+  const Container: React.FC<{ children: React.ReactNode }> = ({ children }) =>
+    scheme === 'light' ? (
+      <LinearGradient
+        colors={["#e9fdf5", "#f9fafb"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={{ flex: 1 }}
       >
-        <TextInput
-          placeholder="Search events or use #tags"
-          placeholderTextColor={c.muted}
-          value={query}
-          onChangeText={setQuery}
-          style={{ color: c.text, fontSize: 16 }}
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
-      </View>
-      {/* Mode toggle */}
-      <View
-        style={{
-          flexDirection: 'row',
-          gap: 6,
-          marginBottom: 12,
-          backgroundColor: c.card,
-          padding: 6,
-          borderRadius: 12,
-        }}
-      >
-        {[
-          { key: 'all', label: 'View All' },
-          { key: 'personalized', label: 'Personalized Feed' },
-        ].map((opt) => {
-          const active = mode === (opt.key as any);
-          return (
-            <Pressable
-              key={opt.key}
-              onPress={() => setMode(opt.key as any)}
-              style={{
-                backgroundColor: active ? c.primary : 'transparent',
-                paddingHorizontal: 12,
-                paddingVertical: 8,
-                borderRadius: 10,
-              }}
-            >
-              <Text style={{ color: active ? '#000' : c.text, fontWeight: '700' }}>
-                {opt.label}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
-      {/* Tag chips */}
-      {allTags.length ? (
-        <View
-          style={{
-            flexDirection: 'row',
-            flexWrap: 'wrap',
-            gap: 8,
-            marginBottom: 12,
-          }}
-        >
-          {allTags.map((t) => {
-            const active = activeTags.includes(t);
-            return (
-              <Pressable
-                key={t}
-                onPress={() =>
-                  setActiveTags((prev) =>
-                    prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t],
-                  )
-                }
-                style={{
-                  backgroundColor: active ? c.primary : '#00000020',
-                  paddingHorizontal: 10,
-                  paddingVertical: 6,
-                  borderRadius: 999,
-                }}
-              >
-                <Text style={{ color: active ? '#000' : c.text, fontSize: 12 }}>{t}</Text>
-              </Pressable>
-            );
-          })}
-          {activeTags.length || query.length ? (
-            <Pressable
-              onPress={() => {
-                setActiveTags([]);
-                setQuery('');
-              }}
-              style={{
-                backgroundColor: '#00000030',
-                paddingHorizontal: 10,
-                paddingVertical: 6,
-                borderRadius: 999,
-              }}
-            >
-              <Text style={{ color: c.text, fontSize: 12 }}>Clear filters</Text>
-            </Pressable>
-          ) : null}
-        </View>
-      ) : null}
+        <View style={{ flex: 1, padding: 12 }}>{children}</View>
+      </LinearGradient>
+    ) : (
+      <View style={{ flex: 1, backgroundColor: c.background, padding: 12 }}>{children}</View>
+    );
 
-      {/* Results info */}
-      <View
-        style={{
-          flexDirection: 'row',
-          justifyContent: 'space-between',
-          marginBottom: 8,
-        }}
-      >
-        <Text style={{ color: c.muted }}>
-          Showing {filtered.length} {filtered.length === 1 ? 'event' : 'events'}
-        </Text>
-        {mode === 'personalized' ? (
-          <Text style={{ color: c.muted }}>Sorted by match</Text>
-        ) : (
-          <Text style={{ color: c.muted }}>Soonest first</Text>
-        )}
-      </View>
+  return (
+    <Container>
       <FlatList
         ref={listRef}
         data={filtered}
         keyExtractor={(e) => String(e.id)}
+        ListHeaderComponent={() => (
+          <View style={{ paddingBottom: 12 }}>
+            {/* Admin panel */}
+            {isAdmin ? (
+              <View
+                style={{
+                  backgroundColor: c.card,
+                  borderRadius: 12,
+                  padding: 12,
+                  marginBottom: 12,
+                  borderWidth: 1,
+                  borderColor: '#00000020',
+                }}
+              >
+                <Pressable onPress={() => setAdminOpen((v) => !v)}>
+                  <Text style={{ color: c.text, fontWeight: '800', fontSize: 16 }}>
+                    Admin: Manage Events {adminOpen ? '▲' : '▼'}
+                  </Text>
+                </Pressable>
+                {adminOpen ? (
+                  <View style={{ marginTop: 8, gap: 8 }}>
+                    {editingId ? (
+                      <Text style={{ color: c.muted }}>Editing event #{editingId}</Text>
+                    ) : null}
+                    <TextInput
+                      placeholder="Title"
+                      placeholderTextColor={c.muted}
+                      value={fTitle}
+                      onChangeText={setFTitle}
+                      style={{
+                        color: c.text,
+                        backgroundColor: '#00000010',
+                        padding: 10,
+                        borderRadius: 8,
+                      }}
+                    />
+                    <TextInput
+                      placeholder="Description"
+                      placeholderTextColor={c.muted}
+                      value={fDesc}
+                      onChangeText={setFDesc}
+                      multiline
+                      style={{
+                        color: c.text,
+                        backgroundColor: '#00000010',
+                        padding: 10,
+                        borderRadius: 8,
+                        minHeight: 60,
+                      }}
+                    />
+                    <TextInput
+                      placeholder="Image URL"
+                      placeholderTextColor={c.muted}
+                      value={fImage}
+                      onChangeText={setFImage}
+                      style={{
+                        color: c.text,
+                        backgroundColor: '#00000010',
+                        padding: 10,
+                        borderRadius: 8,
+                      }}
+                    />
+                    <TextInput
+                      placeholder="Date/time ISO (e.g. 2025-09-22T18:00:00Z)"
+                      placeholderTextColor={c.muted}
+                      value={fDateTime}
+                      onChangeText={setFDateTime}
+                      style={{
+                        color: c.text,
+                        backgroundColor: '#00000010',
+                        padding: 10,
+                        borderRadius: 8,
+                      }}
+                      autoCapitalize="none"
+                    />
+                    <TextInput
+                      placeholder="Location"
+                      placeholderTextColor={c.muted}
+                      value={fLocation}
+                      onChangeText={setFLocation}
+                      style={{
+                        color: c.text,
+                        backgroundColor: '#00000010',
+                        padding: 10,
+                        borderRadius: 8,
+                      }}
+                    />
+                    <TextInput
+                      placeholder="Tags (comma-separated)"
+                      placeholderTextColor={c.muted}
+                      value={fTagsCsv}
+                      onChangeText={setFTagsCsv}
+                      style={{
+                        color: c.text,
+                        backgroundColor: '#00000010',
+                        padding: 10,
+                        borderRadius: 8,
+                      }}
+                      autoCapitalize="none"
+                    />
+                    <TextInput
+                      placeholder="RSVP URL (optional)"
+                      placeholderTextColor={c.muted}
+                      value={fRsvp}
+                      onChangeText={setFRsvp}
+                      style={{
+                        color: c.text,
+                        backgroundColor: '#00000010',
+                        padding: 10,
+                        borderRadius: 8,
+                      }}
+                      autoCapitalize="none"
+                    />
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                      <Pressable
+                        onPress={upsertEvent}
+                        style={{
+                          backgroundColor: c.primary,
+                          paddingHorizontal: 12,
+                          paddingVertical: 10,
+                          borderRadius: 10,
+                        }}
+                      >
+                        <Text style={{ color: '#000', fontWeight: '700' }}>
+                          {editingId ? 'Update Event' : 'Create Event'}
+                        </Text>
+                      </Pressable>
+                      {editingId ? (
+                        <Pressable
+                          onPress={resetForm}
+                          style={{
+                            backgroundColor: '#00000030',
+                            paddingHorizontal: 12,
+                            paddingVertical: 10,
+                            borderRadius: 10,
+                          }}
+                        >
+                          <Text style={{ color: c.text, fontWeight: '700' }}>Cancel</Text>
+                        </Pressable>
+                      ) : null}
+                    </View>
+                    {/* Quick list to edit/delete */}
+                    <View style={{ marginTop: 8, gap: 8 }}>
+                      {events
+                        .filter((e) => e.id > 0)
+                        .slice(0, 8)
+                        .map((e) => (
+                          <View
+                            key={e.id}
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                            }}
+                          >
+                            <Text style={{ color: c.text }}>
+                              #{e.id} · {e.title}
+                            </Text>
+                            <View style={{ flexDirection: 'row', gap: 6 }}>
+                              <Pressable
+                                onPress={() => {
+                                  setEditingId(e.id);
+                                  setFTitle(e.title);
+                                  setFDesc(e.description ?? '');
+                                  setFImage(e.image_url ?? '');
+                                  setFDateTime(e.date_time);
+                                  setFLocation(e.location ?? '');
+                                  setFTagsCsv((e.tags ?? []).join(', '));
+                                  setFRsvp(e.rsvp_url ?? '');
+                                }}
+                                style={{
+                                  backgroundColor: '#00000030',
+                                  paddingHorizontal: 10,
+                                  paddingVertical: 6,
+                                  borderRadius: 8,
+                                }}
+                              >
+                                <Text style={{ color: c.text }}>Edit</Text>
+                              </Pressable>
+                              <Pressable
+                                onPress={() => deleteEvent(e.id)}
+                                style={{
+                                  backgroundColor: '#ff444433',
+                                  paddingHorizontal: 10,
+                                  paddingVertical: 6,
+                                  borderRadius: 8,
+                                }}
+                              >
+                                <Text style={{ color: '#ff5555' }}>Delete</Text>
+                              </Pressable>
+                            </View>
+                          </View>
+                        ))}
+                    </View>
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
+
+            {/* Search input with hashtag support */}
+            <View
+              style={{
+                backgroundColor: c.card,
+                borderRadius: 12,
+                paddingHorizontal: 12,
+                paddingVertical: 8,
+                marginBottom: 12,
+                borderWidth: 1,
+                borderColor: '#00000020',
+              }}
+            >
+              <TextInput
+                placeholder="Search events or use #tags"
+                placeholderTextColor={c.muted}
+                value={query}
+                onChangeText={setQuery}
+                style={{ color: c.text, fontSize: 16 }}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+            </View>
+
+            {/* Mode toggle */}
+            <View
+              style={{
+                flexDirection: 'row',
+                gap: 6,
+                marginBottom: 12,
+                backgroundColor: c.card,
+                padding: 6,
+                borderRadius: 12,
+              }}
+            >
+              {[
+                { key: 'all', label: 'View All' },
+                { key: 'personalized', label: 'Personalized Feed' },
+              ].map((opt) => {
+                const active = mode === (opt.key as any);
+                return (
+                  <Pressable
+                    key={opt.key}
+                    onPress={() => setMode(opt.key as any)}
+                    style={{
+                      backgroundColor: active ? c.primary : 'transparent',
+                      paddingHorizontal: 12,
+                      paddingVertical: 8,
+                      borderRadius: 10,
+                    }}
+                  >
+                    <Text style={{ color: active ? '#000' : c.text, fontWeight: '700' }}>
+                      {opt.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            {/* Tag chips */}
+            {allTags.length ? (
+              <View
+                style={{
+                  flexDirection: 'row',
+                  flexWrap: 'wrap',
+                  gap: 8,
+                  marginBottom: 12,
+                }}
+              >
+                {allTags.map((t) => {
+                  const active = activeTags.includes(t);
+                  return (
+                    <Pressable
+                      key={t}
+                      onPress={() =>
+                        setActiveTags((prev) =>
+                          prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t],
+                        )
+                      }
+                      style={{
+                        backgroundColor: active ? c.primary : '#00000020',
+                        paddingHorizontal: 10,
+                        paddingVertical: 6,
+                        borderRadius: 999,
+                      }}
+                    >
+                      <Text style={{ color: active ? '#000' : c.text, fontSize: 12 }}>{t}</Text>
+                    </Pressable>
+                  );
+                })}
+                {(activeTags.length || query.length) ? (
+                  <Pressable
+                    onPress={() => {
+                      setActiveTags([]);
+                      setQuery('');
+                    }}
+                    style={{
+                      backgroundColor: '#00000030',
+                      paddingHorizontal: 10,
+                      paddingVertical: 6,
+                      borderRadius: 999,
+                    }}
+                  >
+                    <Text style={{ color: c.text, fontSize: 12 }}>Clear filters</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            ) : null}
+
+            {/* Results info */}
+            <View
+              style={{
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                marginBottom: 8,
+              }}
+            >
+              <Text style={{ color: c.muted }}>
+                Showing {filtered.length} {filtered.length === 1 ? 'event' : 'events'}
+              </Text>
+              {mode === 'personalized' ? (
+                <Text style={{ color: c.muted }}>Sorted by match</Text>
+              ) : (
+                <Text style={{ color: c.muted }}>Soonest first</Text>
+              )}
+            </View>
+          </View>
+        )}
         contentContainerStyle={{ gap: 12, paddingBottom: 32 }}
         ListEmptyComponent={
           <View style={{ paddingTop: 48, alignItems: 'center' }}>
@@ -849,7 +872,7 @@ export default function Home() {
             </View>
           </Pressable>
         )}
-      />
+  />
 
       {/* Event Details Modal */}
       <Modal
@@ -965,6 +988,6 @@ export default function Home() {
           </ScrollView>
         </SafeAreaView>
       </Modal>
-    </View>
+    </Container>
   );
 }
