@@ -1,15 +1,11 @@
-import { useEffect, useState } from "react";
-import { View, Text, FlatList, Pressable } from "react-native";
-import { useThemeColors } from "@/theme/ThemeProvider";
-import { supabase } from "@/services/supabase";
-import { router } from "expo-router";
+import { useEffect, useState } from 'react';
+import { View, Text, FlatList, Pressable } from 'react-native';
+import { useThemeColors } from '@/theme/ThemeProvider';
+import { supabase } from '@/services/supabase';
+import { router } from 'expo-router';
+import type { Event } from '@/types/models';
 
-type Event = {
-  id: number;
-  title: string;
-  date_time: string;
-  location?: string;
-};
+// Event type from shared models
 
 export default function Saved() {
   const c = useThemeColors();
@@ -17,11 +13,11 @@ export default function Saved() {
   useEffect(() => {
     (async () => {
       const user = (await supabase.auth.getUser()).data.user;
-      if (!user) return router.replace("/onboarding/welcome");
+      if (!user) return router.replace('/onboarding/welcome');
       const { data } = await supabase
-        .from("saved_events")
-        .select("event:events(id,title,date_time,location)")
-        .eq("user_id", user.id);
+        .from('saved_events')
+        .select('event:events(id,title,date_time,location)')
+        .eq('user_id', user.id);
       const events = (data ?? []).map((r: any) => r.event);
       setItems(events);
     })();
@@ -41,9 +37,7 @@ export default function Saved() {
               marginBottom: 8,
             }}
           >
-            <Text style={{ color: c.text, fontWeight: "800" }}>
-              {item.title}
-            </Text>
+            <Text style={{ color: c.text, fontWeight: '800' }}>{item.title}</Text>
             <Text style={{ color: c.muted }}>{item.location}</Text>
           </Pressable>
         )}

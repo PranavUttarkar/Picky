@@ -8,7 +8,7 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "lint": "echo 'add eslint later'",
+    "lint": "eslint . --ext .js,.jsx,.ts,.tsx || exit 0",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -11,22 +11,14 @@ import {
   SafeAreaView,
   Alert,
   Linking,
-} from "react-native";
-import dayjs from "dayjs";
-import { useThemeColors } from "@/theme/ThemeProvider";
-import { supabase } from "@/services/supabase";
-import { router } from "expo-router";
+} from 'react-native';
+import dayjs from 'dayjs';
+import { useThemeColors } from '@/theme/ThemeProvider';
+import { supabase } from '@/services/supabase';
+import { router } from 'expo-router';
+import type { Event } from '@/types/models';
 
-type Event = {
-  id: number;
-  title: string;
-  description?: string;
-  image_url?: string;
-  date_time: string;
-  location?: string;
-  tags?: string[];
-  rsvp_url?: string | null;
-};
+// Event type shared from types/models
 
 export default function Home() {
   const c = useThemeColors();
@@ -35,9 +27,9 @@ export default function Home() {
   const [myTags, setMyTags] = useState<string[]>([]);
   const [scores, setScores] = useState<Record<number, number>>({});
   const [saved, setSaved] = useState<number[]>([]);
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState('');
   const [activeTags, setActiveTags] = useState<string[]>([]);
-  const [mode, setMode] = useState<"all" | "personalized">("all");
+  const [mode, setMode] = useState<'all' | 'personalized'>('all');
   const [isAdmin, setIsAdmin] = useState(false);
 
   // Modal state for event details
@@ -47,80 +39,80 @@ export default function Home() {
   // Admin form state
   const [adminOpen, setAdminOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [fTitle, setFTitle] = useState("");
-  const [fDesc, setFDesc] = useState("");
-  const [fImage, setFImage] = useState("");
+  const [fTitle, setFTitle] = useState('');
+  const [fDesc, setFDesc] = useState('');
+  const [fImage, setFImage] = useState('');
   const [fDateTime, setFDateTime] = useState(
-    dayjs().add(1, "day").hour(18).minute(0).second(0).toISOString()
+    dayjs().add(1, 'day').hour(18).minute(0).second(0).toISOString(),
   );
-  const [fLocation, setFLocation] = useState("");
-  const [fTagsCsv, setFTagsCsv] = useState("");
-  const [fRsvp, setFRsvp] = useState("");
+  const [fLocation, setFLocation] = useState('');
+  const [fTagsCsv, setFTagsCsv] = useState('');
+  const [fRsvp, setFRsvp] = useState('');
 
   // Generate a healthy set of dummy events (negative IDs) to fill the feed
   const makeDummyEvents = (): Event[] => {
     const now = dayjs();
     const cities = [
-      "Downtown Campus",
-      "Riverside Park",
-      "Innovation Hub",
-      "Student Union",
-      "Community Center",
-      "Main Quad",
-      "Arts Hall",
-      "Stadium Plaza",
-      "Library Lawn",
-      "Tech Commons",
+      'Downtown Campus',
+      'Riverside Park',
+      'Innovation Hub',
+      'Student Union',
+      'Community Center',
+      'Main Quad',
+      'Arts Hall',
+      'Stadium Plaza',
+      'Library Lawn',
+      'Tech Commons',
     ];
     const tagSets: string[][] = [
-      ["Music", "Nightlife"],
-      ["Sports", "Outdoors"],
-      ["Food", "Culture"],
-      ["Tech", "Career"],
-      ["Volunteering", "Wellness"],
-      ["Art", "Culture"],
-      ["Gaming", "Tech"],
-      ["Outdoors", "Wellness"],
-      ["Music", "Art"],
-      ["Sports", "Career"],
-      ["Food", "Nightlife"],
-      ["Tech", "Innovation"],
-      ["Volunteering", "Community"],
-      ["Art", "Wellness"],
-      ["Gaming", "Nightlife"],
-      ["Outdoors", "Culture"],
-      ["Career", "Tech"],
-      ["Wellness", "Yoga"],
-      ["Music", "Festival"],
-      ["Food", "Farmers Market"],
+      ['Music', 'Nightlife'],
+      ['Sports', 'Outdoors'],
+      ['Food', 'Culture'],
+      ['Tech', 'Career'],
+      ['Volunteering', 'Wellness'],
+      ['Art', 'Culture'],
+      ['Gaming', 'Tech'],
+      ['Outdoors', 'Wellness'],
+      ['Music', 'Art'],
+      ['Sports', 'Career'],
+      ['Food', 'Nightlife'],
+      ['Tech', 'Innovation'],
+      ['Volunteering', 'Community'],
+      ['Art', 'Wellness'],
+      ['Gaming', 'Nightlife'],
+      ['Outdoors', 'Culture'],
+      ['Career', 'Tech'],
+      ['Wellness', 'Yoga'],
+      ['Music', 'Festival'],
+      ['Food', 'Farmers Market'],
     ];
     const titles = [
-      "Sunset Acoustic Jam",
-      "Intramural Soccer Finals",
-      "Street Foods Around the World",
-      "AI Study Group + Pizza",
-      "Community Clean-up Drive",
-      "Gallery Night: Student Art",
-      "LAN Party Showdown",
-      "Sunrise Yoga in the Quad",
-      "Open Mic Night",
-      "Career Fair Prep Workshop",
-      "Night Market & Bites",
-      "Hack Night: Build & Ship",
-      "Food Bank Volunteering",
-      "Mindfulness & Sketching",
-      "Retro Games & Chips",
-      "Trail Run Meetup",
-      "Resume Review Roundtable",
-      "Wellness Wednesday",
-      "Campus Music Fest Preview",
-      "Local Farmers Market Trip",
+      'Sunset Acoustic Jam',
+      'Intramural Soccer Finals',
+      'Street Foods Around the World',
+      'AI Study Group + Pizza',
+      'Community Clean-up Drive',
+      'Gallery Night: Student Art',
+      'LAN Party Showdown',
+      'Sunrise Yoga in the Quad',
+      'Open Mic Night',
+      'Career Fair Prep Workshop',
+      'Night Market & Bites',
+      'Hack Night: Build & Ship',
+      'Food Bank Volunteering',
+      'Mindfulness & Sketching',
+      'Retro Games & Chips',
+      'Trail Run Meetup',
+      'Resume Review Roundtable',
+      'Wellness Wednesday',
+      'Campus Music Fest Preview',
+      'Local Farmers Market Trip',
     ];
     const desc =
-      "This is a placeholder event to help you explore the app while we load fresh events.";
+      'This is a placeholder event to help you explore the app while we load fresh events.';
     const dummies: Event[] = titles.map((t, i) => {
       const dt = now
-        .add(i + 1, "day")
+        .add(i + 1, 'day')
         .hour(18)
         .minute(0)
         .second(0);
@@ -139,10 +131,10 @@ export default function Home() {
 
   const loadEvents = async () => {
     const { data } = await supabase
-      .from("events")
-      .select("*")
-      .gte("date_time", new Date().toISOString())
-      .order("date_time", { ascending: true });
+      .from('events')
+      .select('*')
+      .gte('date_time', new Date().toISOString())
+      .order('date_time', { ascending: true });
     const real = (data ?? []) as Event[];
     const MIN = 16;
     if (real.length >= MIN) {
@@ -164,27 +156,24 @@ export default function Home() {
       if (!user) return; // guests can still see events; just skip personalized data
       // Admin detection
       const { data: urow } = await supabase
-        .from("users")
-        .select("is_admin")
-        .eq("id", user.id)
+        .from('users')
+        .select('is_admin')
+        .eq('id', user.id)
         .maybeSingle();
       setIsAdmin(!!urow?.is_admin);
 
       const { data } = await supabase
-        .from("user_interests_temp")
-        .select("names")
-        .eq("user_id", user.id)
+        .from('user_interests_temp')
+        .select('names')
+        .eq('user_id', user.id)
         .maybeSingle();
       setMyTags(data?.names ?? []);
 
-      const se = await supabase
-        .from("saved_events")
-        .select("event_id")
-        .eq("user_id", user.id);
+      const se = await supabase.from('saved_events').select('event_id').eq('user_id', user.id);
       setSaved((se.data ?? []).map((r: any) => r.event_id));
 
       // Fetch personal scoring from Supabase RPC (secure function)
-      const { data: rpcScores } = await supabase.rpc("get_user_event_scores");
+      const { data: rpcScores } = await supabase.rpc('get_user_event_scores');
       if (rpcScores) {
         const map: Record<number, number> = {};
         for (const row of rpcScores as any[]) {
@@ -197,7 +186,7 @@ export default function Home() {
   const requireAuth = async (): Promise<boolean> => {
     const user = (await supabase.auth.getUser()).data.user;
     if (!user) {
-      router.push("/onboarding/welcome");
+      router.push('/onboarding/welcome');
       return false;
     }
     return true;
@@ -210,16 +199,10 @@ export default function Home() {
     if (!authed) return;
     const user = (await supabase.auth.getUser()).data.user!;
     if (saved.includes(id)) {
-      await supabase
-        .from("saved_events")
-        .delete()
-        .eq("user_id", user.id)
-        .eq("event_id", id);
+      await supabase.from('saved_events').delete().eq('user_id', user.id).eq('event_id', id);
       setSaved((s) => s.filter((x) => x !== id));
     } else {
-      await supabase
-        .from("saved_events")
-        .insert({ user_id: user.id, event_id: id });
+      await supabase.from('saved_events').insert({ user_id: user.id, event_id: id });
       setSaved((s) => [...s, id]);
     }
   };
@@ -227,13 +210,11 @@ export default function Home() {
   const match = (eventId: number, tags?: string[]) => {
     // Prefer server-computed score when available
     const fromServer = scores[eventId];
-    if (typeof fromServer === "number") return fromServer;
+    if (typeof fromServer === 'number') return fromServer;
     // Fallback local estimate if RPC not available yet
     if (!tags || tags.length === 0 || myTags.length === 0) return 0;
     const overlap = tags.filter((t) => myTags.includes(t)).length;
-    const pct = Math.round(
-      (overlap / Math.max(tags.length, myTags.length)) * 100
-    );
+    const pct = Math.round((overlap / Math.max(tags.length, myTags.length)) * 100);
     return Math.max(0, Math.min(100, pct));
   };
 
@@ -242,7 +223,7 @@ export default function Home() {
     const tags: string[] = [];
     const words: string[] = [];
     for (const token of q.split(/\s+/).filter(Boolean)) {
-      if (token.startsWith("#") && token.length > 1) {
+      if (token.startsWith('#') && token.length > 1) {
         tags.push(token.slice(1).toLowerCase());
       } else {
         words.push(token.toLowerCase());
@@ -255,7 +236,7 @@ export default function Home() {
 
   // Build tag universe from currently loaded events
   const allTags: string[] = Array.from(
-    new Set(events.flatMap((e) => (e.tags ?? []).map((t) => t)))
+    new Set(events.flatMap((e) => (e.tags ?? []).map((t) => t))),
   ).sort((a, b) => a.localeCompare(b));
 
   // Derived filtered list based on text and tag filters
@@ -273,9 +254,7 @@ export default function Home() {
     }
     // Text match on title/description/location
     if (queryWords.length) {
-      const hay = `${e.title} ${e.description ?? ""} ${
-        e.location ?? ""
-      }`.toLowerCase();
+      const hay = `${e.title} ${e.description ?? ''} ${e.location ?? ''}`.toLowerCase();
       for (const w of queryWords) if (!hay.includes(w)) return false;
     }
     return true;
@@ -283,7 +262,7 @@ export default function Home() {
 
   // Apply mode-specific sorting/filtering
   const filtered = [...filteredBase].sort((a, b) => {
-    if (mode === "personalized") {
+    if (mode === 'personalized') {
       return match(b.id, b.tags) - match(a.id, a.tags);
     }
     // Default: chronological by date_time
@@ -293,35 +272,33 @@ export default function Home() {
   // Admin: reset form helper
   const resetForm = () => {
     setEditingId(null);
-    setFTitle("");
-    setFDesc("");
-    setFImage("");
-    setFDateTime(
-      dayjs().add(1, "day").hour(18).minute(0).second(0).toISOString()
-    );
-    setFLocation("");
-    setFTagsCsv("");
-    setFRsvp("");
+    setFTitle('');
+    setFDesc('');
+    setFImage('');
+    setFDateTime(dayjs().add(1, 'day').hour(18).minute(0).second(0).toISOString());
+    setFLocation('');
+    setFTagsCsv('');
+    setFRsvp('');
   };
 
   const upsertEvent = async () => {
     // Basic validation
     if (!fTitle.trim()) {
-      Alert.alert("Missing title", "Please provide a title for the event.");
+      Alert.alert('Missing title', 'Please provide a title for the event.');
       return;
     }
     const dtIso = dayjs(fDateTime).isValid()
       ? dayjs(fDateTime).toISOString()
-      : dayjs().add(1, "day").toISOString();
+      : dayjs().add(1, 'day').toISOString();
     const tags = fTagsCsv
-      .split(",")
+      .split(',')
       .map((t) => t.trim())
       .filter(Boolean);
     const {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) {
-      Alert.alert("Not signed in", "You must be signed in as admin.");
+      Alert.alert('Not signed in', 'You must be signed in as admin.');
       return;
     }
     const payload: any = {
@@ -334,38 +311,33 @@ export default function Home() {
       rsvp_url: fRsvp.trim() || null,
     };
     if (editingId) {
-      const { error } = await supabase
-        .from("events")
-        .update(payload)
-        .eq("id", editingId);
+      const { error } = await supabase.from('events').update(payload).eq('id', editingId);
       if (error) {
-        Alert.alert("Update failed", error.message);
+        Alert.alert('Update failed', error.message);
         return;
       }
     } else {
-      const { error } = await supabase
-        .from("events")
-        .insert({ ...payload, created_by: user.id });
+      const { error } = await supabase.from('events').insert({ ...payload, created_by: user.id });
       if (error) {
-        Alert.alert("Create failed", error.message);
+        Alert.alert('Create failed', error.message);
         return;
       }
     }
     resetForm();
     await loadEvents();
-    Alert.alert("Success", editingId ? "Event updated" : "Event created");
+    Alert.alert('Success', editingId ? 'Event updated' : 'Event created');
   };
 
   const deleteEvent = async (id: number) => {
-    Alert.alert("Delete event?", "This cannot be undone.", [
-      { text: "Cancel", style: "cancel" },
+    Alert.alert('Delete event?', 'This cannot be undone.', [
+      { text: 'Cancel', style: 'cancel' },
       {
-        text: "Delete",
-        style: "destructive",
+        text: 'Delete',
+        style: 'destructive',
         onPress: async () => {
-          const { error } = await supabase.from("events").delete().eq("id", id);
+          const { error } = await supabase.from('events').delete().eq('id', id);
           if (error) {
-            Alert.alert("Delete failed", error.message);
+            Alert.alert('Delete failed', error.message);
             return;
           }
           await loadEvents();
@@ -377,11 +349,7 @@ export default function Home() {
   const onOpenDetails = async (item: Event) => {
     // If it's a real event, fetch full row to include RSVP etc.
     if (item.id > 0) {
-      const { data } = await supabase
-        .from("events")
-        .select("*")
-        .eq("id", item.id)
-        .maybeSingle();
+      const { data } = await supabase.from('events').select('*').eq('id', item.id).maybeSingle();
       if (data) {
         setSelectedEvent(data as Event);
         setDetailsOpen(true);
@@ -397,12 +365,12 @@ export default function Home() {
     setAdminOpen(true);
     setEditingId(e.id);
     setFTitle(e.title);
-    setFDesc(e.description ?? "");
-    setFImage(e.image_url ?? "");
+    setFDesc(e.description ?? '');
+    setFImage(e.image_url ?? '');
     setFDateTime(e.date_time);
-    setFLocation(e.location ?? "");
-    setFTagsCsv((e.tags ?? []).join(", "));
-    setFRsvp(e.rsvp_url ?? "");
+    setFLocation(e.location ?? '');
+    setFTagsCsv((e.tags ?? []).join(', '));
+    setFRsvp(e.rsvp_url ?? '');
     // Scroll to top to reveal the admin panel
     listRef.current?.scrollToOffset?.({ offset: 0, animated: true });
   };
@@ -418,20 +386,18 @@ export default function Home() {
             padding: 12,
             marginBottom: 12,
             borderWidth: 1,
-            borderColor: "#00000020",
+            borderColor: '#00000020',
           }}
         >
           <Pressable onPress={() => setAdminOpen((v) => !v)}>
-            <Text style={{ color: c.text, fontWeight: "800", fontSize: 16 }}>
-              Admin: Manage Events {adminOpen ? "▲" : "▼"}
+            <Text style={{ color: c.text, fontWeight: '800', fontSize: 16 }}>
+              Admin: Manage Events {adminOpen ? '▲' : '▼'}
             </Text>
           </Pressable>
           {adminOpen ? (
             <View style={{ marginTop: 8, gap: 8 }}>
               {editingId ? (
-                <Text style={{ color: c.muted }}>
-                  Editing event #{editingId}
-                </Text>
+                <Text style={{ color: c.muted }}>Editing event #{editingId}</Text>
               ) : null}
               <TextInput
                 placeholder="Title"
@@ -440,7 +406,7 @@ export default function Home() {
                 onChangeText={setFTitle}
                 style={{
                   color: c.text,
-                  backgroundColor: "#00000010",
+                  backgroundColor: '#00000010',
                   padding: 10,
                   borderRadius: 8,
                 }}
@@ -453,7 +419,7 @@ export default function Home() {
                 multiline
                 style={{
                   color: c.text,
-                  backgroundColor: "#00000010",
+                  backgroundColor: '#00000010',
                   padding: 10,
                   borderRadius: 8,
                   minHeight: 60,
@@ -466,7 +432,7 @@ export default function Home() {
                 onChangeText={setFImage}
                 style={{
                   color: c.text,
-                  backgroundColor: "#00000010",
+                  backgroundColor: '#00000010',
                   padding: 10,
                   borderRadius: 8,
                 }}
@@ -478,7 +444,7 @@ export default function Home() {
                 onChangeText={setFDateTime}
                 style={{
                   color: c.text,
-                  backgroundColor: "#00000010",
+                  backgroundColor: '#00000010',
                   padding: 10,
                   borderRadius: 8,
                 }}
@@ -491,7 +457,7 @@ export default function Home() {
                 onChangeText={setFLocation}
                 style={{
                   color: c.text,
-                  backgroundColor: "#00000010",
+                  backgroundColor: '#00000010',
                   padding: 10,
                   borderRadius: 8,
                 }}
@@ -503,7 +469,7 @@ export default function Home() {
                 onChangeText={setFTagsCsv}
                 style={{
                   color: c.text,
-                  backgroundColor: "#00000010",
+                  backgroundColor: '#00000010',
                   padding: 10,
                   borderRadius: 8,
                 }}
@@ -516,13 +482,13 @@ export default function Home() {
                 onChangeText={setFRsvp}
                 style={{
                   color: c.text,
-                  backgroundColor: "#00000010",
+                  backgroundColor: '#00000010',
                   padding: 10,
                   borderRadius: 8,
                 }}
                 autoCapitalize="none"
               />
-              <View style={{ flexDirection: "row", gap: 8 }}>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
                 <Pressable
                   onPress={upsertEvent}
                   style={{
@@ -532,23 +498,21 @@ export default function Home() {
                     borderRadius: 10,
                   }}
                 >
-                  <Text style={{ color: "#000", fontWeight: "700" }}>
-                    {editingId ? "Update Event" : "Create Event"}
+                  <Text style={{ color: '#000', fontWeight: '700' }}>
+                    {editingId ? 'Update Event' : 'Create Event'}
                   </Text>
                 </Pressable>
                 {editingId ? (
                   <Pressable
                     onPress={resetForm}
                     style={{
-                      backgroundColor: "#00000030",
+                      backgroundColor: '#00000030',
                       paddingHorizontal: 12,
                       paddingVertical: 10,
                       borderRadius: 10,
                     }}
                   >
-                    <Text style={{ color: c.text, fontWeight: "700" }}>
-                      Cancel
-                    </Text>
+                    <Text style={{ color: c.text, fontWeight: '700' }}>Cancel</Text>
                   </Pressable>
                 ) : null}
               </View>
@@ -561,28 +525,28 @@ export default function Home() {
                     <View
                       key={e.id}
                       style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        justifyContent: "space-between",
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
                       }}
                     >
                       <Text style={{ color: c.text }}>
                         #{e.id} · {e.title}
                       </Text>
-                      <View style={{ flexDirection: "row", gap: 6 }}>
+                      <View style={{ flexDirection: 'row', gap: 6 }}>
                         <Pressable
                           onPress={() => {
                             setEditingId(e.id);
                             setFTitle(e.title);
-                            setFDesc(e.description ?? "");
-                            setFImage(e.image_url ?? "");
+                            setFDesc(e.description ?? '');
+                            setFImage(e.image_url ?? '');
                             setFDateTime(e.date_time);
-                            setFLocation(e.location ?? "");
-                            setFTagsCsv((e.tags ?? []).join(", "));
-                            setFRsvp(e.rsvp_url ?? "");
+                            setFLocation(e.location ?? '');
+                            setFTagsCsv((e.tags ?? []).join(', '));
+                            setFRsvp(e.rsvp_url ?? '');
                           }}
                           style={{
-                            backgroundColor: "#00000030",
+                            backgroundColor: '#00000030',
                             paddingHorizontal: 10,
                             paddingVertical: 6,
                             borderRadius: 8,
@@ -593,13 +557,13 @@ export default function Home() {
                         <Pressable
                           onPress={() => deleteEvent(e.id)}
                           style={{
-                            backgroundColor: "#ff444433",
+                            backgroundColor: '#ff444433',
                             paddingHorizontal: 10,
                             paddingVertical: 6,
                             borderRadius: 8,
                           }}
                         >
-                          <Text style={{ color: "#ff5555" }}>Delete</Text>
+                          <Text style={{ color: '#ff5555' }}>Delete</Text>
                         </Pressable>
                       </View>
                     </View>
@@ -618,7 +582,7 @@ export default function Home() {
           paddingVertical: 8,
           marginBottom: 12,
           borderWidth: 1,
-          borderColor: "#00000020",
+          borderColor: '#00000020',
         }}
       >
         <TextInput
@@ -634,7 +598,7 @@ export default function Home() {
       {/* Mode toggle */}
       <View
         style={{
-          flexDirection: "row",
+          flexDirection: 'row',
           gap: 6,
           marginBottom: 12,
           backgroundColor: c.card,
@@ -643,8 +607,8 @@ export default function Home() {
         }}
       >
         {[
-          { key: "all", label: "View All" },
-          { key: "personalized", label: "Personalized Feed" },
+          { key: 'all', label: 'View All' },
+          { key: 'personalized', label: 'Personalized Feed' },
         ].map((opt) => {
           const active = mode === (opt.key as any);
           return (
@@ -652,15 +616,13 @@ export default function Home() {
               key={opt.key}
               onPress={() => setMode(opt.key as any)}
               style={{
-                backgroundColor: active ? c.primary : "transparent",
+                backgroundColor: active ? c.primary : 'transparent',
                 paddingHorizontal: 12,
                 paddingVertical: 8,
                 borderRadius: 10,
               }}
             >
-              <Text
-                style={{ color: active ? "#000" : c.text, fontWeight: "700" }}
-              >
+              <Text style={{ color: active ? '#000' : c.text, fontWeight: '700' }}>
                 {opt.label}
               </Text>
             </Pressable>
@@ -671,8 +633,8 @@ export default function Home() {
       {allTags.length ? (
         <View
           style={{
-            flexDirection: "row",
-            flexWrap: "wrap",
+            flexDirection: 'row',
+            flexWrap: 'wrap',
             gap: 8,
             marginBottom: 12,
           }}
@@ -684,21 +646,17 @@ export default function Home() {
                 key={t}
                 onPress={() =>
                   setActiveTags((prev) =>
-                    prev.includes(t)
-                      ? prev.filter((x) => x !== t)
-                      : [...prev, t]
+                    prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t],
                   )
                 }
                 style={{
-                  backgroundColor: active ? c.primary : "#00000020",
+                  backgroundColor: active ? c.primary : '#00000020',
                   paddingHorizontal: 10,
                   paddingVertical: 6,
                   borderRadius: 999,
                 }}
               >
-                <Text style={{ color: active ? "#000" : c.text, fontSize: 12 }}>
-                  {t}
-                </Text>
+                <Text style={{ color: active ? '#000' : c.text, fontSize: 12 }}>{t}</Text>
               </Pressable>
             );
           })}
@@ -706,10 +664,10 @@ export default function Home() {
             <Pressable
               onPress={() => {
                 setActiveTags([]);
-                setQuery("");
+                setQuery('');
               }}
               style={{
-                backgroundColor: "#00000030",
+                backgroundColor: '#00000030',
                 paddingHorizontal: 10,
                 paddingVertical: 6,
                 borderRadius: 999,
@@ -724,15 +682,15 @@ export default function Home() {
       {/* Results info */}
       <View
         style={{
-          flexDirection: "row",
-          justifyContent: "space-between",
+          flexDirection: 'row',
+          justifyContent: 'space-between',
           marginBottom: 8,
         }}
       >
         <Text style={{ color: c.muted }}>
-          Showing {filtered.length} {filtered.length === 1 ? "event" : "events"}
+          Showing {filtered.length} {filtered.length === 1 ? 'event' : 'events'}
         </Text>
-        {mode === "personalized" ? (
+        {mode === 'personalized' ? (
           <Text style={{ color: c.muted }}>Sorted by match</Text>
         ) : (
           <Text style={{ color: c.muted }}>Soonest first</Text>
@@ -744,15 +702,13 @@ export default function Home() {
         keyExtractor={(e) => String(e.id)}
         contentContainerStyle={{ gap: 12, paddingBottom: 32 }}
         ListEmptyComponent={
-          <View style={{ paddingTop: 48, alignItems: "center" }}>
-            <Text style={{ color: c.muted, marginBottom: 8 }}>
-              No events match your filters
-            </Text>
+          <View style={{ paddingTop: 48, alignItems: 'center' }}>
+            <Text style={{ color: c.muted, marginBottom: 8 }}>No events match your filters</Text>
             <Pressable
               onPress={() => {
-                setQuery("");
+                setQuery('');
                 setActiveTags([]);
-                setMode("all");
+                setMode('all');
               }}
               style={{
                 backgroundColor: c.primary,
@@ -761,9 +717,7 @@ export default function Home() {
                 borderRadius: 10,
               }}
             >
-              <Text style={{ color: "#000", fontWeight: "700" }}>
-                Reset filters
-              </Text>
+              <Text style={{ color: '#000', fontWeight: '700' }}>Reset filters</Text>
             </Pressable>
           </View>
         }
@@ -773,28 +727,22 @@ export default function Home() {
             style={{
               backgroundColor: c.card,
               borderRadius: 16,
-              overflow: "hidden",
+              overflow: 'hidden',
               opacity: item.id < 0 ? 0.98 : 1,
             }}
           >
             {item.image_url ? (
-              <Image
-                source={{ uri: item.image_url }}
-                style={{ width: "100%", height: 160 }}
-              />
+              <Image source={{ uri: item.image_url }} style={{ width: '100%', height: 160 }} />
             ) : null}
             <View style={{ padding: 12 }}>
-              <Text style={{ color: c.text, fontSize: 18, fontWeight: "800" }}>
-                {item.title}
-              </Text>
+              <Text style={{ color: c.text, fontSize: 18, fontWeight: '800' }}>{item.title}</Text>
               <Text style={{ color: c.muted, marginTop: 4 }}>
-                {dayjs(item.date_time).format("ddd, MMM D • h:mm A")} •{" "}
-                {item.location}
+                {dayjs(item.date_time).format('ddd, MMM D • h:mm A')} • {item.location}
               </Text>
               <View
                 style={{
-                  flexDirection: "row",
-                  flexWrap: "wrap",
+                  flexDirection: 'row',
+                  flexWrap: 'wrap',
                   gap: 6,
                   marginTop: 8,
                 }}
@@ -803,7 +751,7 @@ export default function Home() {
                   <View
                     key={t}
                     style={{
-                      backgroundColor: "#00000020",
+                      backgroundColor: '#00000020',
                       paddingHorizontal: 8,
                       paddingVertical: 4,
                       borderRadius: 999,
@@ -816,15 +764,15 @@ export default function Home() {
               <View
                 style={{
                   marginTop: 8,
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                  alignItems: "center",
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
                 }}
               >
-                <Text style={{ color: c.text, fontWeight: "700" }}>
+                <Text style={{ color: c.text, fontWeight: '700' }}>
                   Match {match(item.id, item.tags)}%
                 </Text>
-                <View style={{ flexDirection: "row", gap: 8 }}>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
                   <Pressable
                     onPress={() => toggleSave(item.id)}
                     style={{
@@ -835,8 +783,8 @@ export default function Home() {
                       opacity: item.id < 0 ? 0.5 : 1,
                     }}
                   >
-                    <Text style={{ color: "#000", fontWeight: "700" }}>
-                      {saved.includes(item.id) ? "Saved" : "Save"}
+                    <Text style={{ color: '#000', fontWeight: '700' }}>
+                      {saved.includes(item.id) ? 'Saved' : 'Save'}
                     </Text>
                   </Pressable>
                   {item.id > 0 ? (
@@ -845,33 +793,29 @@ export default function Home() {
                         const authed = await requireAuth();
                         if (!authed) return;
                         router.push({
-                          pathname: "/polls/new",
+                          pathname: '/polls/new',
                           params: { fromEvent: item.id },
                         });
                       }}
                       style={{
-                        backgroundColor: "#00000030",
+                        backgroundColor: '#00000030',
                         paddingHorizontal: 12,
                         paddingVertical: 8,
                         borderRadius: 10,
                       }}
                     >
-                      <Text style={{ color: c.text, fontWeight: "700" }}>
-                        Poll
-                      </Text>
+                      <Text style={{ color: c.text, fontWeight: '700' }}>Poll</Text>
                     </Pressable>
                   ) : (
                     <View
                       style={{
-                        backgroundColor: "#00000020",
+                        backgroundColor: '#00000020',
                         paddingHorizontal: 12,
                         paddingVertical: 8,
                         borderRadius: 10,
                       }}
                     >
-                      <Text style={{ color: c.muted, fontWeight: "700" }}>
-                        Demo
-                      </Text>
+                      <Text style={{ color: c.muted, fontWeight: '700' }}>Demo</Text>
                     </View>
                   )}
                   {isAdmin && item.id > 0 ? (
@@ -879,28 +823,24 @@ export default function Home() {
                       <Pressable
                         onPress={() => prefillForEdit(item)}
                         style={{
-                          backgroundColor: "#00000030",
+                          backgroundColor: '#00000030',
                           paddingHorizontal: 12,
                           paddingVertical: 8,
                           borderRadius: 10,
                         }}
                       >
-                        <Text style={{ color: c.text, fontWeight: "700" }}>
-                          Edit
-                        </Text>
+                        <Text style={{ color: c.text, fontWeight: '700' }}>Edit</Text>
                       </Pressable>
                       <Pressable
                         onPress={() => deleteEvent(item.id)}
                         style={{
-                          backgroundColor: "#ff444433",
+                          backgroundColor: '#ff444433',
                           paddingHorizontal: 12,
                           paddingVertical: 8,
                           borderRadius: 10,
                         }}
                       >
-                        <Text style={{ color: "#ff5555", fontWeight: "700" }}>
-                          Delete
-                        </Text>
+                        <Text style={{ color: '#ff5555', fontWeight: '700' }}>Delete</Text>
                       </Pressable>
                     </>
                   ) : null}
@@ -922,20 +862,18 @@ export default function Home() {
             <View style={{ padding: 12 }}>
               <View
                 style={{
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                  alignItems: "center",
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
                 }}
               >
-                <Text
-                  style={{ color: c.text, fontSize: 18, fontWeight: "800" }}
-                >
+                <Text style={{ color: c.text, fontSize: 18, fontWeight: '800' }}>
                   Event details
                 </Text>
                 <Pressable
                   onPress={() => setDetailsOpen(false)}
                   style={{
-                    backgroundColor: "#00000020",
+                    backgroundColor: '#00000020',
                     paddingHorizontal: 12,
                     paddingVertical: 8,
                     borderRadius: 10,
@@ -948,23 +886,21 @@ export default function Home() {
             {selectedEvent?.image_url ? (
               <Image
                 source={{ uri: selectedEvent.image_url }}
-                style={{ width: "100%", height: 220 }}
+                style={{ width: '100%', height: 220 }}
               />
             ) : null}
             <View style={{ padding: 16 }}>
-              <Text style={{ color: c.text, fontSize: 24, fontWeight: "800" }}>
+              <Text style={{ color: c.text, fontSize: 24, fontWeight: '800' }}>
                 {selectedEvent?.title}
               </Text>
               <Text style={{ color: c.muted, marginTop: 4 }}>
-                {selectedEvent
-                  ? dayjs(selectedEvent.date_time).format("ddd, MMM D • h:mm A")
-                  : ""}
-                {selectedEvent?.location ? ` • ${selectedEvent.location}` : ""}
+                {selectedEvent ? dayjs(selectedEvent.date_time).format('ddd, MMM D • h:mm A') : ''}
+                {selectedEvent?.location ? ` • ${selectedEvent.location}` : ''}
               </Text>
               <View
                 style={{
-                  flexDirection: "row",
-                  flexWrap: "wrap",
+                  flexDirection: 'row',
+                  flexWrap: 'wrap',
                   gap: 6,
                   marginTop: 8,
                 }}
@@ -973,7 +909,7 @@ export default function Home() {
                   <View
                     key={t}
                     style={{
-                      backgroundColor: "#00000020",
+                      backgroundColor: '#00000020',
                       paddingHorizontal: 8,
                       paddingVertical: 4,
                       borderRadius: 999,
@@ -984,36 +920,23 @@ export default function Home() {
                 ))}
               </View>
               {selectedEvent?.description ? (
-                <Text style={{ color: c.text, marginTop: 12 }}>
-                  {selectedEvent.description}
-                </Text>
+                <Text style={{ color: c.text, marginTop: 12 }}>{selectedEvent.description}</Text>
               ) : null}
-              <View style={{ flexDirection: "row", gap: 8, marginTop: 16 }}>
+              <View style={{ flexDirection: 'row', gap: 8, marginTop: 16 }}>
                 {selectedEvent?.id && selectedEvent.id > 0 ? (
                   <Pressable
                     onPress={() => {
                       // simple add-to-calendar using ICS deep link (fallback)
                       const title = encodeURIComponent(selectedEvent!.title);
-                      const start = dayjs(
-                        selectedEvent!.date_time
-                      ).toISOString();
-                      const end = dayjs(selectedEvent!.date_time)
-                        .add(2, "hour")
-                        .toISOString();
-                      const details = encodeURIComponent(
-                        selectedEvent!.description ?? ""
-                      );
-                      const location = encodeURIComponent(
-                        selectedEvent!.location ?? ""
-                      );
+                      const start = dayjs(selectedEvent!.date_time).toISOString();
+                      const end = dayjs(selectedEvent!.date_time).add(2, 'hour').toISOString();
+                      const details = encodeURIComponent(selectedEvent!.description ?? '');
+                      const location = encodeURIComponent(selectedEvent!.location ?? '');
                       const href = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${start
-                        .replace(/[-:\.]/g, "")
-                        .replace(".000Z", "Z")}/${end
-                        .replace(/[-:\.]/g, "")
-                        .replace(
-                          ".000Z",
-                          "Z"
-                        )}&details=${details}&location=${location}`;
+                        .replace(/[-:\.]/g, '')
+                        .replace('.000Z', 'Z')}/${end
+                        .replace(/[-:\.]/g, '')
+                        .replace('.000Z', 'Z')}&details=${details}&location=${location}`;
                       Linking.openURL(href);
                     }}
                     style={{
@@ -1022,25 +945,19 @@ export default function Home() {
                       borderRadius: 12,
                     }}
                   >
-                    <Text style={{ color: "#000", fontWeight: "700" }}>
-                      Add to calendar
-                    </Text>
+                    <Text style={{ color: '#000', fontWeight: '700' }}>Add to calendar</Text>
                   </Pressable>
                 ) : null}
                 {selectedEvent?.rsvp_url ? (
                   <Pressable
-                    onPress={() =>
-                      Linking.openURL(String(selectedEvent!.rsvp_url))
-                    }
+                    onPress={() => Linking.openURL(String(selectedEvent!.rsvp_url))}
                     style={{
-                      backgroundColor: "#00000030",
+                      backgroundColor: '#00000030',
                       padding: 12,
                       borderRadius: 12,
                     }}
                   >
-                    <Text style={{ color: c.text, fontWeight: "700" }}>
-                      Open RSVP link
-                    </Text>
+                    <Text style={{ color: c.text, fontWeight: '700' }}>Open RSVP link</Text>
                   </Pressable>
                 ) : null}
               </View>
