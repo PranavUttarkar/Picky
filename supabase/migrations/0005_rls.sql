@@ -63,3 +63,6 @@ create policy "po_insert_group_members" on poll_options for insert to authentica
 create policy "po_update_group_members" on poll_options for update to authenticated using (
   exists(select 1 from polls p join group_members gm on gm.group_id = p.group_id where p.id = poll_options.poll_id and gm.user_id = auth.uid())
 );
+
+-- (poll_votes RLS and policies are defined in 0007_polls_votes.sql after table creation)
+-- (admin helper and event admin policy are defined in 0006_admin_and_indices.sql after adding users.is_admin)

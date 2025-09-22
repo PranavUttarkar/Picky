@@ -19,6 +19,7 @@ export default function Home() {
   const c = useThemeColors();
   const [events, setEvents] = useState<Event[]>([]);
   const [myTags, setMyTags] = useState<string[]>([]);
+  const [scores, setScores] = useState<Record<number, number>>({});
   const [saved, setSaved] = useState<number[]>([]);
 
   useEffect(() => {
@@ -42,6 +43,16 @@ export default function Home() {
         .select("event_id")
         .eq("user_id", user.id);
       setSaved((se.data ?? []).map((r: any) => r.event_id));
+
+      // Fetch personal scoring from Supabase RPC (secure function)
+      const { data: rpcScores } = await supabase.rpc("get_user_event_scores");
+      if (rpcScores) {
+        const map: Record<number, number> = {};
+        for (const row of rpcScores as any[]) {
+          map[Number(row.event_id)] = Number(row.match_percent);
+        }
+        setScores(map);
+      }
     })();
   }, []);
   const toggleSave = async (id: number) => {
@@ -62,7 +73,11 @@ export default function Home() {
     }
   };
 
-  const match = (tags?: string[]) => {
+  const match = (eventId: number, tags?: string[]) => {
+    // Prefer server-computed score when available
+    const fromServer = scores[eventId];
+    if (typeof fromServer === "number") return fromServer;
+    // Fallback local estimate if RPC not available yet
     if (!tags || tags.length === 0 || myTags.length === 0) return 0;
     const overlap = tags.filter((t) => myTags.includes(t)).length;
     return Math.round((overlap / Math.max(tags.length, myTags.length)) * 100);
@@ -128,7 +143,7 @@ export default function Home() {
                 }}
               >
                 <Text style={{ color: c.text, fontWeight: "700" }}>
-                  Match {match(item.tags)}%
+                  Match {match(item.id, item.tags)}%
                 </Text>
                 <View style={{ flexDirection: "row", gap: 8 }}>
                   <Pressable
