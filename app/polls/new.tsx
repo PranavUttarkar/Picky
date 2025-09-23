@@ -1,4 +1,4 @@
-import { View, Text, Pressable, Alert, FlatList, ActivityIndicator, TextInput } from 'react-native';
+import { View, Text, Pressable, Alert, FlatList, ActivityIndicator, TextInput, Platform } from 'react-native';
 import { ThreeDButton, ThreeDCard } from '@/components/ThreeD';
 import { useThemeColors } from '@/theme/ThemeProvider';
 import { useEffect, useRef, useState } from 'react';
@@ -8,6 +8,8 @@ import { getMyGroups } from '@/services/groups';
 import { createPollWithOptions } from '@/services/polls';
 import { getTopUserMatches, getTopGroupMatches, searchEvents } from '@/services/events';
 import type { Event } from '@/types/models';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import dayjs from 'dayjs';
 
 export default function NewPoll() {
   const c = useThemeColors();
@@ -24,6 +26,10 @@ export default function NewPoll() {
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [creating, setCreating] = useState(false);
+  const [title, setTitle] = useState('');
+  const [deadlineDate, setDeadlineDate] = useState<Date | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState<null | 'date' | 'time'>(null);
+  const [mode, setMode] = useState<'single' | 'rating'>('single');
 
   useEffect(() => {
     let mounted = true;
@@ -111,15 +117,12 @@ export default function NewPoll() {
         return;
       }
       const ids = Array.from(selected);
-      if (ids.length < 1) {
-        Alert.alert(
-          'Pick events',
-          'Select at least 1 event. If you pick 1, the poll will be Yes/No for that event.',
-        );
-        return;
-      }
       setCreating(true);
-      const pollId = await createPollWithOptions(groupId, ids);
+      const pollId = await createPollWithOptions(
+        groupId,
+        ids,
+        { title: title?.trim() || null, deadlineAt: deadlineDate ? deadlineDate.toISOString() : null, mode }
+      );
       router.replace(`/polls/${pollId}`);
     } catch (e: any) {
       Alert.alert('Create poll failed', e.message ?? String(e));
@@ -136,6 +139,89 @@ export default function NewPoll() {
       <Text style={{ color: c.text, fontWeight: '800', fontSize: 18, marginBottom: 12 }}>
         New Poll
       </Text>
+
+      {/* Optional title */}
+      <Text style={{ color: c.muted, marginBottom: 6 }}>Title (optional)</Text>
+      <View style={{ backgroundColor: c.card, borderRadius: 10, paddingHorizontal: 10, marginBottom: 12 }}>
+        <TextInput
+          placeholder="e.g., Saturday Night Plans"
+          placeholderTextColor={c.muted}
+          value={title}
+          onChangeText={setTitle}
+          style={{ color: c.text, paddingVertical: 10 }}
+        />
+      </View>
+
+      {/* Optional deadline */}
+      <Text style={{ color: c.muted, marginBottom: 6 }}>Deadline (optional)</Text>
+      <View style={{ backgroundColor: c.card, borderRadius: 10, padding: 10, marginBottom: 12 }}>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <Pressable
+            onPress={() => setShowDatePicker('date')}
+            style={{ paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, backgroundColor: c.background }}
+          >
+            <Text style={{ color: c.text }}>Pick date</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => setShowDatePicker('time')}
+            style={{ paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, backgroundColor: c.background }}
+          >
+            <Text style={{ color: c.text }}>Pick time</Text>
+          </Pressable>
+          {deadlineDate ? (
+            <Pressable
+              onPress={() => setDeadlineDate(null)}
+              style={{ paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, backgroundColor: c.background }}
+            >
+              <Text style={{ color: c.text }}>Clear</Text>
+            </Pressable>
+          ) : null}
+        </View>
+        <Text style={{ color: c.muted, marginTop: 8 }}>
+          {deadlineDate ? dayjs(deadlineDate).format('ddd, MMM D YYYY • h:mm A') : 'No deadline set'}
+        </Text>
+      </View>
+      {showDatePicker && (
+        <DateTimePicker
+          value={deadlineDate ?? new Date()}
+          mode={showDatePicker}
+          onChange={(e, selectedDate) => {
+            if (Platform.OS !== 'ios') setShowDatePicker(null);
+            if (selectedDate) {
+              if (!deadlineDate) {
+                setDeadlineDate(selectedDate);
+              } else {
+                // Merge date/time parts depending on picker
+                const curr = new Date(deadlineDate);
+                const s = new Date(selectedDate);
+                if (showDatePicker === 'date') {
+                  curr.setFullYear(s.getFullYear(), s.getMonth(), s.getDate());
+                } else {
+                  curr.setHours(s.getHours(), s.getMinutes(), 0, 0);
+                }
+                setDeadlineDate(new Date(curr));
+              }
+            }
+          }}
+          display={Platform.select({ ios: 'inline', default: 'default' }) as any}
+        />
+      )}
+
+      {/* Poll mode */}
+      <Text style={{ color: c.muted, marginBottom: 6 }}>Vote Mode</Text>
+      <View style={{ backgroundColor: c.card, borderRadius: 10, padding: 10, marginBottom: 12 }}>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <Pressable onPress={() => setMode('single')} style={{ paddingVertical: 6, paddingHorizontal: 10, borderRadius: 8, backgroundColor: mode === 'single' ? c.primary : c.background }}>
+            <Text style={{ color: c.text }}>Single choice</Text>
+          </Pressable>
+          <Pressable onPress={() => setMode('rating')} style={{ paddingVertical: 6, paddingHorizontal: 10, borderRadius: 8, backgroundColor: mode === 'rating' ? c.primary : c.background }}>
+            <Text style={{ color: c.text }}>Ratings</Text>
+          </Pressable>
+        </View>
+        <Text style={{ color: c.muted, marginTop: 6 }}>
+          {mode === 'single' ? 'Each person picks one option.' : 'Each person rates every option: Love it / It\'s fine / Not for me.'}
+        </Text>
+      </View>
 
       <Text style={{ color: c.muted, marginBottom: 6 }}>Group</Text>
       <View style={{ backgroundColor: c.card, borderRadius: 10, padding: 10, marginBottom: 12 }}>
@@ -224,6 +310,12 @@ export default function NewPoll() {
         />
       </View>
 
+      {mode === 'single' && selectedCount === 1 ? (
+        <Text style={{ color: c.muted, marginBottom: 8 }}>
+          A single selection makes a Yes/No poll for that event.
+        </Text>
+      ) : null}
+
       {/* Search results */}
       {showSearchResults ? (
         <FlatList
@@ -292,15 +384,14 @@ export default function NewPoll() {
         ) : (
           <ThreeDButton
             title={
-              selectedCount < 1
-                ? 'Select at least 1 event'
-                : selectedCount === 1
+              selectedCount === 1 && mode === 'single'
                 ? 'Create Yes/No Poll'
-                : `Create Poll (${selectedCount} selected)`
+                : selectedCount > 1
+                ? `Create Poll (${selectedCount} selected)`
+                : 'Create Poll'
             }
             onPress={onCreate}
-            disabled={selectedCount < 1}
-            style={{ opacity: selectedCount < 1 ? 0.6 : 1, alignSelf: 'center' }}
+            style={{ alignSelf: 'center' }}
           />
         )}
       </View>

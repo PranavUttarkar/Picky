@@ -118,6 +118,7 @@ export default function Welcome() {
           fontSize: 36,
           fontWeight: '800',
           marginBottom: 12,
+          fontFamily: 'Pacifico',
         }}
       >
         Picky
