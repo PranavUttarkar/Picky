@@ -646,6 +646,10 @@ export default function Home() {
   // Modal state for event details
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  // Confirm delete modal state
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Admin form state
   const [adminOpen, setAdminOpen] = useState(false);
@@ -1043,22 +1047,35 @@ export default function Home() {
     Alert.alert('Success', editingIdVal ? 'Event updated' : 'Event created');
   };
 
-  const deleteEvent = async (id: number) => {
-    Alert.alert('Delete event?', 'This cannot be undone.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          const { error } = await supabase.from('events').delete().eq('id', id);
-          if (error) {
-            Alert.alert('Delete failed', error.message);
-            return;
-          }
-          await onRefresh();
-        },
-      },
-    ]);
+  // Open cross-platform confirmation modal
+  const deleteEvent = (id: number) => {
+    if (id <= 0) return; // ignore dummy events
+    setDeleteTargetId(id);
+    setConfirmDeleteOpen(true);
+  };
+
+  const performDelete = async () => {
+    if (!deleteTargetId) return;
+    if (!isAdmin) {
+      Alert.alert('Not allowed', 'Only admins can delete events.');
+      setConfirmDeleteOpen(false);
+      setDeleteTargetId(null);
+      return;
+    }
+    try {
+      setIsDeleting(true);
+      const { error } = await supabase.from('events').delete().eq('id', deleteTargetId);
+      if (error) {
+        Alert.alert('Delete failed', error.message);
+        return;
+      }
+      setConfirmDeleteOpen(false);
+      setDeleteTargetId(null);
+      await onRefresh();
+      Alert.alert('Deleted', 'The event was deleted.');
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const onOpenDetails = async (item: Event) => {
@@ -1442,6 +1459,75 @@ export default function Home() {
             </View>
           </ScrollView>
         </SafeAreaView>
+      </Modal>
+
+      {/* Confirm Delete Modal */}
+      <Modal
+        visible={confirmDeleteOpen}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => !isDeleting && setConfirmDeleteOpen(false)}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(0,0,0,0.4)',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 16,
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: c.card,
+              borderRadius: 16,
+              padding: 16,
+              width: '100%',
+              maxWidth: 420,
+              borderWidth: 1,
+              borderColor: '#00000020',
+            }}
+          >
+            <Text style={{ color: c.text, fontSize: 18, fontWeight: '800' }}>Delete event?</Text>
+            <Text style={{ color: c.muted, marginTop: 8 }}>
+              This action cannot be undone. Are you sure you want to permanently delete this event?
+            </Text>
+            <View
+              style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}
+            >
+              <Pressable
+                onPress={() => !isDeleting && setConfirmDeleteOpen(false)}
+                style={{
+                  backgroundColor: '#00000020',
+                  paddingHorizontal: 12,
+                  paddingVertical: 10,
+                  borderRadius: 10,
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Cancel"
+              >
+                <Text style={{ color: c.text, fontWeight: '700' }}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                onPress={performDelete}
+                disabled={isDeleting}
+                style={{
+                  backgroundColor: '#ef4444',
+                  paddingHorizontal: 12,
+                  paddingVertical: 10,
+                  borderRadius: 10,
+                  opacity: isDeleting ? 0.6 : 1,
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Confirm delete"
+              >
+                <Text style={{ color: '#fff', fontWeight: '800' }}>
+                  {isDeleting ? 'Deleting…' : 'Delete'}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
       </Modal>
     </Container>
   );

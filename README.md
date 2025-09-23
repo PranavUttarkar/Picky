@@ -123,3 +123,49 @@ Next steps
 - Add event details screen and calendar integration
 - Add push notifications using Expo Notifications
 # Picky
+
+---
+
+## Quickstart
+
+1) Install
+
+```powershell
+npm i
+```
+
+2) Configure env (.env)
+
+```
+EXPO_PUBLIC_SUPABASE_URL=your-project-url
+EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+```
+
+3) Apply migrations (in Supabase SQL Editor)
+
+Files in `supabase/migrations` in order. Promote an admin if needed:
+
+```sql
+update users set is_admin = true where email = 'you@example.com';
+```
+
+4) Run
+
+```powershell
+npm run start
+```
+
+## Documentation
+
+Deep-dive docs are in the `docs/` folder:
+
+- `docs/architecture.md` — App layers and data flow
+- `docs/data-model.md` — Tables, views, RPCs, indices
+- `docs/supabase-policies.md` — RLS and admin rights
+- `docs/frontend-home-feed.md` — Feed, filters, personalization, admin UI
+- `docs/admin-flows.md` — Event CRUD and delete confirmation modal
+- `docs/scoring.md` — Personalization and server RPCs
+- `docs/development.md` — Dev setup, scripts, migrations
+- `docs/troubleshooting.md` — Common issues and fixes
+
+If you’re looking for how the admin delete confirmation works, see `docs/admin-flows.md`.
