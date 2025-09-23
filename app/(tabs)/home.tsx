@@ -193,7 +193,7 @@ const AdminHeader = memo(function AdminHeader(props: AdminHeaderProps) {
       >
         <Pressable onPress={() => setAdminOpen((v) => !v)}>
           <Text style={{ color: c.text, fontWeight: '800', fontSize: 16 }}>
-            Admin: Manage Events {adminOpen ? '▲' : '▼'}
+            Admin: Manage Events: {adminOpen ? '▲' : '▼'}
           </Text>
         </Pressable>
         {adminOpen ? (
