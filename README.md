@@ -169,3 +169,33 @@ Deep-dive docs are in the `docs/` folder:
 - `docs/troubleshooting.md` — Common issues and fixes
 
 If you’re looking for how the admin delete confirmation works, see `docs/admin-flows.md`.
+
+## Branding assets (icons/favicons)
+
+Place your branding assets in `assets/branding/`:
+
+- App icon (native): update `expo.icon` in `app.json` to point to your PNG (e.g., `./assets/branding/app-icon.png`).
+- Android adaptive icon: update `expo.android.adaptiveIcon.foregroundImage` (e.g., `./assets/branding/adaptive-foreground.png`).
+- Splash screen: update `expo.splash.image` (e.g., `./assets/branding/splash.png`).
+- Web favicons: create files in `assets/branding/` (e.g., `favicon.ico`, `favicon-192.png`, `favicon-512.png`) and configure via `app.config.ts` `web.favicon` or a custom `index.html` in Expo web if needed.
+
+Example `app.json` snippet:
+
+```json
+{
+	"expo": {
+		"icon": "./assets/branding/app-icon.png",
+		"android": {
+			"adaptiveIcon": {
+				"foregroundImage": "./assets/branding/adaptive-foreground.png",
+				"backgroundColor": "#111827"
+			}
+		},
+		"splash": {
+			"image": "./assets/branding/splash.png",
+			"resizeMode": "contain",
+			"backgroundColor": "#111827"
+		}
+	}
+}
+```

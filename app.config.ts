@@ -9,7 +9,7 @@ export default (): ExpoConfig => ({
   assetBundlePatterns: ['**/*'],
   ios: { supportsTablet: true },
   android: {},
-  web: { bundler: 'metro', output: 'static' },
+  web: { bundler: 'metro', output: 'static', favicon: './assets/branding/P.png' },
   plugins: [
     ['expo-router'],
     ['expo-notifications'],
