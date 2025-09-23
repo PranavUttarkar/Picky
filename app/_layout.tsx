@@ -14,7 +14,7 @@ export default function RootLayout() {
         <Stack.Screen name="onboarding" />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="events/[id]" />
-        <Stack.Screen name="polls/[id]" />
+        {/** Poll routes are under (tabs)/polls now to keep header/tab visible */}
       </Stack>
     </ThemeProvider>
   );

@@ -104,6 +104,12 @@ export default function EventDetails() {
               <Text style={{ color: c.text, fontWeight: '700' }}>Open RSVP link</Text>
             </Pressable>
           ) : null}
+          <Pressable
+            onPress={() => router.push(`/(tabs)/polls/new?eventId=${event.id}`)}
+            style={{ backgroundColor: '#00000030', padding: 12, borderRadius: 12 }}
+          >
+            <Text style={{ color: c.text, fontWeight: '700' }}>Start a poll</Text>
+          </Pressable>
         </View>
       </View>
     </View>
