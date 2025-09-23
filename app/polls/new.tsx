@@ -1,4 +1,5 @@
 import { View, Text, Pressable, Alert, FlatList, ActivityIndicator, TextInput } from 'react-native';
+import { ThreeDButton, ThreeDCard } from '@/components/ThreeD';
 import { useThemeColors } from '@/theme/ThemeProvider';
 import { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/services/supabase';
@@ -171,22 +172,28 @@ export default function NewPoll() {
                 key={item.id}
                 onPress={() => toggle(item.id)}
                 style={{
-                  backgroundColor: c.card,
-                  padding: 12,
-                  borderRadius: 12,
                   marginBottom: 8,
-                  borderWidth: sel ? 2 : 1,
-                  borderColor: sel ? c.primary : '#00000020',
                 }}
               >
-                <Text style={{ color: c.text, fontWeight: '700' }}>{item.title}</Text>
-                <Text style={{ color: c.muted, marginTop: 4 }}>
-                  {new Date(item.date_time).toLocaleString()} • {item.location}
-                </Text>
-                {item.match_percent != null ? (
-                  <Text style={{ color: c.muted, marginTop: 4 }}>{item.match_percent}% match</Text>
-                ) : null}
-                {sel ? <Text style={{ color: c.primary, marginTop: 6 }}>Selected</Text> : null}
+                <ThreeDCard
+                  style={{
+                    borderWidth: sel ? 2 : 1,
+                    borderColor: sel ? c.primary : '#00000020',
+                    padding: 12,
+                    borderRadius: 12,
+                  }}
+                >
+                  <Text style={{ color: c.text, fontWeight: '700' }}>{item.title}</Text>
+                  <Text style={{ color: c.muted, marginTop: 4 }}>
+                    {new Date(item.date_time).toLocaleString()} • {item.location}
+                  </Text>
+                  {item.match_percent != null ? (
+                    <Text style={{ color: c.muted, marginTop: 4 }}>
+                      {item.match_percent}% match
+                    </Text>
+                  ) : null}
+                  {sel ? <Text style={{ color: c.primary, marginTop: 6 }}>Selected</Text> : null}
+                </ThreeDCard>
               </Pressable>
             );
           })}
@@ -195,28 +202,8 @@ export default function NewPoll() {
 
       {/* Quick actions */}
       <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
-        <Pressable
-          onPress={() => router.push('/(tabs)/saved')}
-          style={{
-            backgroundColor: c.card,
-            paddingVertical: 10,
-            paddingHorizontal: 12,
-            borderRadius: 10,
-          }}
-        >
-          <Text style={{ color: c.text, fontWeight: '700' }}>View Saved</Text>
-        </Pressable>
-        <Pressable
-          onPress={() => router.push('/(tabs)/home')}
-          style={{
-            backgroundColor: c.card,
-            paddingVertical: 10,
-            paddingHorizontal: 12,
-            borderRadius: 10,
-          }}
-        >
-          <Text style={{ color: c.text, fontWeight: '700' }}>Browse</Text>
-        </Pressable>
+        <ThreeDButton title="View Saved" onPress={() => router.push('/(tabs)/saved')} />
+        <ThreeDButton title="Browse" onPress={() => router.push('/(tabs)/home')} />
       </View>
 
       {/* Search input */}
@@ -258,19 +245,23 @@ export default function NewPoll() {
               <Pressable
                 onPress={() => toggle(item.id)}
                 style={{
-                  backgroundColor: c.card,
-                  padding: 12,
-                  borderRadius: 12,
                   marginBottom: 8,
-                  borderWidth: sel ? 2 : 1,
-                  borderColor: sel ? c.primary : '#00000020',
                 }}
               >
-                <Text style={{ color: c.text, fontWeight: '700' }}>{item.title}</Text>
-                <Text style={{ color: c.muted, marginTop: 4 }}>
-                  {new Date(item.date_time).toLocaleString()} • {item.location}
-                </Text>
-                {sel ? <Text style={{ color: c.primary, marginTop: 6 }}>Selected</Text> : null}
+                <ThreeDCard
+                  style={{
+                    borderWidth: sel ? 2 : 1,
+                    borderColor: sel ? c.primary : '#00000020',
+                    padding: 12,
+                    borderRadius: 12,
+                  }}
+                >
+                  <Text style={{ color: c.text, fontWeight: '700' }}>{item.title}</Text>
+                  <Text style={{ color: c.muted, marginTop: 4 }}>
+                    {new Date(item.date_time).toLocaleString()} • {item.location}
+                  </Text>
+                  {sel ? <Text style={{ color: c.primary, marginTop: 6 }}>Selected</Text> : null}
+                </ThreeDCard>
               </Pressable>
             );
           }}
@@ -291,32 +282,27 @@ export default function NewPoll() {
           padding: 12,
         }}
       >
-        <Pressable
-          onPress={onCreate}
-          disabled={selectedCount < 1 || creating}
-          style={{
-            backgroundColor: c.card,
-            padding: 14,
-            borderRadius: 12,
-            alignItems: 'center',
-            opacity: selectedCount < 1 || creating ? 0.6 : 1,
-          }}
-        >
-          {creating ? (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <ActivityIndicator color={c.text} />
-              <Text style={{ color: c.text, fontWeight: '700' }}>Creating…</Text>
-            </View>
-          ) : (
-            <Text style={{ color: c.text, fontWeight: '700' }}>
-              {selectedCount < 1
+        {creating ? (
+          <View
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 8, justifyContent: 'center' }}
+          >
+            <ActivityIndicator color={c.text} />
+            <Text style={{ color: c.text, fontWeight: '700' }}>Creating…</Text>
+          </View>
+        ) : (
+          <ThreeDButton
+            title={
+              selectedCount < 1
                 ? 'Select at least 1 event'
                 : selectedCount === 1
                 ? 'Create Yes/No Poll'
-                : `Create Poll (${selectedCount} selected)`}
-            </Text>
-          )}
-        </Pressable>
+                : `Create Poll (${selectedCount} selected)`
+            }
+            onPress={onCreate}
+            disabled={selectedCount < 1}
+            style={{ opacity: selectedCount < 1 ? 0.6 : 1, alignSelf: 'center' }}
+          />
+        )}
       </View>
     </View>
   );

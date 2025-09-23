@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import {
   Linking,
   Platform,
 } from 'react-native';
+import { ThreeDButton, ThreeDCard } from '@/components/ThreeD';
 import dayjs from 'dayjs';
 import { useTheme, useThemeColors } from '@/theme/ThemeProvider';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -21,6 +22,609 @@ import { router } from 'expo-router';
 import type { Event } from '@/types/models';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import DateTimePicker from '@react-native-community/datetimepicker';
+
+type AdminHeaderProps = {
+  c: ReturnType<typeof useThemeColors>;
+  isAdmin: boolean;
+  adminOpen: boolean;
+  setAdminOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  editingId: number | null;
+  fTitle: string;
+  setFTitle: (v: string) => void;
+  fDesc: string;
+  setFDesc: (v: string) => void;
+  fImage: string;
+  setFImage: (v: string) => void;
+  fDateTime: string;
+  setFDateTime: (v: string) => void;
+  fLocation: string;
+  setFLocation: (v: string) => void;
+  fTagsCsv: string;
+  setFTagsCsv: (v: string) => void;
+  fRsvp: string;
+  setFRsvp: (v: string) => void;
+  showDatePicker: boolean;
+  setShowDatePicker: (v: boolean) => void;
+  showTimePicker: boolean;
+  setShowTimePicker: (v: boolean) => void;
+  upsertEvent: (values?: {
+    title: string;
+    desc: string;
+    image: string;
+    dateTime: string;
+    location: string;
+    tagsCsv: string;
+    rsvp: string;
+    editingId?: number | null;
+  }) => void | Promise<void>;
+  resetForm: () => void;
+  events: Event[];
+  deleteEvent: (id: number) => void;
+};
+
+const AdminHeader = memo(function AdminHeader(props: AdminHeaderProps) {
+  const {
+    c,
+    isAdmin,
+    adminOpen,
+    setAdminOpen,
+    editingId,
+    fTitle,
+    setFTitle,
+    fDesc,
+    setFDesc,
+    fImage,
+    setFImage,
+    fDateTime,
+    setFDateTime,
+    fLocation,
+    setFLocation,
+    fTagsCsv,
+    setFTagsCsv,
+    fRsvp,
+    setFRsvp,
+    showDatePicker,
+    setShowDatePicker,
+    showTimePicker,
+    setShowTimePicker,
+    upsertEvent,
+    resetForm,
+    events,
+    deleteEvent,
+  } = props;
+
+  // Local admin form state to avoid re-rendering parent on each keystroke
+  const [titleLocal, setTitleLocal] = useState(fTitle);
+  const [descLocal, setDescLocal] = useState(fDesc);
+  const [imageLocal, setImageLocal] = useState(fImage);
+  const [dateTimeLocal, setDateTimeLocal] = useState(fDateTime);
+  const [locationLocal, setLocationLocal] = useState(fLocation);
+  const [tagsCsvLocal, setTagsCsvLocal] = useState(fTagsCsv);
+  const [rsvpLocal, setRsvpLocal] = useState(fRsvp);
+
+  // Sync locals when parent values change due to Edit/Reset
+  useEffect(() => {
+    setTitleLocal(fTitle);
+    setDescLocal(fDesc);
+    setImageLocal(fImage);
+    setDateTimeLocal(fDateTime);
+    setLocationLocal(fLocation);
+    setTagsCsvLocal(fTagsCsv);
+    setRsvpLocal(fRsvp);
+  }, [editingId, fTitle, fDesc, fImage, fDateTime, fLocation, fTagsCsv, fRsvp]);
+
+  // Web date/time input UX: locally control text and commit onBlur or when valid
+  const [dateText, setDateText] = useState(dayjs(fDateTime).format('YYYY-MM-DD'));
+  const [timeText, setTimeText] = useState(dayjs(fDateTime).format('HH:mm'));
+  useEffect(() => {
+    // keep local fields in sync when fDateTime changes externally
+    setDateText(dayjs(fDateTime).format('YYYY-MM-DD'));
+    setTimeText(dayjs(fDateTime).format('HH:mm'));
+  }, [fDateTime]);
+
+  const commitDateText = () => {
+    const d = dayjs(dateText, 'YYYY-MM-DD', true);
+    if (d.isValid()) {
+      const merged = d
+        .hour(dayjs(fDateTime).hour())
+        .minute(dayjs(fDateTime).minute())
+        .second(0)
+        .millisecond(0)
+        .toISOString();
+      setFDateTime(merged);
+    }
+  };
+  const commitTimeText = () => {
+    const [hh, mm] = timeText.split(':');
+    const h = Number(hh);
+    const m = Number(mm);
+    if (!Number.isNaN(h) && !Number.isNaN(m) && h >= 0 && h < 24 && m >= 0 && m < 60) {
+      const merged = dayjs(fDateTime).hour(h).minute(m).second(0).millisecond(0).toISOString();
+      setFDateTime(merged);
+    }
+  };
+
+  const DateTimeInputsWebInner = () => (
+    <View style={{ flexDirection: 'row', gap: 8 }}>
+      <TextInput
+        value={dateText}
+        onChangeText={(val) => setDateText(val)}
+        onBlur={commitDateText}
+        placeholder="YYYY-MM-DD"
+        style={{
+          flex: 1,
+          color: c.text,
+          backgroundColor: '#00000010',
+          padding: 10,
+          borderRadius: 8,
+        }}
+        inputMode="numeric"
+      />
+      <TextInput
+        value={timeText}
+        onChangeText={(val) => setTimeText(val)}
+        onBlur={commitTimeText}
+        placeholder="HH:mm"
+        style={{
+          flex: 1,
+          color: c.text,
+          backgroundColor: '#00000010',
+          padding: 10,
+          borderRadius: 8,
+        }}
+        inputMode="numeric"
+      />
+    </View>
+  );
+
+  if (!isAdmin) return null;
+
+  return (
+    <View style={{ paddingBottom: 12 }}>
+      <View
+        style={{
+          backgroundColor: c.card,
+          borderRadius: 12,
+          padding: 12,
+          marginBottom: 12,
+          borderWidth: 1,
+          borderColor: '#00000020',
+        }}
+      >
+        <Pressable onPress={() => setAdminOpen((v) => !v)}>
+          <Text style={{ color: c.text, fontWeight: '800', fontSize: 16 }}>
+            Admin: Manage Events {adminOpen ? '▲' : '▼'}
+          </Text>
+        </Pressable>
+        {adminOpen ? (
+          <View style={{ marginTop: 8, gap: 8 }}>
+            {editingId ? <Text style={{ color: c.muted }}>Editing event #{editingId}</Text> : null}
+            <TextInput
+              placeholder="Title"
+              placeholderTextColor={c.muted}
+              value={titleLocal}
+              onChangeText={setTitleLocal}
+              style={{ color: c.text, backgroundColor: '#00000010', padding: 10, borderRadius: 8 }}
+              autoComplete="off"
+              blurOnSubmit={false}
+            />
+            <TextInput
+              placeholder="Description"
+              placeholderTextColor={c.muted}
+              value={descLocal}
+              onChangeText={setDescLocal}
+              multiline
+              style={{
+                color: c.text,
+                backgroundColor: '#00000010',
+                padding: 10,
+                borderRadius: 8,
+                minHeight: 60,
+              }}
+              autoComplete="off"
+              blurOnSubmit={false}
+            />
+            <TextInput
+              placeholder="Image URL"
+              placeholderTextColor={c.muted}
+              value={imageLocal}
+              onChangeText={setImageLocal}
+              style={{ color: c.text, backgroundColor: '#00000010', padding: 10, borderRadius: 8 }}
+              autoComplete="off"
+              blurOnSubmit={false}
+            />
+            {Platform.OS === 'web' ? (
+              <DateTimeInputsWebInner />
+            ) : (
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <Pressable
+                  onPress={() => setShowDatePicker(true)}
+                  style={{
+                    flex: 1,
+                    backgroundColor: '#00000010',
+                    padding: 10,
+                    borderRadius: 8,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Select date"
+                >
+                  <Text style={{ color: c.text, fontWeight: '700' }}>
+                    {dayjs(dateTimeLocal).format('YYYY-MM-DD')}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => setShowTimePicker(true)}
+                  style={{
+                    flex: 1,
+                    backgroundColor: '#00000010',
+                    padding: 10,
+                    borderRadius: 8,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Select time"
+                >
+                  <Text style={{ color: c.text, fontWeight: '700' }}>
+                    {dayjs(dateTimeLocal).format('h:mm A')}
+                  </Text>
+                </Pressable>
+              </View>
+            )}
+            {showDatePicker ? (
+              <DateTimePicker
+                mode="date"
+                value={new Date(dateTimeLocal)}
+                onChange={(evt, selectedDate) => {
+                  setShowDatePicker(false);
+                  if (!selectedDate) return;
+                  const current = dayjs(dateTimeLocal);
+                  const merged = current
+                    .year(selectedDate.getFullYear())
+                    .month(selectedDate.getMonth())
+                    .date(selectedDate.getDate());
+                  setDateTimeLocal(merged.toISOString());
+                }}
+              />
+            ) : null}
+            {showTimePicker ? (
+              <DateTimePicker
+                mode="time"
+                value={new Date(dateTimeLocal)}
+                onChange={(evt, selectedTime) => {
+                  setShowTimePicker(false);
+                  if (!selectedTime) return;
+                  const current = dayjs(dateTimeLocal);
+                  const merged = current
+                    .hour(selectedTime.getHours())
+                    .minute(selectedTime.getMinutes())
+                    .second(0)
+                    .millisecond(0);
+                  setDateTimeLocal(merged.toISOString());
+                }}
+              />
+            ) : null}
+            <TextInput
+              placeholder="Location"
+              placeholderTextColor={c.muted}
+              value={locationLocal}
+              onChangeText={setLocationLocal}
+              style={{ color: c.text, backgroundColor: '#00000010', padding: 10, borderRadius: 8 }}
+              autoComplete="off"
+              blurOnSubmit={false}
+            />
+            <TextInput
+              placeholder="Tags (comma-separated)"
+              placeholderTextColor={c.muted}
+              value={tagsCsvLocal}
+              onChangeText={setTagsCsvLocal}
+              style={{ color: c.text, backgroundColor: '#00000010', padding: 10, borderRadius: 8 }}
+              autoCapitalize="none"
+              autoComplete="off"
+              blurOnSubmit={false}
+            />
+            <TextInput
+              placeholder="RSVP URL (optional)"
+              placeholderTextColor={c.muted}
+              value={rsvpLocal}
+              onChangeText={setRsvpLocal}
+              style={{ color: c.text, backgroundColor: '#00000010', padding: 10, borderRadius: 8 }}
+              autoCapitalize="none"
+              autoComplete="off"
+              blurOnSubmit={false}
+            />
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <ThreeDButton
+                title={editingId ? 'Update Event' : 'Create Event'}
+                onPress={() =>
+                  upsertEvent({
+                    title: titleLocal,
+                    desc: descLocal,
+                    image: imageLocal,
+                    dateTime: dateTimeLocal,
+                    location: locationLocal,
+                    tagsCsv: tagsCsvLocal,
+                    rsvp: rsvpLocal,
+                    editingId,
+                  })
+                }
+              />
+              {editingId ? <ThreeDButton title="Cancel" onPress={resetForm} /> : null}
+            </View>
+            {/* Quick list to edit/delete */}
+            <View style={{ marginTop: 8, gap: 8 }}>
+              {events
+                .filter((e: any) => e.id > 0)
+                .slice(0, 8)
+                .map((e: any) => (
+                  <View
+                    key={e.id}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                    }}
+                  >
+                    <Text style={{ color: c.text }}>
+                      #{e.id} · {e.title}
+                    </Text>
+                    <View style={{ flexDirection: 'row', gap: 6 }}>
+                      <Pressable
+                        onPress={() => {
+                          setFTitle(e.title);
+                          setFDesc(e.description ?? '');
+                          setFImage(e.image_url ?? '');
+                          setFDateTime(e.date_time);
+                          setFLocation(e.location ?? '');
+                          setFTagsCsv((e.tags ?? []).join(', '));
+                          setFRsvp(e.rsvp_url ?? '');
+                        }}
+                        style={{
+                          backgroundColor: '#00000030',
+                          paddingHorizontal: 10,
+                          paddingVertical: 6,
+                          borderRadius: 8,
+                        }}
+                      >
+                        <Text style={{ color: c.text }}>Edit</Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => deleteEvent(e.id)}
+                        style={{
+                          backgroundColor: '#ff444433',
+                          paddingHorizontal: 10,
+                          paddingVertical: 6,
+                          borderRadius: 8,
+                        }}
+                      >
+                        <Text style={{ color: '#ff5555' }}>Delete</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                ))}
+            </View>
+          </View>
+        ) : null}
+      </View>
+    </View>
+  );
+});
+
+type FiltersTopBarProps = {
+  c: ReturnType<typeof useThemeColors>;
+  query: string;
+  setQuery: (v: string) => void;
+  mode: 'all' | 'personalized';
+  setMode: React.Dispatch<React.SetStateAction<'all' | 'personalized'>>;
+};
+
+const FiltersTopBar = memo(function FiltersTopBar({
+  c,
+  query,
+  setQuery,
+  mode,
+  setMode,
+}: FiltersTopBarProps) {
+  return (
+    <View style={{ paddingBottom: 12 }}>
+      <View
+        style={{
+          backgroundColor: c.card,
+          borderRadius: 12,
+          paddingHorizontal: 12,
+          paddingVertical: 8,
+          marginBottom: 12,
+          borderWidth: 1,
+          borderColor: '#00000020',
+        }}
+      >
+        <TextInput
+          placeholder="Search events or use #tags"
+          placeholderTextColor={c.muted}
+          value={query}
+          onChangeText={setQuery}
+          style={{ color: c.text, fontSize: 16 }}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+      </View>
+      <View
+        style={{
+          flexDirection: 'row',
+          gap: 6,
+          marginBottom: 12,
+          backgroundColor: c.card,
+          padding: 6,
+          borderRadius: 12,
+        }}
+      >
+        {[
+          { key: 'all', label: 'View All' },
+          { key: 'personalized', label: 'Personalized Feed' },
+        ].map((opt) => {
+          const active = mode === (opt.key as any);
+          return (
+            <Pressable
+              key={opt.key}
+              onPress={() => setMode(opt.key as any)}
+              style={{
+                backgroundColor: active ? c.primary : 'transparent',
+                paddingHorizontal: 12,
+                paddingVertical: 8,
+                borderRadius: 10,
+              }}
+            >
+              <Text style={{ color: active ? '#000' : c.text, fontWeight: '700' }}>
+                {opt.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+});
+
+type FiltersScrollableProps = {
+  c: ReturnType<typeof useThemeColors>;
+  myTags: string[];
+  activeTags: string[];
+  setActiveTags: React.Dispatch<React.SetStateAction<string[]>>;
+  allTags: string[];
+  query: string;
+  setQuery: (v: string) => void;
+  filteredCount: number;
+  mode: 'all' | 'personalized';
+};
+
+const FiltersScrollable = memo(function FiltersScrollable({
+  c,
+  myTags,
+  activeTags,
+  setActiveTags,
+  allTags,
+  query,
+  setQuery,
+  filteredCount,
+  mode,
+}: FiltersScrollableProps) {
+  return (
+    <View style={{ paddingBottom: 12 }}>
+      {myTags.length ? (
+        <View
+          style={{
+            backgroundColor: c.card,
+            borderRadius: 12,
+            padding: 12,
+            marginBottom: 12,
+            borderWidth: 1,
+            borderColor: '#00000020',
+          }}
+        >
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: 8,
+            }}
+          >
+            <Text style={{ color: c.text, fontWeight: '800' }}>Your interests</Text>
+            <Pressable
+              onPress={() => router.push('/onboarding/interests')}
+              style={{
+                backgroundColor: '#00000020',
+                paddingHorizontal: 10,
+                paddingVertical: 6,
+                borderRadius: 8,
+              }}
+            >
+              <Text style={{ color: c.text }}>Edit</Text>
+            </Pressable>
+          </View>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            {myTags.map((t, i) => {
+              const active = activeTags.includes(t);
+              return (
+                <Pressable
+                  key={`${t}-${i}`}
+                  onPress={() =>
+                    setActiveTags((prev) =>
+                      prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t],
+                    )
+                  }
+                  style={{
+                    backgroundColor: active ? c.primary : '#00000020',
+                    paddingHorizontal: 10,
+                    paddingVertical: 6,
+                    borderRadius: 999,
+                  }}
+                >
+                  <Text style={{ color: active ? '#000' : c.text, fontSize: 12 }}>#{t}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+      ) : null}
+
+      {allTags.length ? (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+          {allTags.map((t, i) => {
+            const active = activeTags.includes(t);
+            return (
+              <Pressable
+                key={`${t}-${i}`}
+                onPress={() =>
+                  setActiveTags((prev) =>
+                    prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t],
+                  )
+                }
+                style={{
+                  backgroundColor: active ? c.primary : '#00000020',
+                  paddingHorizontal: 10,
+                  paddingVertical: 6,
+                  borderRadius: 999,
+                }}
+              >
+                <Text style={{ color: active ? '#000' : c.text, fontSize: 12 }}>{t}</Text>
+              </Pressable>
+            );
+          })}
+          {activeTags.length || query.length ? (
+            <Pressable
+              onPress={() => {
+                setActiveTags([]);
+                setQuery('');
+              }}
+              style={{
+                backgroundColor: '#00000030',
+                paddingHorizontal: 10,
+                paddingVertical: 6,
+                borderRadius: 999,
+              }}
+            >
+              <Text style={{ color: c.text, fontSize: 12 }}>Clear filters</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
+
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+        <Text style={{ color: c.muted }}>
+          Showing {filteredCount} {filteredCount === 1 ? 'event' : 'events'}
+        </Text>
+        {mode === 'personalized' ? (
+          <Text style={{ color: c.muted }}>Sorted by match</Text>
+        ) : (
+          <Text style={{ color: c.muted }}>Soonest first</Text>
+        )}
+      </View>
+    </View>
+  );
+});
 
 export default function Home() {
   const c = useThemeColors();
@@ -58,84 +662,59 @@ export default function Home() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
 
-  // Generate a healthy set of dummy events (negative IDs) to fill the feed
   const makeDummyEvents = (): Event[] => {
-    const now = dayjs();
-    const cities = [
-      'Downtown Campus',
-      'Riverside Park',
-      'Innovation Hub',
-      'Student Union',
-      'Community Center',
-      'Main Quad',
-      'Arts Hall',
-      'Stadium Plaza',
-      'Library Lawn',
-      'Tech Commons',
-    ];
-    const tagSets: string[][] = [
-      ['Music', 'Nightlife'],
-      ['Sports', 'Outdoors'],
-      ['Food', 'Culture'],
-      ['Tech', 'Career'],
-      ['Volunteering', 'Wellness'],
-      ['Art', 'Culture'],
-      ['Gaming', 'Tech'],
-      ['Outdoors', 'Wellness'],
-      ['Music', 'Art'],
-      ['Sports', 'Career'],
-      ['Food', 'Nightlife'],
-      ['Tech', 'Innovation'],
-      ['Volunteering', 'Community'],
-      ['Art', 'Wellness'],
-      ['Gaming', 'Nightlife'],
-      ['Outdoors', 'Culture'],
-      ['Career', 'Tech'],
-      ['Wellness', 'Yoga'],
-      ['Music', 'Festival'],
-      ['Food', 'Farmers Market'],
-    ];
     const titles = [
-      'Sunset Acoustic Jam',
-      'Intramural Soccer Finals',
-      'Street Foods Around the World',
-      'AI Study Group + Pizza',
-      'Community Clean-up Drive',
-      'Gallery Night: Student Art',
-      'LAN Party Showdown',
-      'Sunrise Yoga in the Quad',
-      'Open Mic Night',
-      'Career Fair Prep Workshop',
-      'Night Market & Bites',
-      'Hack Night: Build & Ship',
-      'Food Bank Volunteering',
-      'Mindfulness & Sketching',
-      'Retro Games & Chips',
-      'Trail Run Meetup',
-      'Resume Review Roundtable',
-      'Wellness Wednesday',
-      'Campus Music Fest Preview',
-      'Local Farmers Market Trip',
+      'Campus Mixer Night',
+      'Tech Talk & Pizza',
+      'Outdoor Movie',
+      'Art & Coffee',
+      'Startup Pitch Jam',
+      'Game Night Social',
+      'Mindfulness Workshop',
+      'Live Music on the Lawn',
+      'Career Fair Warmup',
+      'Community Volunteering',
+      'Robotics Demo Day',
+      'Open Mic Evening',
+      'Photography Walk',
     ];
-    const desc =
-      'This is a placeholder event to help you explore the app while we load fresh events.';
-    const dummies: Event[] = titles.map((t, i) => {
-      const dt = now
+    const locations = ['Riverside Park', 'Innovation Hub', 'Student Union', 'Main Quad'];
+    const tagPool = [
+      'tech',
+      'music',
+      'food',
+      'networking',
+      'wellness',
+      'art',
+      'sports',
+      'career',
+      'community',
+    ];
+    const now = dayjs();
+    const list: Event[] = [] as Event[];
+    for (let i = 0; i < 24; i++) {
+      const id = -1 - i;
+      const title = titles[i % titles.length];
+      const location = locations[i % locations.length];
+      const date_time = now
         .add(i + 1, 'day')
         .hour(18)
         .minute(0)
-        .second(0);
-      return {
-        id: -1 - i, // negative IDs to avoid collisions with real events
-        title: t,
-        description: desc,
-        image_url: `https://picsum.photos/seed/picky${i + 1}/800/500`,
-        date_time: dt.toISOString(),
-        location: cities[i % cities.length],
-        tags: tagSets[i % tagSets.length],
-      } as unknown as Event;
-    });
-    return dummies;
+        .second(0)
+        .toISOString();
+      const tags = [tagPool[i % tagPool.length], tagPool[(i + 3) % tagPool.length]];
+      list.push({
+        id,
+        title,
+        description: null,
+        image_url: null,
+        date_time,
+        location,
+        tags,
+        rsvp_url: null,
+      } as unknown as Event);
+    }
+    return list;
   };
 
   // Pagination + caching
@@ -222,12 +801,19 @@ export default function Home() {
         });
       } else {
         setEvents((prev) => {
-          const mergedBase = [
-            ...prev.filter((e: any) => e.id < 0),
-            ...prev.filter((e: any) => e.id > 0),
-            ...next.filter((e: any) => e.id > 0),
-          ] as Event[];
-          let final = mergedBase;
+          const negatives = prev.filter((e: any) => e.id < 0) as Event[];
+          const realMap = new Map<number, Event>();
+          // include previous real events
+          for (const e of prev) if ((e as any).id > 0) realMap.set((e as any).id, e);
+          // include new page real events
+          for (const e of next as any[])
+            if ((e as any).id > 0) realMap.set((e as any).id, e as Event);
+          let realList = Array.from(realMap.values());
+          // Optionally keep chronological order for base data
+          realList = realList.sort(
+            (a: any, b: any) => dayjs(a.date_time).valueOf() - dayjs(b.date_time).valueOf(),
+          );
+          let final = [...negatives, ...realList] as Event[];
           if (next.length < PAGE_SIZE) {
             const dummiesAll = makeDummyEvents();
             const existingIds = new Set((final as any[]).map((e) => e.id));
@@ -392,16 +978,34 @@ export default function Home() {
     setFRsvp('');
   };
 
-  const upsertEvent = async () => {
+  const upsertEvent = async (values?: {
+    title: string;
+    desc: string;
+    image: string;
+    dateTime: string;
+    location: string;
+    tagsCsv: string;
+    rsvp: string;
+    editingId?: number | null;
+  }) => {
     // Basic validation
-    if (!fTitle.trim()) {
+    const titleVal = values?.title ?? fTitle;
+    const descVal = values?.desc ?? fDesc;
+    const imageVal = values?.image ?? fImage;
+    const dateTimeVal = values?.dateTime ?? fDateTime;
+    const locationVal = values?.location ?? fLocation;
+    const tagsCsvVal = values?.tagsCsv ?? fTagsCsv;
+    const rsvpVal = values?.rsvp ?? fRsvp;
+    const editingIdVal = values?.editingId ?? editingId;
+
+    if (!titleVal.trim()) {
       Alert.alert('Missing title', 'Please provide a title for the event.');
       return;
     }
-    const dtIso = dayjs(fDateTime).isValid()
-      ? dayjs(fDateTime).toISOString()
+    const dtIso = dayjs(dateTimeVal).isValid()
+      ? dayjs(dateTimeVal).toISOString()
       : dayjs().add(1, 'day').toISOString();
-    const tags = fTagsCsv
+    const tags = tagsCsvVal
       .split(',')
       .map((t) => t.trim())
       .filter(Boolean);
@@ -413,16 +1017,16 @@ export default function Home() {
       return;
     }
     const payload: any = {
-      title: fTitle.trim(),
-      description: fDesc.trim() || null,
-      image_url: fImage.trim() || null,
+      title: titleVal.trim(),
+      description: descVal.trim() || null,
+      image_url: imageVal.trim() || null,
       date_time: dtIso,
-      location: fLocation.trim() || null,
+      location: locationVal.trim() || null,
       tags,
-      rsvp_url: fRsvp.trim() || null,
+      rsvp_url: rsvpVal.trim() || null,
     };
-    if (editingId) {
-      const { error } = await supabase.from('events').update(payload).eq('id', editingId);
+    if (editingIdVal) {
+      const { error } = await supabase.from('events').update(payload).eq('id', editingIdVal);
       if (error) {
         Alert.alert('Update failed', error.message);
         return;
@@ -436,7 +1040,7 @@ export default function Home() {
     }
     resetForm();
     await onRefresh();
-    Alert.alert('Success', editingId ? 'Event updated' : 'Event created');
+    Alert.alert('Success', editingIdVal ? 'Event updated' : 'Event created');
   };
 
   const deleteEvent = async (id: number) => {
@@ -500,55 +1104,78 @@ export default function Home() {
       <View style={{ flex: 1, backgroundColor: c.background, padding: 12 }}>{children}</View>
     );
 
-  // Web-friendly date/time fallback
-  const DateTimeInputsWeb = () => (
-    <View style={{ flexDirection: 'row', gap: 8 }}>
-      <TextInput
-        value={dayjs(fDateTime).format('YYYY-MM-DD')}
-        onChangeText={(val) => {
-          const d = dayjs(val, 'YYYY-MM-DD');
-          if (d.isValid())
-            setFDateTime(
-              d
-                .hour(dayjs(fDateTime).hour())
-                .minute(dayjs(fDateTime).minute())
-                .second(0)
-                .millisecond(0)
-                .toISOString(),
-            );
-        }}
-        placeholder="YYYY-MM-DD"
-        style={{
-          flex: 1,
-          color: c.text,
-          backgroundColor: '#00000010',
-          padding: 10,
-          borderRadius: 8,
-        }}
-        inputMode="numeric"
+  // Admin header memo: only depends on admin form state, not search
+  const adminHeader = useMemo(
+    () => (
+      <AdminHeader
+        c={c}
+        isAdmin={isAdmin}
+        adminOpen={adminOpen}
+        setAdminOpen={setAdminOpen}
+        editingId={editingId}
+        fTitle={fTitle}
+        setFTitle={setFTitle}
+        fDesc={fDesc}
+        setFDesc={setFDesc}
+        fImage={fImage}
+        setFImage={setFImage}
+        fDateTime={fDateTime}
+        setFDateTime={setFDateTime}
+        fLocation={fLocation}
+        setFLocation={setFLocation}
+        fTagsCsv={fTagsCsv}
+        setFTagsCsv={setFTagsCsv}
+        fRsvp={fRsvp}
+        setFRsvp={setFRsvp}
+        showDatePicker={showDatePicker}
+        setShowDatePicker={setShowDatePicker}
+        showTimePicker={showTimePicker}
+        setShowTimePicker={setShowTimePicker}
+        upsertEvent={upsertEvent}
+        resetForm={resetForm}
+        events={events}
+        deleteEvent={deleteEvent}
       />
-      <TextInput
-        value={dayjs(fDateTime).format('HH:mm')}
-        onChangeText={(val) => {
-          const [hh, mm] = val.split(':');
-          const h = Number(hh);
-          const m = Number(mm);
-          if (!Number.isNaN(h) && !Number.isNaN(m)) {
-            const merged = dayjs(fDateTime).hour(h).minute(m).second(0).millisecond(0);
-            setFDateTime(merged.toISOString());
-          }
-        }}
-        placeholder="HH:mm"
-        style={{
-          flex: 1,
-          color: c.text,
-          backgroundColor: '#00000010',
-          padding: 10,
-          borderRadius: 8,
-        }}
-        inputMode="numeric"
+    ),
+    [
+      c,
+      isAdmin,
+      adminOpen,
+      editingId,
+      fTitle,
+      fDesc,
+      fImage,
+      fDateTime,
+      fLocation,
+      fTagsCsv,
+      fRsvp,
+      showDatePicker,
+      showTimePicker,
+      events,
+    ],
+  );
+
+  // Filters: top bar outside list, interests/tags/results inside list header
+  const filtersTopBar = useMemo(
+    () => <FiltersTopBar c={c} query={query} setQuery={setQuery} mode={mode} setMode={setMode} />,
+    [c, query, mode],
+  );
+
+  const filtersScrollable = useMemo(
+    () => (
+      <FiltersScrollable
+        c={c}
+        myTags={myTags}
+        activeTags={activeTags}
+        setActiveTags={setActiveTags}
+        allTags={allTags}
+        query={query}
+        setQuery={setQuery}
+        filteredCount={filtered.length}
+        mode={mode}
       />
-    </View>
+    ),
+    [c, myTags, activeTags, allTags, query, filtered.length, mode],
   );
 
   // Gradient bordered match badge
@@ -576,608 +1203,128 @@ export default function Home() {
 
   return (
     <Container>
+      {adminHeader}
+      {filtersTopBar}
       <FlatList
         ref={listRef}
         data={filtered}
         keyExtractor={(e: any) => String(e.id)}
-        ListHeaderComponent={() => (
-          <View style={{ paddingBottom: 12 }}>
-            {/* Admin panel */}
-            {isAdmin ? (
-              <View
-                style={{
-                  backgroundColor: c.card,
-                  borderRadius: 12,
-                  padding: 12,
-                  marginBottom: 12,
-                  borderWidth: 1,
-                  borderColor: '#00000020',
-                }}
-              >
-                <Pressable onPress={() => setAdminOpen((v) => !v)}>
-                  <Text style={{ color: c.text, fontWeight: '800', fontSize: 16 }}>
-                    Admin: Manage Events {adminOpen ? '▲' : '▼'}
-                  </Text>
-                </Pressable>
-                {adminOpen ? (
-                  <View style={{ marginTop: 8, gap: 8 }}>
-                    {editingId ? (
-                      <Text style={{ color: c.muted }}>Editing event #{editingId}</Text>
-                    ) : null}
-                    <TextInput
-                      placeholder="Title"
-                      placeholderTextColor={c.muted}
-                      value={fTitle}
-                      onChangeText={setFTitle}
-                      style={{
-                        color: c.text,
-                        backgroundColor: '#00000010',
-                        padding: 10,
-                        borderRadius: 8,
-                      }}
-                    />
-                    <TextInput
-                      placeholder="Description"
-                      placeholderTextColor={c.muted}
-                      value={fDesc}
-                      onChangeText={setFDesc}
-                      multiline
-                      style={{
-                        color: c.text,
-                        backgroundColor: '#00000010',
-                        padding: 10,
-                        borderRadius: 8,
-                        minHeight: 60,
-                      }}
-                    />
-                    <TextInput
-                      placeholder="Image URL"
-                      placeholderTextColor={c.muted}
-                      value={fImage}
-                      onChangeText={setFImage}
-                      style={{
-                        color: c.text,
-                        backgroundColor: '#00000010',
-                        padding: 10,
-                        borderRadius: 8,
-                      }}
-                    />
-                    {/* Date & Time pickers */}
-                    {Platform.OS === 'web' ? (
-                      <DateTimeInputsWeb />
-                    ) : (
-                      <View style={{ flexDirection: 'row', gap: 8 }}>
-                        <Pressable
-                          onPress={() => setShowDatePicker(true)}
-                          style={{
-                            flex: 1,
-                            backgroundColor: '#00000010',
-                            padding: 10,
-                            borderRadius: 8,
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                          }}
-                          accessibilityRole="button"
-                          accessibilityLabel="Select date"
-                        >
-                          <Text style={{ color: c.text, fontWeight: '700' }}>
-                            {dayjs(fDateTime).format('YYYY-MM-DD')}
-                          </Text>
-                        </Pressable>
-                        <Pressable
-                          onPress={() => setShowTimePicker(true)}
-                          style={{
-                            flex: 1,
-                            backgroundColor: '#00000010',
-                            padding: 10,
-                            borderRadius: 8,
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                          }}
-                          accessibilityRole="button"
-                          accessibilityLabel="Select time"
-                        >
-                          <Text style={{ color: c.text, fontWeight: '700' }}>
-                            {dayjs(fDateTime).format('h:mm A')}
-                          </Text>
-                        </Pressable>
-                      </View>
-                    )}
-                    {showDatePicker ? (
-                      <DateTimePicker
-                        mode="date"
-                        value={new Date(fDateTime)}
-                        onChange={(evt, selectedDate) => {
-                          setShowDatePicker(false);
-                          if (!selectedDate) return;
-                          const current = dayjs(fDateTime);
-                          const merged = current
-                            .year(selectedDate.getFullYear())
-                            .month(selectedDate.getMonth())
-                            .date(selectedDate.getDate());
-                          setFDateTime(merged.toISOString());
-                        }}
-                      />
-                    ) : null}
-                    {showTimePicker ? (
-                      <DateTimePicker
-                        mode="time"
-                        value={new Date(fDateTime)}
-                        onChange={(evt, selectedTime) => {
-                          setShowTimePicker(false);
-                          if (!selectedTime) return;
-                          const current = dayjs(fDateTime);
-                          const merged = current
-                            .hour(selectedTime.getHours())
-                            .minute(selectedTime.getMinutes())
-                            .second(0)
-                            .millisecond(0);
-                          setFDateTime(merged.toISOString());
-                        }}
-                      />
-                    ) : null}
-                    <TextInput
-                      placeholder="Location"
-                      placeholderTextColor={c.muted}
-                      value={fLocation}
-                      onChangeText={setFLocation}
-                      style={{
-                        color: c.text,
-                        backgroundColor: '#00000010',
-                        padding: 10,
-                        borderRadius: 8,
-                      }}
-                    />
-                    <TextInput
-                      placeholder="Tags (comma-separated)"
-                      placeholderTextColor={c.muted}
-                      value={fTagsCsv}
-                      onChangeText={setFTagsCsv}
-                      style={{
-                        color: c.text,
-                        backgroundColor: '#00000010',
-                        padding: 10,
-                        borderRadius: 8,
-                      }}
-                      autoCapitalize="none"
-                    />
-                    <TextInput
-                      placeholder="RSVP URL (optional)"
-                      placeholderTextColor={c.muted}
-                      value={fRsvp}
-                      onChangeText={setFRsvp}
-                      style={{
-                        color: c.text,
-                        backgroundColor: '#00000010',
-                        padding: 10,
-                        borderRadius: 8,
-                      }}
-                      autoCapitalize="none"
-                    />
-                    <View style={{ flexDirection: 'row', gap: 8 }}>
-                      <Pressable
-                        onPress={upsertEvent}
-                        style={{
-                          backgroundColor: c.primary,
-                          paddingHorizontal: 12,
-                          paddingVertical: 10,
-                          borderRadius: 10,
-                        }}
-                      >
-                        <Text style={{ color: '#000', fontWeight: '700' }}>
-                          {editingId ? 'Update Event' : 'Create Event'}
-                        </Text>
-                      </Pressable>
-                      {editingId ? (
-                        <Pressable
-                          onPress={resetForm}
-                          style={{
-                            backgroundColor: '#00000030',
-                            paddingHorizontal: 12,
-                            paddingVertical: 10,
-                            borderRadius: 10,
-                          }}
-                        >
-                          <Text style={{ color: c.text, fontWeight: '700' }}>Cancel</Text>
-                        </Pressable>
-                      ) : null}
-                    </View>
-                    {/* Quick list to edit/delete */}
-                    <View style={{ marginTop: 8, gap: 8 }}>
-                      {events
-                        .filter((e: any) => e.id > 0)
-                        .slice(0, 8)
-                        .map((e: any) => (
-                          <View
-                            key={e.id}
-                            style={{
-                              flexDirection: 'row',
-                              alignItems: 'center',
-                              justifyContent: 'space-between',
-                            }}
-                          >
-                            <Text style={{ color: c.text }}>
-                              #{e.id} · {e.title}
-                            </Text>
-                            <View style={{ flexDirection: 'row', gap: 6 }}>
-                              <Pressable
-                                onPress={() => {
-                                  setEditingId(e.id);
-                                  setFTitle(e.title);
-                                  setFDesc(e.description ?? '');
-                                  setFImage(e.image_url ?? '');
-                                  setFDateTime(e.date_time);
-                                  setFLocation(e.location ?? '');
-                                  setFTagsCsv((e.tags ?? []).join(', '));
-                                  setFRsvp(e.rsvp_url ?? '');
-                                }}
-                                style={{
-                                  backgroundColor: '#00000030',
-                                  paddingHorizontal: 10,
-                                  paddingVertical: 6,
-                                  borderRadius: 8,
-                                }}
-                              >
-                                <Text style={{ color: c.text }}>Edit</Text>
-                              </Pressable>
-                              <Pressable
-                                onPress={() => deleteEvent(e.id)}
-                                style={{
-                                  backgroundColor: '#ff444433',
-                                  paddingHorizontal: 10,
-                                  paddingVertical: 6,
-                                  borderRadius: 8,
-                                }}
-                              >
-                                <Text style={{ color: '#ff5555' }}>Delete</Text>
-                              </Pressable>
-                            </View>
-                          </View>
-                        ))}
-                    </View>
-                  </View>
-                ) : null}
-              </View>
-            ) : null}
-
-            {/* Search input with hashtag support */}
-            <View
-              style={{
-                backgroundColor: c.card,
-                borderRadius: 12,
-                paddingHorizontal: 12,
-                paddingVertical: 8,
-                marginBottom: 12,
-                borderWidth: 1,
-                borderColor: '#00000020',
-              }}
-            >
-              <TextInput
-                placeholder="Search events or use #tags"
-                placeholderTextColor={c.muted}
-                value={query}
-                onChangeText={setQuery}
-                style={{ color: c.text, fontSize: 16 }}
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-            </View>
-
-            {/* Mode toggle */}
-            <View
-              style={{
-                flexDirection: 'row',
-                gap: 6,
-                marginBottom: 12,
-                backgroundColor: c.card,
-                padding: 6,
-                borderRadius: 12,
-              }}
-            >
-              {[
-                { key: 'all', label: 'View All' },
-                { key: 'personalized', label: 'Personalized Feed' },
-              ].map((opt) => {
-                const active = mode === (opt.key as any);
-                return (
-                  <Pressable
-                    key={opt.key}
-                    onPress={() => setMode(opt.key as any)}
-                    style={{
-                      backgroundColor: active ? c.primary : 'transparent',
-                      paddingHorizontal: 12,
-                      paddingVertical: 8,
-                      borderRadius: 10,
-                    }}
-                  >
-                    <Text style={{ color: active ? '#000' : c.text, fontWeight: '700' }}>
-                      {opt.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-
-            {/* Your interests (from onboarding) */}
-            {myTags.length ? (
-              <View
-                style={{
-                  backgroundColor: c.card,
-                  borderRadius: 12,
-                  padding: 12,
-                  marginBottom: 12,
-                  borderWidth: 1,
-                  borderColor: '#00000020',
-                }}
-              >
-                <View
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    marginBottom: 8,
-                  }}
-                >
-                  <Text style={{ color: c.text, fontWeight: '800' }}>Your interests</Text>
-                  <Pressable
-                    onPress={() => router.push('/onboarding/interests')}
-                    style={{
-                      backgroundColor: '#00000020',
-                      paddingHorizontal: 10,
-                      paddingVertical: 6,
-                      borderRadius: 8,
-                    }}
-                  >
-                    <Text style={{ color: c.text }}>Edit</Text>
-                  </Pressable>
-                </View>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                  {myTags.map((t) => {
-                    const active = activeTags.includes(t);
-                    return (
-                      <Pressable
-                        key={t}
-                        onPress={() =>
-                          setActiveTags((prev) =>
-                            prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t],
-                          )
-                        }
-                        style={{
-                          backgroundColor: active ? c.primary : '#00000020',
-                          paddingHorizontal: 10,
-                          paddingVertical: 6,
-                          borderRadius: 999,
-                        }}
-                      >
-                        <Text style={{ color: active ? '#000' : c.text, fontSize: 12 }}>#{t}</Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              </View>
-            ) : null}
-
-            {/* Tag chips */}
-            {allTags.length ? (
-              <View
-                style={{
-                  flexDirection: 'row',
-                  flexWrap: 'wrap',
-                  gap: 8,
-                  marginBottom: 12,
-                }}
-              >
-                {allTags.map((t) => {
-                  const active = activeTags.includes(t);
-                  return (
-                    <Pressable
-                      key={t}
-                      onPress={() =>
-                        setActiveTags((prev) =>
-                          prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t],
-                        )
-                      }
-                      style={{
-                        backgroundColor: active ? c.primary : '#00000020',
-                        paddingHorizontal: 10,
-                        paddingVertical: 6,
-                        borderRadius: 999,
-                      }}
-                    >
-                      <Text style={{ color: active ? '#000' : c.text, fontSize: 12 }}>{t}</Text>
-                    </Pressable>
-                  );
-                })}
-                {activeTags.length || query.length ? (
-                  <Pressable
-                    onPress={() => {
-                      setActiveTags([]);
-                      setQuery('');
-                    }}
-                    style={{
-                      backgroundColor: '#00000030',
-                      paddingHorizontal: 10,
-                      paddingVertical: 6,
-                      borderRadius: 999,
-                    }}
-                  >
-                    <Text style={{ color: c.text, fontSize: 12 }}>Clear filters</Text>
-                  </Pressable>
-                ) : null}
-              </View>
-            ) : null}
-
-            {/* Results info */}
-            <View
-              style={{
-                flexDirection: 'row',
-                justifyContent: 'space-between',
-                marginBottom: 8,
-              }}
-            >
-              <Text style={{ color: c.muted }}>
-                Showing {filtered.length} {filtered.length === 1 ? 'event' : 'events'}
-              </Text>
-              {mode === 'personalized' ? (
-                <Text style={{ color: c.muted }}>Sorted by match</Text>
-              ) : (
-                <Text style={{ color: c.muted }}>Soonest first</Text>
-              )}
-            </View>
-          </View>
-        )}
         contentContainerStyle={{ gap: 12, paddingBottom: 32 }}
+        ListHeaderComponent={filtersScrollable}
         refreshing={refreshing}
         onRefresh={onRefresh}
         onEndReachedThreshold={0.25}
         onEndReached={loadNextPage}
         initialNumToRender={8}
         windowSize={10}
-        removeClippedSubviews
+        removeClippedSubviews={false}
         ListEmptyComponent={
           <View style={{ paddingTop: 48, alignItems: 'center' }}>
             <Text style={{ color: c.muted, marginBottom: 8 }}>No events match your filters</Text>
-            <Pressable
+            <ThreeDButton
+              title="Reset filters"
               onPress={() => {
                 setQuery('');
                 setActiveTags([]);
                 setMode('all');
               }}
-              style={{
-                backgroundColor: c.primary,
-                paddingHorizontal: 12,
-                paddingVertical: 8,
-                borderRadius: 10,
-              }}
-            >
-              <Text style={{ color: '#000', fontWeight: '700' }}>Reset filters</Text>
-            </Pressable>
+            />
           </View>
         }
         renderItem={({ item }) => (
           <Pressable
             onPress={() => onOpenDetails(item)}
             style={{
-              backgroundColor: c.card,
               borderRadius: 16,
               overflow: 'hidden',
               opacity: item.id < 0 ? 0.98 : 1,
             }}
           >
-            {item.image_url ? (
-              <Image source={{ uri: item.image_url }} style={{ width: '100%', height: 160 }} />
-            ) : null}
-            <View style={{ padding: 12 }}>
-              <Text style={{ color: c.text, fontSize: 18, fontWeight: '800' }}>{item.title}</Text>
-              <Text style={{ color: c.muted, marginTop: 4 }}>
-                {dayjs(item.date_time).format('ddd, MMM D • h:mm A')} • {item.location}
-              </Text>
-              <View
-                style={{
-                  flexDirection: 'row',
-                  flexWrap: 'wrap',
-                  gap: 6,
-                  marginTop: 8,
-                }}
-              >
-                {(item.tags ?? []).map((t: string) => (
-                  <View
-                    key={t}
-                    style={{
-                      backgroundColor: '#00000020',
-                      paddingHorizontal: 8,
-                      paddingVertical: 4,
-                      borderRadius: 999,
-                    }}
-                  >
-                    <Text style={{ color: c.text, fontSize: 12 }}>{t}</Text>
-                  </View>
-                ))}
-              </View>
-              <View
-                style={{
-                  marginTop: 8,
-                  flexDirection: 'row',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                }}
-              >
-                <MatchBadge value={match(item.id, item.tags)} />
-                <View style={{ flexDirection: 'row', gap: 8 }}>
-                  <Pressable
-                    onPress={() => toggleSave(item.id)}
-                    style={{
-                      backgroundColor: c.primary,
-                      paddingHorizontal: 12,
-                      paddingVertical: 8,
-                      borderRadius: 10,
-                      opacity: item.id < 0 ? 0.5 : 1,
-                    }}
-                  >
-                    <Text style={{ color: '#000', fontWeight: '700' }}>
-                      {saved.includes(item.id) ? 'Saved' : 'Save'}
-                    </Text>
-                  </Pressable>
-                  {item.id > 0 ? (
-                    <Pressable
-                      onPress={async () => {
-                        const authed = await requireAuth();
-                        if (!authed) return;
-                        router.push({
-                          pathname: '/polls/new',
-                          params: { fromEvent: item.id },
-                        });
-                      }}
-                      style={{
-                        backgroundColor: '#00000030',
-                        paddingHorizontal: 12,
-                        paddingVertical: 8,
-                        borderRadius: 10,
-                      }}
-                    >
-                      <Text style={{ color: c.text, fontWeight: '700' }}>Poll</Text>
-                    </Pressable>
-                  ) : (
+            <ThreeDCard>
+              {item.image_url ? (
+                <Image
+                  source={{ uri: item.image_url }}
+                  style={{
+                    width: '100%',
+                    height: 160,
+                    borderTopLeftRadius: 16,
+                    borderTopRightRadius: 16,
+                  }}
+                />
+              ) : null}
+              <View style={{ padding: 12 }}>
+                <Text style={{ color: c.text, fontSize: 18, fontWeight: '800' }}>{item.title}</Text>
+                <Text style={{ color: c.muted, marginTop: 4 }}>
+                  {dayjs(item.date_time).format('ddd, MMM D • h:mm A')} • {item.location}
+                </Text>
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    flexWrap: 'wrap',
+                    gap: 6,
+                    marginTop: 8,
+                  }}
+                >
+                  {(item.tags ?? []).map((t: string, i: number) => (
                     <View
+                      key={`${t}-${i}`}
                       style={{
                         backgroundColor: '#00000020',
-                        paddingHorizontal: 12,
-                        paddingVertical: 8,
-                        borderRadius: 10,
+                        paddingHorizontal: 8,
+                        paddingVertical: 4,
+                        borderRadius: 999,
                       }}
                     >
-                      <Text style={{ color: c.muted, fontWeight: '700' }}>Demo</Text>
+                      <Text style={{ color: c.text, fontSize: 12 }}>{t}</Text>
                     </View>
-                  )}
-                  {isAdmin && item.id > 0 ? (
-                    <>
-                      <Pressable
-                        onPress={() => prefillForEdit(item)}
+                  ))}
+                </View>
+                <View
+                  style={{
+                    marginTop: 8,
+                    flexDirection: 'row',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                  }}
+                >
+                  <MatchBadge value={match(item.id, item.tags)} />
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    <ThreeDButton
+                      title={saved.includes(item.id) ? 'Saved' : 'Save'}
+                      onPress={() => toggleSave(item.id)}
+                      style={{ opacity: item.id < 0 ? 0.5 : 1 }}
+                    />
+                    {item.id > 0 ? (
+                      <ThreeDButton
+                        title="Poll"
+                        onPress={async () => {
+                          const authed = await requireAuth();
+                          if (!authed) return;
+                          router.push({ pathname: '/polls/new', params: { fromEvent: item.id } });
+                        }}
+                      />
+                    ) : (
+                      <View
                         style={{
-                          backgroundColor: '#00000030',
+                          backgroundColor: '#00000020',
                           paddingHorizontal: 12,
                           paddingVertical: 8,
                           borderRadius: 10,
                         }}
                       >
-                        <Text style={{ color: c.text, fontWeight: '700' }}>Edit</Text>
-                      </Pressable>
-                      <Pressable
-                        onPress={() => deleteEvent(item.id)}
-                        style={{
-                          backgroundColor: '#ff444433',
-                          paddingHorizontal: 12,
-                          paddingVertical: 8,
-                          borderRadius: 10,
-                        }}
-                      >
-                        <Text style={{ color: '#ff5555', fontWeight: '700' }}>Delete</Text>
-                      </Pressable>
-                    </>
-                  ) : null}
+                        <Text style={{ color: c.muted, fontWeight: '700' }}>Demo</Text>
+                      </View>
+                    )}
+                    {isAdmin && item.id > 0 ? (
+                      <>
+                        <ThreeDButton title="Edit" onPress={() => prefillForEdit(item)} />
+                        <ThreeDButton title="Delete" onPress={() => deleteEvent(item.id)} />
+                      </>
+                    ) : null}
+                  </View>
                 </View>
               </View>
-            </View>
+            </ThreeDCard>
           </Pressable>
         )}
       />
@@ -1236,9 +1383,9 @@ export default function Home() {
                   marginTop: 8,
                 }}
               >
-                {(selectedEvent?.tags ?? []).map((t) => (
+                {(selectedEvent?.tags ?? []).map((t, i) => (
                   <View
-                    key={t}
+                    key={`${t}-${i}`}
                     style={{
                       backgroundColor: '#00000020',
                       paddingHorizontal: 8,
