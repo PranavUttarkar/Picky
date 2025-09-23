@@ -197,20 +197,37 @@ export default function NewPoll() {
       <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
         <Pressable
           onPress={() => router.push('/(tabs)/saved')}
-          style={{ backgroundColor: c.card, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 10 }}
+          style={{
+            backgroundColor: c.card,
+            paddingVertical: 10,
+            paddingHorizontal: 12,
+            borderRadius: 10,
+          }}
         >
           <Text style={{ color: c.text, fontWeight: '700' }}>View Saved</Text>
         </Pressable>
         <Pressable
           onPress={() => router.push('/(tabs)/home')}
-          style={{ backgroundColor: c.card, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 10 }}
+          style={{
+            backgroundColor: c.card,
+            paddingVertical: 10,
+            paddingHorizontal: 12,
+            borderRadius: 10,
+          }}
         >
           <Text style={{ color: c.text, fontWeight: '700' }}>Browse</Text>
         </Pressable>
       </View>
 
       {/* Search input */}
-      <View style={{ backgroundColor: c.card, borderRadius: 10, paddingHorizontal: 10, marginBottom: 8 }}>
+      <View
+        style={{
+          backgroundColor: c.card,
+          borderRadius: 10,
+          paddingHorizontal: 10,
+          marginBottom: 8,
+        }}
+      >
         <TextInput
           placeholder="Search events to add (min 3 chars)"
           placeholderTextColor={c.muted}
@@ -228,11 +245,13 @@ export default function NewPoll() {
           contentContainerStyle={{ paddingBottom: 120 }}
           onEndReachedThreshold={0.5}
           onEndReached={loadMore}
-          ListFooterComponent={loadingMore ? (
-            <View style={{ paddingVertical: 12 }}>
-              <ActivityIndicator color={c.text} />
-            </View>
-          ) : null}
+          ListFooterComponent={
+            loadingMore ? (
+              <View style={{ paddingVertical: 12 }}>
+                <ActivityIndicator color={c.text} />
+              </View>
+            ) : null
+          }
           renderItem={({ item }) => {
             const sel = selected.has(item.id);
             return (
