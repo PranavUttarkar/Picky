@@ -1,4 +1,4 @@
-import { View, Text, Pressable, FlatList, Alert } from 'react-native';
+import { View, Text, Pressable, FlatList, Alert, Platform } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { useThemeColors } from '@/theme/ThemeProvider';
 import { useEffect, useState } from 'react';
@@ -52,10 +52,32 @@ export default function GroupFeed() {
   const onCopy = async () => {
     try {
       if (!group?.invite_code) return;
-      await Clipboard.setStringAsync(group.invite_code);
+      const code = group.invite_code as string;
+      const nav: any = (globalThis as any).navigator;
+      if (Platform.OS === 'web' && nav?.clipboard?.writeText) {
+        await nav.clipboard.writeText(code);
+      } else {
+        await Clipboard.setStringAsync(code);
+      }
       Alert.alert('Copied', 'Invite code copied to clipboard');
     } catch (e: any) {
-      Alert.alert('Copy failed', e.message ?? String(e));
+      try {
+        if (Platform.OS === 'web') {
+          const doc: any = (globalThis as any).document;
+          const el = doc.createElement('textarea');
+          el.value = group?.invite_code ?? '';
+          el.setAttribute('readonly', '');
+          el.style.position = 'absolute';
+          el.style.left = '-9999px';
+          doc.body.appendChild(el);
+          el.select();
+          doc.execCommand('copy');
+          doc.body.removeChild(el);
+          Alert.alert('Copied', 'Invite code copied to clipboard');
+          return;
+        }
+      } catch {}
+      Alert.alert('Copy failed', e?.message ?? String(e));
     }
   };
 

@@ -68,9 +68,13 @@ export default function Groups() {
     scheme === 'light'
       ? { colors: ['#e9fdf5', '#f9fafb'], start: { x: 0, y: 0 }, end: { x: 1, y: 1 } }
       : {};
+  const wrapperStyle = {
+    flex: 1,
+    ...(scheme === 'dark' ? { backgroundColor: c.background } : {}),
+  } as const;
 
   return (
-    <Wrapper style={{ flex: 1 }} {...(wrapperProps as any)}>
+    <Wrapper style={wrapperStyle} {...(wrapperProps as any)}>
       <View style={{ flex: 1, padding: 16 }}>
         <View style={{ flexDirection: 'row', gap: 12, marginBottom: 12 }}>
           <Pressable
