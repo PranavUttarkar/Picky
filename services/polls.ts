@@ -50,14 +50,16 @@ export async function closePoll(pollId: number): Promise<void> {
   if (error) throw error;
 }
 
-export async function getPoll(pollId: number): Promise<{ poll: any; options: PollOptionView[]; myVote?: number | null; myRatings?: Record<number, number>; totalMembers: number; respondedCount: number; waiting?: Array<{ id: string; name?: string | null }>; }> {
+export async function getPoll(pollId: number): Promise<{ poll: any; options: PollOptionView[]; myVote?: number | null; myRatings?: Record<number, number>; totalMembers: number; respondedCount: number; waiting?: Array<{ id: string; name?: string | null }>; commitments?: string[]; finalEvent?: any; }> {
   const user = (await supabase.auth.getUser()).data.user;
-  const [{ data: poll }, { data: options }, { data: myVote }, { data: groupIdRow }, { data: myRatingsRows } ] = await Promise.all([
+  const [{ data: poll }, { data: options }, { data: myVote }, { data: groupIdRow }, { data: myRatingsRows }, { data: commitmentRows }, { data: finalEvent } ] = await Promise.all([
     supabase.from('polls').select('*').eq('id', pollId).single(),
     supabase.from('poll_options').select('poll_id,event_id,votes, event:events(id,title,description,image_url,date_time,location,tags,rsvp_url)').eq('poll_id', pollId).order('votes', { ascending: false }),
     user ? supabase.from('poll_votes').select('event_id').eq('poll_id', pollId).eq('user_id', user.id).maybeSingle() : Promise.resolve({ data: null }),
     supabase.from('polls').select('group_id').eq('id', pollId).single(),
     user ? supabase.from('poll_ratings').select('event_id,rating').eq('poll_id', pollId).eq('user_id', user.id) : Promise.resolve({ data: [] }),
+    supabase.from('poll_commitments').select('user_id').eq('poll_id', pollId),
+    supabase.from('polls').select('final_event_id, event:events!polls_final_event_id_fkey(id,title,description,image_url,date_time,location,tags,rsvp_url)').eq('id', pollId).maybeSingle(),
   ]);
 
   // Compute group match % for options
@@ -130,7 +132,9 @@ export async function getPoll(pollId: number): Promise<{ poll: any; options: Pol
     }));
   }
 
-  return { poll, options: (optionsWithMatch as any) ?? [], myVote: (myVote as any)?.event_id ?? null, myRatings, totalMembers, respondedCount, waiting };
+  const commitmentIds = ((commitmentRows as any[]) ?? []).map((r: any) => r.user_id);
+  const resolvedFinalEvent = (finalEvent as any)?.event ?? undefined;
+  return { poll, options: (optionsWithMatch as any) ?? [], myVote: (myVote as any)?.event_id ?? null, myRatings, totalMembers, respondedCount, waiting, commitments: commitmentIds, finalEvent: resolvedFinalEvent };
 }
 
 export async function castVote(pollId: number, eventId: number): Promise<void> {
@@ -151,6 +155,8 @@ export function onPollRealtime(pollId: number, onChange: () => void) {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'poll_votes', filter: `poll_id=eq.${pollId}` }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'poll_options', filter: `poll_id=eq.${pollId}` }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'poll_ratings', filter: `poll_id=eq.${pollId}` }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'poll_commitments', filter: `poll_id=eq.${pollId}` }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'polls', filter: `id=eq.${pollId}` }, onChange)
     .subscribe();
   return () => {
     supabase.removeChannel(channel);
@@ -174,5 +180,29 @@ export function suggestLeader(options: PollOptionView[]): PollOptionView | undef
 
 export async function castRating(pollId: number, eventId: number, rating: -1 | 0 | 1 | null): Promise<void> {
   const { error } = await supabase.rpc('cast_rating', { p_poll_id: pollId, p_event_id: eventId, p_rating: rating });
+  if (error) throw error;
+}
+
+export async function commitPoll(pollId: number, eventId: number): Promise<void> {
+  const { error } = await supabase.rpc('commit_poll', { p_poll_id: pollId, p_event_id: eventId });
+  if (error) throw error;
+}
+
+export async function toggleCommitment(pollId: number): Promise<void> {
+  const { error } = await supabase.rpc('toggle_commitment', { p_poll_id: pollId });
+  if (error) throw error;
+}
+
+export async function postStatusUpdate(pollId: number, kind: 'late_10' | 'note', message?: string): Promise<void> {
+  const user = (await supabase.auth.getUser()).data.user;
+  if (!user) throw new Error('Not authenticated');
+  const { error } = await supabase.from('poll_status_updates').insert({ poll_id: pollId, user_id: user.id, kind, message: message ?? null });
+  if (error) throw error;
+}
+
+export async function submitFeedback(pollId: number, rating: number, comment?: string): Promise<void> {
+  const user = (await supabase.auth.getUser()).data.user;
+  if (!user) throw new Error('Not authenticated');
+  const { error } = await supabase.from('post_event_feedback').upsert({ poll_id: pollId, user_id: user.id, rating, comment: comment ?? null }, { onConflict: 'poll_id,user_id' });
   if (error) throw error;
 }

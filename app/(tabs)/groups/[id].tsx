@@ -1,4 +1,5 @@
 import { View, Text, Pressable, FlatList, Alert } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { useThemeColors } from '@/theme/ThemeProvider';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/services/supabase';
@@ -23,12 +24,46 @@ export default function GroupFeed() {
       const { data: g } = await supabase.from('groups').select('*').eq('id', groupId).single();
       const { data: p } = await supabase
         .from('polls')
-        .select('*')
+        .select('id,created_at,is_active,title,deadline_at,final_event_id')
         .eq('group_id', groupId)
         .order('created_at', { ascending: false });
       if (!mounted) return;
       setGroup(g);
       setPolls(p ?? []);
+      const channel = supabase
+        .channel(`group-${groupId}-polls`)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'polls', filter: `group_id=eq.${groupId}` },
+          async () => {
+            const { data: p2 } = await supabase
+              .from('polls')
+              .select('id,created_at,is_active,title,deadline_at,final_event_id')
+              .eq('group_id', groupId)
+              .order('created_at', { ascending: false });
+            if (mounted) setPolls(p2 ?? []);
+          },
+        )
+        .subscribe();
+      const channelGroup = supabase
+        .channel(`group-${groupId}-row`)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'groups', filter: `id=eq.${groupId}` },
+          async () => {
+            const { data: g2 } = await supabase
+              .from('groups')
+              .select('*')
+              .eq('id', groupId)
+              .single();
+            if (mounted) setGroup(g2);
+          },
+        )
+        .subscribe();
+      return () => {
+        supabase.removeChannel(channel);
+        supabase.removeChannel(channelGroup);
+      };
     })();
     return () => {
       mounted = false;
@@ -38,10 +73,30 @@ export default function GroupFeed() {
   const onRegenerate = async () => {
     try {
       const code = await regenerateInviteCode(groupId);
+      // Update local immediately, then refetch to confirm
       setGroup((prev: any) => ({ ...prev, invite_code: code }));
-      Alert.alert('Invite code regenerated', code);
+      const { data: g } = await supabase
+        .from('groups')
+        .select('invite_code')
+        .eq('id', groupId)
+        .single();
+      if (g?.invite_code && g.invite_code !== code) {
+        // If server differed, prefer server
+        setGroup((prev: any) => ({ ...prev, invite_code: g.invite_code }));
+      }
+      Alert.alert('Invite code regenerated', g?.invite_code ?? code);
     } catch (e: any) {
       Alert.alert('Not allowed', e.message ?? String(e));
+    }
+  };
+
+  const onCopy = async () => {
+    try {
+      if (!group?.invite_code) return;
+      await Clipboard.setStringAsync(group.invite_code);
+      Alert.alert('Copied', 'Invite code copied to clipboard');
+    } catch (e: any) {
+      Alert.alert('Copy failed', e.message ?? String(e));
     }
   };
 
@@ -62,7 +117,11 @@ export default function GroupFeed() {
         >
           <Text style={{ color: c.muted }}>Invite code:</Text>
           <Text style={{ color: c.text, letterSpacing: 2 }}>{group.invite_code}</Text>
-          <Pressable onPress={onRegenerate} style={{ marginLeft: 'auto' }}>
+          <View style={{ flex: 1 }} />
+          <Pressable onPress={onCopy}>
+            <Text style={{ color: c.text, fontWeight: '700' }}>Copy</Text>
+          </Pressable>
+          <Pressable onPress={onRegenerate}>
             <Text style={{ color: c.primary, fontWeight: '700' }}>Regenerate</Text>
           </Pressable>
         </View>
@@ -83,12 +142,19 @@ export default function GroupFeed() {
             onPress={() => router.push(`/(tabs)/polls/${item.id}`)}
             style={{ backgroundColor: c.card, padding: 12, borderRadius: 12, marginBottom: 8 }}
           >
-            <Text style={{ color: c.text, fontWeight: '700' }}>
-              Poll #{item.id} {item.is_active ? '' : '(Closed)'}
+            <Text style={{ color: c.text, fontWeight: '800' }}>
+              {item.title || `Poll #${item.id}`} {item.is_active ? '' : '(Closed)'}
             </Text>
             <Text style={{ color: c.muted, marginTop: 4 }}>
-              Created {new Date(item.created_at).toLocaleString()}
+              {item.deadline_at
+                ? `Due ${new Date(item.deadline_at).toLocaleString()}`
+                : `Created ${new Date(item.created_at).toLocaleString()}`}
             </Text>
+            {item.final_event_id ? (
+              <Text style={{ color: c.muted, marginTop: 4 }}>
+                Committed: Event #{item.final_event_id}
+              </Text>
+            ) : null}
           </Pressable>
         )}
         ListEmptyComponent={<Text style={{ color: c.muted }}>No polls yet.</Text>}

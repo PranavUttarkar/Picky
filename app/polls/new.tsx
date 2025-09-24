@@ -1,4 +1,13 @@
-import { View, Text, Pressable, Alert, FlatList, ActivityIndicator, TextInput, Platform } from 'react-native';
+import {
+  View,
+  Text,
+  Pressable,
+  Alert,
+  FlatList,
+  ActivityIndicator,
+  TextInput,
+  Platform,
+} from 'react-native';
 import { ThreeDButton, ThreeDCard } from '@/components/ThreeD';
 import { useThemeColors } from '@/theme/ThemeProvider';
 import { useEffect, useRef, useState } from 'react';
@@ -118,11 +127,11 @@ export default function NewPoll() {
       }
       const ids = Array.from(selected);
       setCreating(true);
-      const pollId = await createPollWithOptions(
-        groupId,
-        ids,
-        { title: title?.trim() || null, deadlineAt: deadlineDate ? deadlineDate.toISOString() : null, mode }
-      );
+      const pollId = await createPollWithOptions(groupId, ids, {
+        title: title?.trim() || null,
+        deadlineAt: deadlineDate ? deadlineDate.toISOString() : null,
+        mode,
+      });
       router.replace(`/polls/${pollId}`);
     } catch (e: any) {
       Alert.alert('Create poll failed', e.message ?? String(e));
@@ -142,7 +151,14 @@ export default function NewPoll() {
 
       {/* Optional title */}
       <Text style={{ color: c.muted, marginBottom: 6 }}>Title (optional)</Text>
-      <View style={{ backgroundColor: c.card, borderRadius: 10, paddingHorizontal: 10, marginBottom: 12 }}>
+      <View
+        style={{
+          backgroundColor: c.card,
+          borderRadius: 10,
+          paddingHorizontal: 10,
+          marginBottom: 12,
+        }}
+      >
         <TextInput
           placeholder="e.g., Saturday Night Plans"
           placeholderTextColor={c.muted}
@@ -158,27 +174,44 @@ export default function NewPoll() {
         <View style={{ flexDirection: 'row', gap: 8 }}>
           <Pressable
             onPress={() => setShowDatePicker('date')}
-            style={{ paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, backgroundColor: c.background }}
+            style={{
+              paddingVertical: 8,
+              paddingHorizontal: 12,
+              borderRadius: 8,
+              backgroundColor: c.background,
+            }}
           >
             <Text style={{ color: c.text }}>Pick date</Text>
           </Pressable>
           <Pressable
             onPress={() => setShowDatePicker('time')}
-            style={{ paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, backgroundColor: c.background }}
+            style={{
+              paddingVertical: 8,
+              paddingHorizontal: 12,
+              borderRadius: 8,
+              backgroundColor: c.background,
+            }}
           >
             <Text style={{ color: c.text }}>Pick time</Text>
           </Pressable>
           {deadlineDate ? (
             <Pressable
               onPress={() => setDeadlineDate(null)}
-              style={{ paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, backgroundColor: c.background }}
+              style={{
+                paddingVertical: 8,
+                paddingHorizontal: 12,
+                borderRadius: 8,
+                backgroundColor: c.background,
+              }}
             >
               <Text style={{ color: c.text }}>Clear</Text>
             </Pressable>
           ) : null}
         </View>
         <Text style={{ color: c.muted, marginTop: 8 }}>
-          {deadlineDate ? dayjs(deadlineDate).format('ddd, MMM D YYYY • h:mm A') : 'No deadline set'}
+          {deadlineDate
+            ? dayjs(deadlineDate).format('ddd, MMM D YYYY • h:mm A')
+            : 'No deadline set'}
         </Text>
       </View>
       {showDatePicker && (
@@ -211,15 +244,33 @@ export default function NewPoll() {
       <Text style={{ color: c.muted, marginBottom: 6 }}>Vote Mode</Text>
       <View style={{ backgroundColor: c.card, borderRadius: 10, padding: 10, marginBottom: 12 }}>
         <View style={{ flexDirection: 'row', gap: 8 }}>
-          <Pressable onPress={() => setMode('single')} style={{ paddingVertical: 6, paddingHorizontal: 10, borderRadius: 8, backgroundColor: mode === 'single' ? c.primary : c.background }}>
+          <Pressable
+            onPress={() => setMode('single')}
+            style={{
+              paddingVertical: 6,
+              paddingHorizontal: 10,
+              borderRadius: 8,
+              backgroundColor: mode === 'single' ? c.primary : c.background,
+            }}
+          >
             <Text style={{ color: c.text }}>Single choice</Text>
           </Pressable>
-          <Pressable onPress={() => setMode('rating')} style={{ paddingVertical: 6, paddingHorizontal: 10, borderRadius: 8, backgroundColor: mode === 'rating' ? c.primary : c.background }}>
+          <Pressable
+            onPress={() => setMode('rating')}
+            style={{
+              paddingVertical: 6,
+              paddingHorizontal: 10,
+              borderRadius: 8,
+              backgroundColor: mode === 'rating' ? c.primary : c.background,
+            }}
+          >
             <Text style={{ color: c.text }}>Ratings</Text>
           </Pressable>
         </View>
         <Text style={{ color: c.muted, marginTop: 6 }}>
-          {mode === 'single' ? 'Each person picks one option.' : 'Each person rates every option: Love it / It\'s fine / Not for me.'}
+          {mode === 'single'
+            ? 'Each person picks one option.'
+            : "Each person rates every option: Love it / It's fine / Not for me."}
         </Text>
       </View>
 

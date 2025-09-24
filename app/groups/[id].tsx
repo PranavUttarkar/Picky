@@ -1,4 +1,5 @@
 import { View, Text, Pressable, FlatList, Alert } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { useThemeColors } from '@/theme/ThemeProvider';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/services/supabase';
@@ -34,9 +35,27 @@ export default function GroupFeed() {
     try {
       const code = await regenerateInviteCode(groupId);
       setGroup((prev: any) => ({ ...prev, invite_code: code }));
-      Alert.alert('Invite code regenerated', code);
+      const { data: g } = await supabase
+        .from('groups')
+        .select('invite_code')
+        .eq('id', groupId)
+        .single();
+      if (g?.invite_code && g.invite_code !== code) {
+        setGroup((prev: any) => ({ ...prev, invite_code: g.invite_code }));
+      }
+      Alert.alert('Invite code regenerated', g?.invite_code ?? code);
     } catch (e: any) {
       Alert.alert('Not allowed', e.message ?? String(e));
+    }
+  };
+
+  const onCopy = async () => {
+    try {
+      if (!group?.invite_code) return;
+      await Clipboard.setStringAsync(group.invite_code);
+      Alert.alert('Copied', 'Invite code copied to clipboard');
+    } catch (e: any) {
+      Alert.alert('Copy failed', e.message ?? String(e));
     }
   };
 
@@ -57,7 +76,11 @@ export default function GroupFeed() {
         >
           <Text style={{ color: c.muted }}>Invite code:</Text>
           <Text style={{ color: c.text, letterSpacing: 2 }}>{group.invite_code}</Text>
-          <Pressable onPress={onRegenerate} style={{ marginLeft: 'auto' }}>
+          <View style={{ flex: 1 }} />
+          <Pressable onPress={onCopy}>
+            <Text style={{ color: c.text, fontWeight: '700' }}>Copy</Text>
+          </Pressable>
+          <Pressable onPress={onRegenerate}>
             <Text style={{ color: c.primary, fontWeight: '700' }}>Regenerate</Text>
           </Pressable>
         </View>
