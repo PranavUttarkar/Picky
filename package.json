@@ -3,14 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "main": "expo-router/entry",
-  "scripts": {
-    "start": "expo start",
-    "android": "expo run:android",
-    "ios": "expo run:ios",
-    "web": "expo start --web",
-    "lint": "eslint . --ext .js,.jsx,.ts,.tsx || exit 0",
-    "typecheck": "tsc --noEmit"
-  },
+"scripts": {
+  "start": "expo start",
+  "android": "expo run:android",
+  "ios": "expo run:ios",
+  "web": "expo start --web",
+  "build:web": "expo export:web",
+  "lint": "eslint . --ext .js,.jsx,.ts,.tsx || exit 0",
+  "typecheck": "tsc --noEmit"
+},
   "dependencies": {
     "@expo-google-fonts/pacifico": "^0.4.1",
     "@react-native-async-storage/async-storage": "1.23.1",

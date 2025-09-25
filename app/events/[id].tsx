@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { View, Text, Image, Pressable, Linking, ScrollView } from 'react-native';
+import LazyImage from '@/components/LazyImage';
 import { useLocalSearchParams } from 'expo-router';
 import dayjs from 'dayjs';
 import * as Calendar from 'expo-calendar';
@@ -57,11 +58,18 @@ export default function EventDetails() {
           const imgs: string[] = (event as any).image_urls?.length
             ? (event as any).image_urls
             : event.image_url
-              ? [event.image_url]
-              : [];
+            ? [event.image_url]
+            : [];
           if (!imgs.length) return null;
           if (imgs.length === 1) {
-            return <Image source={{ uri: imgs[0] }} style={{ width: '100%', height: 220 }} />;
+            return (
+              <LazyImage
+                uri={imgs[0]}
+                width={'100%'}
+                height={220}
+                accessibilityLabel={`Event image for ${event.title}`}
+              />
+            );
           }
           return (
             <ScrollView
@@ -72,15 +80,14 @@ export default function EventDetails() {
               contentContainerStyle={{ alignItems: 'center', paddingHorizontal: 12 }}
             >
               {imgs.map((u, i) => (
-                <Image
+                <LazyImage
                   key={i}
-                  source={{ uri: u }}
-                  style={{
-                    width: 300,
-                    height: 220,
-                    marginRight: 12,
-                    borderRadius: 12,
-                  }}
+                  uri={u}
+                  width={300}
+                  height={220}
+                  borderRadius={12}
+                  style={{ marginRight: 12 }}
+                  accessibilityLabel={`Gallery image ${i + 1} for ${event.title}`}
                 />
               ))}
             </ScrollView>

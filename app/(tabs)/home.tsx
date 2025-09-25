@@ -19,12 +19,14 @@ import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
 import { ThreeDButton, ThreeDCard } from '@/components/ThreeD';
 import dayjs from 'dayjs';
+import LazyImage from '@/components/LazyImage';
 import { useTheme, useThemeColors } from '@/theme/ThemeProvider';
 import GradientBackground from '@/components/GradientBackground';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import Chip from '@/components/Chip';
 import { supabase } from '@/services/supabase';
+import { sanitizeEventImageUrls } from '@/utils/images';
 import { router } from 'expo-router';
 import type { Event } from '@/types/models';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -84,12 +86,12 @@ const AdminHeader = memo(function AdminHeader(props: AdminHeaderProps) {
     setFTitle,
     fDesc,
     setFDesc,
-  fImage1,
-  setFImage1,
-  fImage2,
-  setFImage2,
-  fImage3,
-  setFImage3,
+    fImage1,
+    setFImage1,
+    fImage2,
+    setFImage2,
+    fImage3,
+    setFImage3,
     fDateTime,
     setFDateTime,
     fLocation,
@@ -122,9 +124,9 @@ const AdminHeader = memo(function AdminHeader(props: AdminHeaderProps) {
   useEffect(() => {
     setTitleLocal(fTitle);
     setDescLocal(fDesc);
-  setImage1Local(fImage1);
-  setImage2Local(fImage2);
-  setImage3Local(fImage3);
+    setImage1Local(fImage1);
+    setImage2Local(fImage2);
+    setImage3Local(fImage3);
     setDateTimeLocal(fDateTime);
     setLocationLocal(fLocation);
     setTagsCsvLocal(fTagsCsv);
@@ -177,32 +179,42 @@ const AdminHeader = memo(function AdminHeader(props: AdminHeaderProps) {
               blurOnSubmit={false}
             />
             <View style={{ gap: 6 }}>
-              {[{
-                label: 'Image 1 URL (cover)',
-                value: image1Local,
-                setter: setImage1Local,
-              }, {
-                label: 'Image 2 URL',
-                value: image2Local,
-                setter: setImage2Local,
-              }, {
-                label: 'Image 3 URL',
-                value: image3Local,
-                setter: setImage3Local,
-              }].map((cfg, idx) => (
+              {[
+                {
+                  label: 'Image 1 URL (cover)',
+                  value: image1Local,
+                  setter: setImage1Local,
+                },
+                {
+                  label: 'Image 2 URL',
+                  value: image2Local,
+                  setter: setImage2Local,
+                },
+                {
+                  label: 'Image 3 URL',
+                  value: image3Local,
+                  setter: setImage3Local,
+                },
+              ].map((cfg, idx) => (
                 <TextInput
                   key={idx}
                   placeholder={cfg.label}
                   placeholderTextColor={c.muted}
                   value={cfg.value}
                   onChangeText={cfg.setter}
-                  style={{ color: c.text, backgroundColor: '#00000010', padding: 10, borderRadius: 8 }}
+                  style={{
+                    color: c.text,
+                    backgroundColor: '#00000010',
+                    padding: 10,
+                    borderRadius: 8,
+                  }}
                   autoComplete="off"
                   blurOnSubmit={false}
                 />
               ))}
               <Text style={{ color: c.muted, fontSize: 11 }}>
-                Provide up to 3 images. First acts as card cover; others appear as thumbnails / gallery.
+                Provide up to 3 images. First acts as card cover; others appear as thumbnails /
+                gallery.
               </Text>
             </View>
             {Platform.OS === 'web' ? null : (
@@ -951,9 +963,9 @@ export default function Home() {
     setEditingId(null);
     setFTitle('');
     setFDesc('');
-  setFImage1('');
-  setFImage2('');
-  setFImage3('');
+    setFImage1('');
+    setFImage2('');
+    setFImage3('');
     setFDateTime(dayjs().add(1, 'day').hour(18).minute(0).second(0).toISOString());
     setFLocation('');
     setFTagsCsv('');
@@ -973,7 +985,7 @@ export default function Home() {
     // Basic validation
     const titleVal = values?.title ?? fTitle;
     const descVal = values?.desc ?? fDesc;
-  const imageVal = values?.image ?? fImage1; // legacy single field
+    const imageVal = values?.image ?? fImage1; // legacy single field
     const dateTimeVal = values?.dateTime ?? fDateTime;
     const locationVal = values?.location ?? fLocation;
     const tagsCsvVal = values?.tagsCsv ?? fTagsCsv;
@@ -998,9 +1010,14 @@ export default function Home() {
       Alert.alert('Not signed in', 'You must be signed in as admin.');
       return;
     }
-    const imageUrls = [fImage1, fImage2, fImage3]
-      .map((u) => u.trim())
-      .filter((u) => !!u);
+    const { cleaned: imageUrls, errors: imageErrors } = sanitizeEventImageUrls([
+      fImage1,
+      fImage2,
+      fImage3,
+    ]);
+    if (imageErrors.length) {
+      Alert.alert('Image issues', imageErrors.join('\n'));
+    }
     const payload: any = {
       title: titleVal.trim(),
       description: descVal.trim() || null,
@@ -1080,10 +1097,10 @@ export default function Home() {
     setEditingId(e.id);
     setFTitle(e.title);
     setFDesc(e.description ?? '');
-  const imgs = (e as any).image_urls ?? [];
-  setFImage1(imgs[0] || e.image_url || '');
-  setFImage2(imgs[1] || '');
-  setFImage3(imgs[2] || '');
+    const imgs = (e as any).image_urls ?? [];
+    setFImage1(imgs[0] || e.image_url || '');
+    setFImage2(imgs[1] || '');
+    setFImage3(imgs[2] || '');
     setFDateTime(e.date_time);
     setFLocation(e.location ?? '');
     setFTagsCsv((e.tags ?? []).join(', '));
@@ -1111,12 +1128,12 @@ export default function Home() {
         setFTitle={setFTitle}
         fDesc={fDesc}
         setFDesc={setFDesc}
-  fImage1={fImage1}
-  setFImage1={setFImage1}
-  fImage2={fImage2}
-  setFImage2={setFImage2}
-  fImage3={fImage3}
-  setFImage3={setFImage3}
+        fImage1={fImage1}
+        setFImage1={setFImage1}
+        fImage2={fImage2}
+        setFImage2={setFImage2}
+        fImage3={fImage3}
+        setFImage3={setFImage3}
         fDateTime={fDateTime}
         setFDateTime={setFDateTime}
         fLocation={fLocation}
@@ -1142,9 +1159,9 @@ export default function Home() {
       editingId,
       fTitle,
       fDesc,
-  fImage1,
-  fImage2,
-  fImage3,
+      fImage1,
+      fImage2,
+      fImage3,
       fDateTime,
       fLocation,
       fTagsCsv,
@@ -1277,21 +1294,20 @@ export default function Home() {
                   const imgs: string[] = (item as any).image_urls?.length
                     ? (item as any).image_urls
                     : item.image_url
-                      ? [item.image_url]
-                      : [];
+                    ? [item.image_url]
+                    : [];
                   if (!imgs.length) return null;
                   const cover = imgs[0];
                   const extras = imgs.slice(1, 3);
                   return (
                     <View style={{ position: 'relative' }}>
-                      <Image
-                        source={{ uri: cover }}
-                        style={{
-                          width: '100%',
-                          height: 160,
-                          borderTopLeftRadius: 16,
-                          borderTopRightRadius: 16,
-                        }}
+                      <LazyImage
+                        uri={cover}
+                        width={'100%'}
+                        height={160}
+                        borderRadius={16}
+                        accessibilityLabel={`Cover image for ${item.title}`}
+                        style={{ borderTopLeftRadius: 16, borderTopRightRadius: 16 }}
                       />
                       {extras.length ? (
                         <View
@@ -1304,16 +1320,14 @@ export default function Home() {
                           }}
                         >
                           {extras.map((u, i) => (
-                            <Image
+                            <LazyImage
                               key={i}
-                              source={{ uri: u }}
-                              style={{
-                                width: 44,
-                                height: 44,
-                                borderRadius: 8,
-                                borderWidth: 1,
-                                borderColor: '#ffffff55',
-                              }}
+                              uri={u}
+                              width={44}
+                              height={44}
+                              borderRadius={8}
+                              style={{ borderWidth: 1, borderColor: '#ffffff55' }}
+                              accessibilityLabel={`Additional image ${i + 2} for ${item.title}`}
                             />
                           ))}
                           {imgs.length > 3 ? (
@@ -1481,8 +1495,8 @@ export default function Home() {
               const imgs: string[] = (selectedEvent as any)?.image_urls?.length
                 ? (selectedEvent as any).image_urls
                 : selectedEvent?.image_url
-                  ? [selectedEvent.image_url]
-                  : [];
+                ? [selectedEvent.image_url]
+                : [];
               if (!imgs.length) return null;
               return (
                 <ScrollView
@@ -1492,10 +1506,14 @@ export default function Home() {
                   style={{ width: '100%', maxHeight: 240 }}
                 >
                   {imgs.map((u, i) => (
-                    <Image
+                    <LazyImage
                       key={i}
-                      source={{ uri: u }}
-                      style={{ width: 320, height: 220, marginRight: 8, borderRadius: 12 }}
+                      uri={u}
+                      width={320}
+                      height={220}
+                      borderRadius={12}
+                      style={{ marginRight: 8 }}
+                      accessibilityLabel={`Gallery image ${i + 1} for ${selectedEvent?.title}`}
                     />
                   ))}
                 </ScrollView>
