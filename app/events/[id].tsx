@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { View, Text, Image, Pressable, Linking, ScrollView } from 'react-native';
 import LazyImage from '@/components/LazyImage';
+import EventImages from '@/components/EventImages';
 import { useLocalSearchParams } from 'expo-router';
 import dayjs from 'dayjs';
 import * as Calendar from 'expo-calendar';
@@ -61,37 +62,7 @@ export default function EventDetails() {
             ? [event.image_url]
             : [];
           if (!imgs.length) return null;
-          if (imgs.length === 1) {
-            return (
-              <LazyImage
-                uri={imgs[0]}
-                width={'100%'}
-                height={220}
-                accessibilityLabel={`Event image for ${event.title}`}
-              />
-            );
-          }
-          return (
-            <ScrollView
-              horizontal
-              pagingEnabled
-              showsHorizontalScrollIndicator={false}
-              style={{ width: '100%', maxHeight: 240 }}
-              contentContainerStyle={{ alignItems: 'center', paddingHorizontal: 12 }}
-            >
-              {imgs.map((u, i) => (
-                <LazyImage
-                  key={i}
-                  uri={u}
-                  width={300}
-                  height={220}
-                  borderRadius={12}
-                  style={{ marginRight: 12 }}
-                  accessibilityLabel={`Gallery image ${i + 1} for ${event.title}`}
-                />
-              ))}
-            </ScrollView>
-          );
+          return <EventImages images={imgs} variant="detail" />;
         })()}
         <View style={{ padding: 16 }}>
           <GradientHeader

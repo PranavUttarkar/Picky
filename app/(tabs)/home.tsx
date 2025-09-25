@@ -20,6 +20,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { ThreeDButton, ThreeDCard } from '@/components/ThreeD';
 import dayjs from 'dayjs';
 import LazyImage from '@/components/LazyImage';
+import EventImages from '@/components/EventImages';
 import { useTheme, useThemeColors } from '@/theme/ThemeProvider';
 import GradientBackground from '@/components/GradientBackground';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -1357,57 +1358,9 @@ export default function Home() {
                     ? [item.image_url]
                     : [];
                   if (!imgs.length) return null;
-                  const cover = imgs[0];
-                  const extras = imgs.slice(1, 3);
                   return (
-                    <View style={{ position: 'relative' }}>
-                      <LazyImage
-                        uri={cover}
-                        width={'100%'}
-                        height={160}
-                        borderRadius={16}
-                        accessibilityLabel={`Cover image for ${item.title}`}
-                        style={{ borderTopLeftRadius: 16, borderTopRightRadius: 16 }}
-                      />
-                      {extras.length ? (
-                        <View
-                          style={{
-                            position: 'absolute',
-                            right: 8,
-                            bottom: 8,
-                            flexDirection: 'row',
-                            gap: 6,
-                          }}
-                        >
-                          {extras.map((u, i) => (
-                            <LazyImage
-                              key={i}
-                              uri={u}
-                              width={44}
-                              height={44}
-                              borderRadius={8}
-                              style={{ borderWidth: 1, borderColor: '#ffffff55' }}
-                              accessibilityLabel={`Additional image ${i + 2} for ${item.title}`}
-                            />
-                          ))}
-                          {imgs.length > 3 ? (
-                            <View
-                              style={{
-                                width: 44,
-                                height: 44,
-                                borderRadius: 8,
-                                backgroundColor: '#00000070',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                              }}
-                            >
-                              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 12 }}>
-                                +{imgs.length - 3}
-                              </Text>
-                            </View>
-                          ) : null}
-                        </View>
-                      ) : null}
+                    <View style={{ padding: 0, margin: 0 }}>
+                      <EventImages images={imgs} variant="card" />
                     </View>
                   );
                 })()}
@@ -1568,24 +1521,9 @@ export default function Home() {
                 : [];
               if (!imgs.length) return null;
               return (
-                <ScrollView
-                  horizontal
-                  pagingEnabled
-                  showsHorizontalScrollIndicator={false}
-                  style={{ width: '100%', maxHeight: 240 }}
-                >
-                  {imgs.map((u, i) => (
-                    <LazyImage
-                      key={i}
-                      uri={u}
-                      width={320}
-                      height={220}
-                      borderRadius={12}
-                      style={{ marginRight: 8 }}
-                      accessibilityLabel={`Gallery image ${i + 1} for ${selectedEvent?.title}`}
-                    />
-                  ))}
-                </ScrollView>
+                <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
+                  <EventImages images={imgs} variant="modal" />
+                </View>
               );
             })()}
             <View style={{ padding: 16 }}>

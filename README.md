@@ -108,6 +108,22 @@ Notes
 - Interests picker currently writes to `user_interests_temp`. You can later map to `interests` and `user_interests` via a function/trigger.
 - This scaffold includes Home, Groups, Saved, Profile tabs and onboarding flow.
 
+### Editing interests after onboarding
+
+Users can edit interests anytime from the Profile tab via a comma‑separated list (CSV). Example:
+
+```
+Music, Food, Tech, Outdoors
+```
+
+Rules:
+1. Commas or newlines both separate interests.
+2. Empty tokens ignored; duplicates removed (first occurrence kept).
+3. Client caps list at 24 items for safety.
+4. Saves with an `upsert` into `user_interests_temp.names`.
+
+Future ideas: autosuggest popular tags, trending interests, per-interest delete chips, or normalization into a join table.
+
 Scoring RPCs
 - Personal feed scores: call `rpc('get_user_event_scores')` to get rows `{ event_id, match_percent }` for the current user.
 - Group feed scores: call `rpc('get_group_event_scores', { p_group_id: '<group uuid>' })` to get rows `{ event_id, match_percent }` for that group (caller must be a member).
