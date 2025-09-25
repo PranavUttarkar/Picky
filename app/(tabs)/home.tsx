@@ -12,7 +12,11 @@ import {
   Alert,
   Linking,
   Platform,
+  LayoutAnimation,
+  UIManager,
 } from 'react-native';
+import * as Haptics from 'expo-haptics';
+import { Ionicons } from '@expo/vector-icons';
 import { ThreeDButton, ThreeDCard } from '@/components/ThreeD';
 import dayjs from 'dayjs';
 import { useTheme, useThemeColors } from '@/theme/ThemeProvider';
@@ -105,7 +109,6 @@ const AdminHeader = memo(function AdminHeader(props: AdminHeaderProps) {
   const [tagsCsvLocal, setTagsCsvLocal] = useState(fTagsCsv);
   const [rsvpLocal, setRsvpLocal] = useState(fRsvp);
 
-  // Sync locals when parent values change due to Edit/Reset
   useEffect(() => {
     setTitleLocal(fTitle);
     setDescLocal(fDesc);
@@ -115,72 +118,6 @@ const AdminHeader = memo(function AdminHeader(props: AdminHeaderProps) {
     setTagsCsvLocal(fTagsCsv);
     setRsvpLocal(fRsvp);
   }, [editingId, fTitle, fDesc, fImage, fDateTime, fLocation, fTagsCsv, fRsvp]);
-
-  // Web date/time input UX: locally control text and commit onBlur or when valid
-  const [dateText, setDateText] = useState(dayjs(fDateTime).format('YYYY-MM-DD'));
-  const [timeText, setTimeText] = useState(dayjs(fDateTime).format('HH:mm'));
-  useEffect(() => {
-    // keep local fields in sync when fDateTime changes externally
-    setDateText(dayjs(fDateTime).format('YYYY-MM-DD'));
-    setTimeText(dayjs(fDateTime).format('HH:mm'));
-  }, [fDateTime]);
-
-  const commitDateText = () => {
-    const d = dayjs(dateText, 'YYYY-MM-DD', true);
-    if (d.isValid()) {
-      const merged = d
-        .hour(dayjs(fDateTime).hour())
-        .minute(dayjs(fDateTime).minute())
-        .second(0)
-        .millisecond(0)
-        .toISOString();
-      setFDateTime(merged);
-    }
-  };
-  const commitTimeText = () => {
-    const [hh, mm] = timeText.split(':');
-    const h = Number(hh);
-    const m = Number(mm);
-    if (!Number.isNaN(h) && !Number.isNaN(m) && h >= 0 && h < 24 && m >= 0 && m < 60) {
-      const merged = dayjs(fDateTime).hour(h).minute(m).second(0).millisecond(0).toISOString();
-      setFDateTime(merged);
-    }
-  };
-
-  const DateTimeInputsWebInner = () => (
-    <View style={{ flexDirection: 'row', gap: 8 }}>
-      <TextInput
-        value={dateText}
-        onChangeText={(val) => setDateText(val)}
-        onBlur={commitDateText}
-        placeholder="YYYY-MM-DD"
-        style={{
-          flex: 1,
-          color: c.text,
-          backgroundColor: '#00000010',
-          padding: 10,
-          borderRadius: 8,
-        }}
-        inputMode="numeric"
-      />
-      <TextInput
-        value={timeText}
-        onChangeText={(val) => setTimeText(val)}
-        onBlur={commitTimeText}
-        placeholder="HH:mm"
-        style={{
-          flex: 1,
-          color: c.text,
-          backgroundColor: '#00000010',
-          padding: 10,
-          borderRadius: 8,
-        }}
-        inputMode="numeric"
-      />
-    </View>
-  );
-
-  if (!isAdmin) return null;
 
   return (
     <View style={{ paddingBottom: 12 }}>
@@ -236,9 +173,7 @@ const AdminHeader = memo(function AdminHeader(props: AdminHeaderProps) {
               autoComplete="off"
               blurOnSubmit={false}
             />
-            {Platform.OS === 'web' ? (
-              <DateTimeInputsWebInner />
-            ) : (
+            {Platform.OS === 'web' ? null : (
               <View style={{ flexDirection: 'row', gap: 8 }}>
                 <Pressable
                   onPress={() => setShowDatePicker(true)}
@@ -250,8 +185,6 @@ const AdminHeader = memo(function AdminHeader(props: AdminHeaderProps) {
                     alignItems: 'center',
                     justifyContent: 'center',
                   }}
-                  accessibilityRole="button"
-                  accessibilityLabel="Select date"
                 >
                   <Text style={{ color: c.text, fontWeight: '700' }}>
                     {dayjs(dateTimeLocal).format('YYYY-MM-DD')}
@@ -267,8 +200,6 @@ const AdminHeader = memo(function AdminHeader(props: AdminHeaderProps) {
                     alignItems: 'center',
                     justifyContent: 'center',
                   }}
-                  accessibilityRole="button"
-                  accessibilityLabel="Select time"
                 >
                   <Text style={{ color: c.text, fontWeight: '700' }}>
                     {dayjs(dateTimeLocal).format('h:mm A')}
@@ -356,7 +287,6 @@ const AdminHeader = memo(function AdminHeader(props: AdminHeaderProps) {
               />
               {editingId ? <ThreeDButton title="Cancel" onPress={resetForm} /> : null}
             </View>
-            {/* Quick list to edit/delete */}
             <View style={{ marginTop: 8, gap: 8 }}>
               {events
                 .filter((e: any) => e.id > 0)
@@ -653,6 +583,12 @@ export default function Home() {
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  // Track which card is expanded; collapsed shows truncated description + hint
+  const [expandedId, setExpandedId] = useState<number | null>(null);
+
+  if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+    UIManager.setLayoutAnimationEnabledExperimental(true);
+  }
 
   // Admin form state
   const [adminOpen, setAdminOpen] = useState(false);
@@ -1111,7 +1047,9 @@ export default function Home() {
   };
 
   const Container: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-    <GradientBackground contentContainerStyle={{ flex: 1, padding: 12 }}>{children}</GradientBackground>
+    <GradientBackground contentContainerStyle={{ flex: 1, padding: 12 }}>
+      {children}
+    </GradientBackground>
   );
 
   // Admin header memo: only depends on admin form state, not search
@@ -1241,85 +1179,162 @@ export default function Home() {
             />
           </View>
         }
-        renderItem={({ item }) => (
-          <Pressable
-            onPress={() => onOpenDetails(item)}
-            style={{
-              borderRadius: 16,
-              overflow: 'hidden',
-              opacity: item.id < 0 ? 0.98 : 1,
-            }}
-          >
-            <ThreeDCard>
-              {item.image_url ? (
-                <Image
-                  source={{ uri: item.image_url }}
-                  style={{
-                    width: '100%',
-                    height: 160,
-                    borderTopLeftRadius: 16,
-                    borderTopRightRadius: 16,
-                  }}
-                />
-              ) : null}
-              <View style={{ padding: 12 }}>
-                <Text style={{ color: c.text, fontSize: 18, fontWeight: '800' }}>{item.title}</Text>
-                <Text style={{ color: c.muted, marginTop: 4 }}>
-                  {dayjs(item.date_time).format('ddd, MMM D • h:mm A')} • {item.location}
-                </Text>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
-                  {(item.tags ?? []).map((t: string, i: number) => (
-                    <Chip key={`${t}-${i}`} label={t} />
-                  ))}
-                </View>
-                <View
-                  style={{
-                    marginTop: 8,
-                    flexDirection: 'row',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                  }}
-                >
-                  <MatchBadge value={match(item.id, item.tags)} />
-                  <View style={{ flexDirection: 'row', gap: 8 }}>
-                    <ThreeDButton
-                      title={saved.includes(item.id) ? 'Saved' : 'Save'}
-                      onPress={() => toggleSave(item.id)}
-                      style={{ opacity: item.id < 0 ? 0.5 : 1 }}
-                    />
-                    {item.id > 0 ? (
-                      <ThreeDButton
-                        title="Poll"
-                        onPress={async () => {
-                          const authed = await requireAuth();
-                          if (!authed) return;
-                          router.push({ pathname: '/polls/new', params: { fromEvent: item.id } });
-                        }}
-                      />
-                    ) : (
-                      <View
-                        style={{
-                          backgroundColor: '#00000020',
-                          paddingHorizontal: 12,
-                          paddingVertical: 8,
-                          borderRadius: 10,
-                        }}
-                      >
-                        <Text style={{ color: c.muted, fontWeight: '700' }}>Demo</Text>
+        renderItem={({ item }) => {
+          const savedState = saved.includes(item.id);
+          const disabled = item.id < 0;
+          const isExpanded = expandedId === item.id;
+          const fullDesc = item.description ?? '';
+          const truncated = fullDesc.length > 50 ? fullDesc.slice(0, 50) + '…' : fullDesc;
+
+          const IconButton: React.FC<{
+            name: keyof typeof Ionicons.glyphMap;
+            label: string;
+            onPress?: () => void | Promise<void>;
+            color?: string;
+            disabled?: boolean;
+          }> = ({ name, label, onPress, color, disabled: dis }) => (
+            <Pressable
+              onPress={dis ? undefined : onPress}
+              accessibilityRole="button"
+              accessibilityLabel={label}
+              style={{
+                width: 42,
+                height: 42,
+                borderRadius: 12,
+                backgroundColor: '#00000020',
+                alignItems: 'center',
+                justifyContent: 'center',
+                opacity: dis ? 0.4 : 1,
+              }}
+            >
+              <Ionicons name={name} size={22} color={color || c.text} />
+            </Pressable>
+          );
+
+          return (
+            <View
+              style={{
+                borderRadius: 16,
+                overflow: 'hidden',
+                opacity: item.id < 0 ? 0.98 : 1,
+              }}
+            >
+              <ThreeDCard>
+                {item.image_url ? (
+                  <Image
+                    source={{ uri: item.image_url }}
+                    style={{
+                      width: '100%',
+                      height: 160,
+                      borderTopLeftRadius: 16,
+                      borderTopRightRadius: 16,
+                    }}
+                  />
+                ) : null}
+                <View style={{ padding: 12 }}>
+                  <Text style={{ color: c.text, fontSize: 18, fontWeight: '800' }}>
+                    {item.title}
+                  </Text>
+                  <Text style={{ color: c.muted, marginTop: 4 }}>
+                    {dayjs(item.date_time).format('ddd, MMM D • h:mm A')} • {item.location}
+                  </Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                    {(item.tags ?? []).map((t: string, i: number) => (
+                      <Chip key={`${t}-${i}`} label={t} />
+                    ))}
+                  </View>
+                  {fullDesc.length ? (
+                    <Pressable
+                      onPress={() => {
+                        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                        setExpandedId((prev) => (prev === item.id ? null : item.id));
+                        Haptics.selectionAsync().catch(() => {});
+                      }}
+                      accessibilityRole="button"
+                      accessibilityLabel={
+                        isExpanded ? 'Collapse description' : 'Expand description'
+                      }
+                      style={{ marginTop: 10 }}
+                    >
+                      <View style={{ position: 'relative' }}>
+                        <Text style={{ color: c.text }}>
+                          {isExpanded ? fullDesc : truncated || ''}
+                        </Text>
+                        {!isExpanded && fullDesc.length > truncated.length ? (
+                          <LinearGradient
+                            colors={
+                              scheme === 'light'
+                                ? ['rgba(255,255,255,0)', 'rgba(255,255,255,0.92)']
+                                : ['rgba(0,0,0,0)', 'rgba(0,0,0,0.85)']
+                            }
+                            style={{
+                              position: 'absolute',
+                              right: 0,
+                              top: 0,
+                              bottom: 0,
+                              width: 50,
+                            }}
+                            pointerEvents="none"
+                          />
+                        ) : null}
                       </View>
-                    )}
-                    {isAdmin && item.id > 0 ? (
-                      <>
-                        <ThreeDButton title="Edit" onPress={() => prefillForEdit(item)} />
-                        <ThreeDButton title="Delete" onPress={() => deleteEvent(item.id)} />
-                      </>
-                    ) : null}
+                    </Pressable>
+                  ) : null}
+                  {/* Actions row always visible */}
+                  <View
+                    style={{
+                      marginTop: 12,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: 12,
+                    }}
+                  >
+                    <MatchBadge value={match(item.id, item.tags)} />
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      {item.id > 0 ? (
+                        <ThreeDButton
+                          title="Poll"
+                          onPress={async () => {
+                            const authed = await requireAuth();
+                            if (!authed) return;
+                            router.push({ pathname: '/polls/new', params: { fromEvent: item.id } });
+                          }}
+                        />
+                      ) : null}
+                      <IconButton
+                        name={savedState ? 'bookmark' : 'bookmark-outline'}
+                        label={savedState ? 'Saved' : 'Save event'}
+                        onPress={() => toggleSave(item.id)}
+                        disabled={disabled}
+                        color={savedState ? c.primary : c.text}
+                      />
+                      {isAdmin && item.id > 0 ? (
+                        <>
+                          <IconButton
+                            name="pencil"
+                            label="Edit event"
+                            onPress={() => prefillForEdit(item)}
+                          />
+                          <IconButton
+                            name="trash"
+                            label="Delete event"
+                            onPress={() => deleteEvent(item.id)}
+                          />
+                        </>
+                      ) : null}
+                      <IconButton
+                        name="expand-outline"
+                        label="View full details"
+                        onPress={() => onOpenDetails(item)}
+                      />
+                    </View>
                   </View>
                 </View>
-              </View>
-            </ThreeDCard>
-          </Pressable>
-        )}
+              </ThreeDCard>
+            </View>
+          );
+        }}
       />
 
       {/* Event Details Modal */}
@@ -1329,14 +1344,18 @@ export default function Home() {
         onRequestClose={() => setDetailsOpen(false)}
       >
         <SafeAreaView style={{ flex: 1, backgroundColor: c.background }}>
-          <BlurView intensity={30} tint={scheme === 'dark' ? 'dark' : 'light'} style={{ padding: 12 }}>
+          <BlurView
+            intensity={30}
+            tint={scheme === 'dark' ? 'dark' : 'light'}
+            style={{ padding: 12 }}
+          >
             <View
               style={{
                 flexDirection: 'row',
                 justifyContent: 'space-between',
                 alignItems: 'center',
               }}
-           >
+            >
               <Text style={{ color: c.text, fontSize: 18, fontWeight: '800' }}>Event details</Text>
               <Pressable
                 onPress={() => setDetailsOpen(false)}
