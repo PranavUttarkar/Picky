@@ -43,12 +43,12 @@ How the app flows today
 	- `group`: Create a group (generates invite code) or join via ID/code; can skip to tabs.
 3) Tabs
 	- `home`: Event feed
-	  - Loads upcoming events from `events`. If too few, injects a set of clearly labeled dummy events (negative IDs) so the UI feels full.
+	  - Loads upcoming events from `events` (chronological).
 	  - Search box: supports plain text and `#tag` filters; also provides tag chips (multi-select AND logic).
 	  - Modes: View All (chronological) vs Personalized (sorted by match%). Personalized uses `rpc('get_user_event_scores')` when available; otherwise falls back to a local overlap estimate.
-	  - Save/Unsave: persists to `saved_events` (requires auth; disabled on dummy events).
-	  - Details: opens a modal with time, location, tags, description, add-to-calendar shortcut, and RSVP link.
-	  - Admin tools: if `users.is_admin = true`, shows an expandable CRUD form to create/update/delete real events.
+	  - Save/Unsave: persists to `saved_events` (auth required).
+	  - Details: modal with time, location, tags, description, add-to-calendar shortcut, and RSVP link.
+	  - Admin tools: if `users.is_admin = true`, shows expandable CRUD form to create/update/delete real events.
 	- `groups`: Lists groups the user belongs to from `group_members` → `groups`.
 	- `saved`: Shows user’s saved events and links to event detail pages.
 	- `profile`: Sign out.
@@ -183,6 +183,16 @@ Deep-dive docs are in the `docs/` folder:
 - `docs/scoring.md` — Personalization and server RPCs
 - `docs/development.md` — Dev setup, scripts, migrations
 - `docs/troubleshooting.md` — Common issues and fixes
+
+### Feed Row Card Layout (Update)
+
+The main event feed now uses a compact horizontal row card component (`EventRowCard`) instead of tall vertical cards. Benefits:
+- Consistent height for smoother, more predictable scrolling.
+- Denser information (title, time, location, tags, actions) in one row.
+- Thumbnail (first image) at fixed size for visual alignment.
+- Match % badge shown when available.
+
+Actions preserved: save/unsave, open details, start poll, (admin) edit/delete. Full description still accessible via details modal.
 
 If you’re looking for how the admin delete confirmation works, see `docs/admin-flows.md`.
 

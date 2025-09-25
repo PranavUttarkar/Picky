@@ -18,6 +18,7 @@ import {
 import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
 import { ThreeDButton, ThreeDCard } from '@/components/ThreeD';
+import EventRowCard from '@/components/EventRowCard';
 import dayjs from 'dayjs';
 import LazyImage from '@/components/LazyImage';
 import EventImages from '@/components/EventImages';
@@ -711,65 +712,11 @@ export default function Home() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
 
-  const makeDummyEvents = (): Event[] => {
-    const titles = [
-      'Campus Mixer Night',
-      'Tech Talk & Pizza',
-      'Outdoor Movie',
-      'Art & Coffee',
-      'Startup Pitch Jam',
-      'Game Night Social',
-      'Mindfulness Workshop',
-      'Live Music on the Lawn',
-      'Career Fair Warmup',
-      'Community Volunteering',
-      'Robotics Demo Day',
-      'Open Mic Evening',
-      'Photography Walk',
-    ];
-    const locations = ['Riverside Park', 'Innovation Hub', 'Student Union', 'Main Quad'];
-    const tagPool = [
-      'tech',
-      'music',
-      'food',
-      'networking',
-      'wellness',
-      'art',
-      'sports',
-      'career',
-      'community',
-    ];
-    const now = dayjs();
-    const list: Event[] = [] as Event[];
-    for (let i = 0; i < 24; i++) {
-      const id = -1 - i;
-      const title = titles[i % titles.length];
-      const location = locations[i % locations.length];
-      const date_time = now
-        .add(i + 1, 'day')
-        .hour(18)
-        .minute(0)
-        .second(0)
-        .toISOString();
-      const tags = [tagPool[i % tagPool.length], tagPool[(i + 3) % tagPool.length]];
-      list.push({
-        id,
-        title,
-        description: null,
-        image_url: null,
-        date_time,
-        location,
-        tags,
-        rsvp_url: null,
-      } as unknown as Event);
-    }
-    return list;
-  };
 
   // Pagination + caching
   const PAGE_SIZE = 10;
   const CACHE_KEY = 'events_cache_v1';
-  const MIN_FEED = 12; // ensure at least this many items by adding placeholders
+  // Removed dummy/placeholder events: feed now reflects only real upcoming events
 
   const saveCache = async (items: Event[]) => {
     try {
@@ -806,26 +753,10 @@ export default function Home() {
     setIsFetching(true);
     try {
       const first = await fetchPage(0);
-      const dummiesAll = makeDummyEvents();
-      if (first.length === 0) {
-        // No real upcoming events; show a healthy set of dummies to demo UX
-        const dummies = dummiesAll.slice(0, MIN_FEED);
-        setEvents(dummies);
-        setHasMore(false);
-      } else {
-        const hasMoreNow = first.length === PAGE_SIZE;
-        let initial: Event[] = first as Event[];
-        if (!hasMoreNow && first.length < MIN_FEED) {
-          const existingIds = new Set((first as any[]).map((e) => e.id));
-          const toAdd = dummiesAll
-            .filter((d) => !existingIds.has(d.id))
-            .slice(0, MIN_FEED - first.length);
-          initial = [...first, ...toAdd] as Event[];
-        }
-        setEvents(initial);
-        setHasMore(hasMoreNow);
-        await saveCache(first);
-      }
+      const hasMoreNow = first.length === PAGE_SIZE;
+      setEvents(first as Event[]);
+      setHasMore(hasMoreNow);
+      await saveCache(first as Event[]);
       setPage(1);
     } finally {
       setIsFetching(false);
@@ -839,40 +770,16 @@ export default function Home() {
       const next = await fetchPage(page);
       if (next.length === 0) {
         setHasMore(false);
-        // Top-up with placeholders if needed
-        setEvents((prev) => {
-          const merged = [...prev] as Event[];
-          const dummiesAll = makeDummyEvents();
-          const existingIds = new Set((merged as any[]).map((e) => e.id));
-          const needed = Math.max(0, MIN_FEED - merged.length);
-          const toAdd = dummiesAll.filter((d) => !existingIds.has(d.id)).slice(0, needed);
-          return [...merged, ...toAdd] as Event[];
-        });
       } else {
         setEvents((prev) => {
-          const negatives = prev.filter((e: any) => e.id < 0) as Event[];
-          const realMap = new Map<number, Event>();
-          // include previous real events
-          for (const e of prev) if ((e as any).id > 0) realMap.set((e as any).id, e);
-          // include new page real events
-          for (const e of next as any[])
-            if ((e as any).id > 0) realMap.set((e as any).id, e as Event);
-          let realList = Array.from(realMap.values());
-          // Optionally keep chronological order for base data
-          realList = realList.sort(
-            (a: any, b: any) => dayjs(a.date_time).valueOf() - dayjs(b.date_time).valueOf(),
-          );
-          let final = [...negatives, ...realList] as Event[];
-          if (next.length < PAGE_SIZE) {
-            const dummiesAll = makeDummyEvents();
-            const existingIds = new Set((final as any[]).map((e) => e.id));
-            const needed = Math.max(0, MIN_FEED - final.length);
-            const toAdd = dummiesAll.filter((d) => !existingIds.has(d.id)).slice(0, needed);
-            final = [...final, ...toAdd] as Event[];
-          }
-          // Save only real events to cache
-          saveCache(final.filter((e: any) => e.id > 0));
-          return final;
+          const map = new Map<number, Event>();
+            for (const e of prev) map.set((e as any).id, e as Event);
+            for (const e of next as any[]) map.set((e as any).id, e as Event);
+            const merged = Array.from(map.values()).sort(
+              (a: any, b: any) => dayjs(a.date_time).valueOf() - dayjs(b.date_time).valueOf(),
+            );
+            saveCache(merged);
+            return merged;
         });
         if (next.length < PAGE_SIZE) setHasMore(false);
         setPage((p) => p + 1);
@@ -939,8 +846,6 @@ export default function Home() {
   };
 
   const toggleSave = async (id: number) => {
-    // Disable save for dummy items
-    if (id < 0) return;
     const authed = await requireAuth();
     if (!authed) return;
     const user = (await supabase.auth.getUser()).data.user!;
@@ -1105,7 +1010,6 @@ export default function Home() {
 
   // Open cross-platform confirmation modal
   const deleteEvent = (id: number) => {
-    if (id <= 0) return; // ignore dummy events
     setDeleteTargetId(id);
     setConfirmDeleteOpen(true);
   };
@@ -1135,21 +1039,12 @@ export default function Home() {
   };
 
   const onOpenDetails = async (item: Event) => {
-    // If it's a real event, fetch full row to include RSVP etc.
-    if (item.id > 0) {
-      const { data } = await supabase.from('events').select('*').eq('id', item.id).maybeSingle();
-      if (data) {
-        setSelectedEvent(data as Event);
-        setDetailsOpen(true);
-        return;
-      }
-    }
-    setSelectedEvent(item);
+    const { data } = await supabase.from('events').select('*').eq('id', item.id).maybeSingle();
+    setSelectedEvent((data ?? item) as Event);
     setDetailsOpen(true);
   };
 
   const prefillForEdit = (e: Event) => {
-    if (e.id <= 0) return;
     setAdminOpen(true);
     setEditingId(e.id);
     setFTitle(e.title);
@@ -1174,41 +1069,42 @@ export default function Home() {
 
   // Admin header memo: only depends on admin form state, not search
   const adminHeader = useMemo(
-    () => (
-      <AdminHeader
-        c={c}
-        isAdmin={isAdmin}
-        adminOpen={adminOpen}
-        setAdminOpen={setAdminOpen}
-        editingId={editingId}
-        fTitle={fTitle}
-        setFTitle={setFTitle}
-        fDesc={fDesc}
-        setFDesc={setFDesc}
-        fImage1={fImage1}
-        setFImage1={setFImage1}
-        fImage2={fImage2}
-        setFImage2={setFImage2}
-        fImage3={fImage3}
-        setFImage3={setFImage3}
-        fDateTime={fDateTime}
-        setFDateTime={setFDateTime}
-        fLocation={fLocation}
-        setFLocation={setFLocation}
-        fTagsCsv={fTagsCsv}
-        setFTagsCsv={setFTagsCsv}
-        fRsvp={fRsvp}
-        setFRsvp={setFRsvp}
-        showDatePicker={showDatePicker}
-        setShowDatePicker={setShowDatePicker}
-        showTimePicker={showTimePicker}
-        setShowTimePicker={setShowTimePicker}
-        upsertEvent={upsertEvent}
-        resetForm={resetForm}
-        events={events}
-        deleteEvent={deleteEvent}
-      />
-    ),
+    () =>
+      isAdmin ? (
+        <AdminHeader
+          c={c}
+          isAdmin={isAdmin}
+          adminOpen={adminOpen}
+          setAdminOpen={setAdminOpen}
+          editingId={editingId}
+          fTitle={fTitle}
+          setFTitle={setFTitle}
+          fDesc={fDesc}
+          setFDesc={setFDesc}
+          fImage1={fImage1}
+          setFImage1={setFImage1}
+          fImage2={fImage2}
+          setFImage2={setFImage2}
+          fImage3={fImage3}
+          setFImage3={setFImage3}
+          fDateTime={fDateTime}
+          setFDateTime={setFDateTime}
+          fLocation={fLocation}
+          setFLocation={setFLocation}
+          fTagsCsv={fTagsCsv}
+          setFTagsCsv={setFTagsCsv}
+          fRsvp={fRsvp}
+          setFRsvp={setFRsvp}
+          showDatePicker={showDatePicker}
+          setShowDatePicker={setShowDatePicker}
+          showTimePicker={showTimePicker}
+          setShowTimePicker={setShowTimePicker}
+          upsertEvent={upsertEvent}
+          resetForm={resetForm}
+          events={events}
+          deleteEvent={deleteEvent}
+        />
+      ) : null,
     [
       c,
       isAdmin,
@@ -1228,6 +1124,12 @@ export default function Home() {
       events,
     ],
   );
+
+  // TODO: Replace current vertical card layout with horizontal row cards (EventRowCard component)
+  // New layout plan:
+  //  - Left: square/16:9 thumb (first image) using EventImages with maxDisplay=1 or a dedicated thumb
+  //  - Right: title, date/time, location, tags (single-line truncated), actions row
+  //  - Keep expand for description reveal below row or in modal
 
   // Filters: top bar outside list, interests/tags/results inside list header
   const filtersTopBar = useMemo(
@@ -1307,174 +1209,26 @@ export default function Home() {
         }
         renderItem={({ item }) => {
           const savedState = saved.includes(item.id);
-          const disabled = item.id < 0;
-          const isExpanded = expandedId === item.id;
-          const fullDesc = item.description ?? '';
-          const COLLAPSED_LIMIT = 250;
-          const truncated =
-            fullDesc.length > COLLAPSED_LIMIT
-              ? fullDesc.slice(0, COLLAPSED_LIMIT).replace(/\s+$/, '') + '…'
-              : fullDesc;
-
-          const IconButton: React.FC<{
-            name: keyof typeof Ionicons.glyphMap;
-            label: string;
-            onPress?: () => void | Promise<void>;
-            color?: string;
-            disabled?: boolean;
-          }> = ({ name, label, onPress, color, disabled: dis }) => (
-            <Pressable
-              onPress={dis ? undefined : onPress}
-              accessibilityRole="button"
-              accessibilityLabel={label}
-              style={{
-                width: 42,
-                height: 42,
-                borderRadius: 12,
-                backgroundColor: '#00000020',
-                alignItems: 'center',
-                justifyContent: 'center',
-                opacity: dis ? 0.4 : 1,
-              }}
-            >
-              <Ionicons name={name} size={22} color={color || c.text} />
-            </Pressable>
-          );
-
           return (
-            <View
-              style={{
-                borderRadius: 16,
-                overflow: 'hidden',
-                opacity: item.id < 0 ? 0.98 : 1,
-              }}
-            >
-              <ThreeDCard>
-                {/* Multi-image cover: show first image full, up to 2 more as stacked thumbnails */}
-                {(() => {
-                  const imgs: string[] = (item as any).image_urls?.length
-                    ? (item as any).image_urls
-                    : item.image_url
-                    ? [item.image_url]
-                    : [];
-                  if (!imgs.length) return null;
-                  return (
-                    <View style={{ padding: 0, margin: 0 }}>
-                      <EventImages images={imgs} variant="card" />
-                    </View>
-                  );
-                })()}
-                <View style={{ padding: 12 }}>
-                  <Text style={{ color: c.text, fontSize: 18, fontWeight: '800' }}>
-                    {item.title}
-                  </Text>
-                  <Text style={{ color: c.muted, marginTop: 4 }}>
-                    {dayjs(item.date_time).format('ddd, MMM D • h:mm A')} • {item.location}
-                  </Text>
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
-                    {(item.tags ?? []).map((t: string, i: number) => (
-                      <Chip key={`${t}-${i}`} label={t} />
-                    ))}
-                  </View>
-                  {fullDesc.length ? (
-                    <Pressable
-                      onPress={() => {
-                        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-                        setExpandedId((prev) => (prev === item.id ? null : item.id));
-                        Haptics.selectionAsync().catch(() => {});
-                      }}
-                      accessibilityRole="button"
-                      accessibilityLabel={
-                        isExpanded ? 'Collapse description' : 'Expand description'
-                      }
-                      style={{ marginTop: 10 }}
-                    >
-                      <View style={{ position: 'relative' }}>
-                        <Text style={{ color: c.text, lineHeight: 20 }}>
-                          {isExpanded ? fullDesc : truncated || ''}
-                        </Text>
-                        {!isExpanded && fullDesc.length > COLLAPSED_LIMIT ? (
-                          <LinearGradient
-                            colors={
-                              scheme === 'light'
-                                ? ['rgba(255,255,255,0)', 'rgba(255,255,255,0.97)']
-                                : ['rgba(0,0,0,0)', 'rgba(0,0,0,0.9)']
-                            }
-                            style={{
-                              position: 'absolute',
-                              left: 0,
-                              right: 0,
-                              bottom: 0,
-                              height: 38,
-                            }}
-                            pointerEvents="none"
-                          />
-                        ) : null}
-                      </View>
-                      {!isExpanded && fullDesc.length > COLLAPSED_LIMIT ? (
-                        <Text style={{ color: c.muted, marginTop: 4, fontSize: 12 }}>
-                          Tap to read more
-                        </Text>
-                      ) : isExpanded ? (
-                        <Text style={{ color: c.muted, marginTop: 4, fontSize: 12 }}>
-                          Tap to collapse
-                        </Text>
-                      ) : null}
-                    </Pressable>
-                  ) : null}
-                  {/* Actions row always visible */}
-                  <View
-                    style={{
-                      marginTop: 12,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: 12,
-                    }}
-                  >
-                    <MatchBadge value={match(item.id, item.tags)} />
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                      {item.id > 0 ? (
-                        <ThreeDButton
-                          title="Poll"
-                          onPress={async () => {
-                            const authed = await requireAuth();
-                            if (!authed) return;
-                            router.push({ pathname: '/polls/new', params: { fromEvent: item.id } });
-                          }}
-                        />
-                      ) : null}
-                      <IconButton
-                        name={savedState ? 'bookmark' : 'bookmark-outline'}
-                        label={savedState ? 'Saved' : 'Save event'}
-                        onPress={() => toggleSave(item.id)}
-                        disabled={disabled}
-                        color={savedState ? c.primary : c.text}
-                      />
-                      {isAdmin && item.id > 0 ? (
-                        <>
-                          <IconButton
-                            name="pencil"
-                            label="Edit event"
-                            onPress={() => prefillForEdit(item)}
-                          />
-                          <IconButton
-                            name="trash"
-                            label="Delete event"
-                            onPress={() => deleteEvent(item.id)}
-                          />
-                        </>
-                      ) : null}
-                      <IconButton
-                        name="expand-outline"
-                        label="View full details"
-                        onPress={() => onOpenDetails(item)}
-                      />
-                    </View>
-                  </View>
-                </View>
-              </ThreeDCard>
-            </View>
+            <EventRowCard
+              event={item}
+              isSaved={savedState}
+              onToggleSave={() => toggleSave(item.id)}
+              onOpenDetails={() => onOpenDetails(item)}
+              onPoll={
+                item.id > 0
+                  ? async () => {
+                      const authed = await requireAuth();
+                      if (!authed) return;
+                      router.push({ pathname: '/polls/new', params: { fromEvent: item.id } });
+                    }
+                  : undefined
+              }
+              onEdit={isAdmin && item.id > 0 ? () => prefillForEdit(item) : undefined}
+              onDelete={isAdmin && item.id > 0 ? () => deleteEvent(item.id) : undefined}
+              isAdmin={isAdmin}
+              matchPercent={match(item.id, item.tags)}
+            />
           );
         }}
       />
