@@ -68,3 +68,21 @@ export async function searchEvents(query: string, offset = 0, limit = 20): Promi
   if (error) throw error;
   return (data ?? []) as Event[];
 }
+
+// Generic upcoming events (no matching filter) for fallback suggestions
+export async function getUpcomingEvents(limit = 5): Promise<Event[]> {
+  const nowIso = new Date().toISOString();
+  const { data, error } = await supabase
+    .from('events')
+    .select('id,title,description,image_url,date_time,location,tags')
+    .gte('date_time', nowIso)
+    .order('date_time', { ascending: true })
+    .limit(limit);
+  if (error) throw error;
+  return (data ?? []) as Event[];
+}
+
+export async function deleteEvent(eventId: number): Promise<void> {
+  const { error } = await supabase.rpc('delete_event', { p_event_id: eventId });
+  if (error) throw error;
+}

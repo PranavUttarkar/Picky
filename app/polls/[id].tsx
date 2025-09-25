@@ -1,4 +1,4 @@
-import { View, Text, Pressable, FlatList, Alert, Image, Linking } from 'react-native';
+import { View, Text, Pressable, FlatList, Alert, Image, Linking, Modal } from 'react-native';
 import { useThemeColors } from '@/theme/ThemeProvider';
 import GradientBackground from '@/components/GradientBackground';
 import GradientHeader from '@/components/GradientHeader';
@@ -15,9 +15,11 @@ import {
   castRating,
   commitPoll,
   toggleCommitment,
-  postStatusUpdate,
-  submitFeedback,
+  addPollOption,
+  recordNoVote,
+  deletePoll,
 } from '@/services/polls';
+import { getTopGroupMatches, getTopUserMatches } from '@/services/events';
 
 export default function PollDetails() {
   const c = useThemeColors();
@@ -34,6 +36,10 @@ export default function PollDetails() {
   );
   const [commitments, setCommitments] = useState<string[] | undefined>(undefined);
   const [finalEvent, setFinalEvent] = useState<any | undefined>(undefined);
+  const [adding, setAdding] = useState(false);
+  const [suggested, setSuggested] = useState<any[] | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const load = async () => {
     const {
@@ -56,6 +62,19 @@ export default function PollDetails() {
     setWaiting(waiting);
     setCommitments(commitments);
     setFinalEvent(finalEvent);
+    // Load fallback suggestions if no options yet
+    if ((options?.length ?? 0) === 0 && poll) {
+      try {
+        const evs = await (poll.group_id
+          ? getTopGroupMatches(poll.group_id, 3)
+          : getTopUserMatches(3));
+        setSuggested(evs);
+      } catch {
+        setSuggested([]);
+      }
+    } else {
+      setSuggested(null);
+    }
   };
 
   useEffect(() => {
@@ -104,12 +123,38 @@ export default function PollDetails() {
     }
   };
 
+  const onDeletePoll = async () => {
+    try {
+      setDeleting(true);
+      await deletePoll(pollId);
+      setDeleteOpen(false);
+      Alert.alert('Deleted', 'Poll removed');
+      // If we know the group id, route explicitly to its page with a refresh param
+      const gid = poll?.group_id;
+      if (gid) {
+        router.replace(`/groups/${gid}?refresh=1`);
+      } else {
+        router.back();
+      }
+    } catch (e: any) {
+      Alert.alert('Delete failed', e.message ?? String(e));
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <GradientBackground variant="dim">
       <View style={{ flex: 1, padding: 16 }}>
         <GradientHeader
           title={poll?.title || `Poll #${pollId}`}
           subtitle={poll?.is_active ? 'Open' : 'Closed'}
+          onBack={() => {
+            const gid = poll?.group_id;
+            if (gid) router.replace(`/(tabs)/groups/${gid}`);
+            else router.replace('/(tabs)/groups');
+          }}
+          backLabel="Back to group"
         />
         <Text style={{ color: c.muted, marginTop: 6 }}>
           {poll?.is_active ? 'Open' : 'Closed'}
@@ -135,12 +180,7 @@ export default function PollDetails() {
             </View>
             {waiting && waiting.length > 0 ? (
               <Text style={{ color: c.muted, marginTop: 6 }}>
-                Waiting on{' '}
-                {waiting
-                  .slice(0, 3)
-                  .map((w) => w.name || 'Someone')
-                  .join(', ')}
-                {waiting.length > 3 ? ` +${waiting.length - 3}` : ''}
+                Waiting on {waiting.length} {waiting.length === 1 ? 'person' : 'people'}
               </Text>
             ) : null}
           </View>
@@ -161,6 +201,20 @@ export default function PollDetails() {
             <Text style={{ color: c.text, fontWeight: '700' }}>Close Poll</Text>
           </Pressable>
         ) : null}
+        {/* Delete poll button (always visible to members; server enforces auth) */}
+        <Pressable
+          onPress={() => setDeleteOpen(true)}
+          style={{
+            alignSelf: 'flex-start',
+            backgroundColor: c.background,
+            paddingVertical: 8,
+            paddingHorizontal: 12,
+            borderRadius: 10,
+            marginTop: 12,
+          }}
+        >
+          <Text style={{ color: '#ff5555', fontWeight: '700' }}>Delete Poll</Text>
+        </Pressable>
 
         {options.length === 1 && poll?.mode !== 'rating' ? (
           <View style={{ marginTop: 20 }}>
@@ -225,17 +279,19 @@ export default function PollDetails() {
               </Pressable>
               <Pressable
                 onPress={async () => {
+                  if (!poll?.is_active) return;
                   try {
-                    await clearMyVote(pollId);
+                    await recordNoVote(pollId);
                     await load();
+                    Alert.alert('Recorded', 'You responded No');
                   } catch (e: any) {
                     Alert.alert('Update failed', e.message ?? String(e));
                   }
                 }}
-                disabled={!poll?.is_active || myVote == null}
+                disabled={!poll?.is_active}
                 style={{
                   flex: 1,
-                  backgroundColor: myVote == null ? c.card : c.accent,
+                  backgroundColor: myVote == null ? c.accent : c.background,
                   padding: 14,
                   borderRadius: 12,
                   alignItems: 'center',
@@ -246,6 +302,26 @@ export default function PollDetails() {
             </View>
             <View style={{ backgroundColor: c.card, padding: 12, borderRadius: 12, marginTop: 12 }}>
               <Text style={{ color: c.muted }}>Yes votes: {totalVotes}</Text>
+              <Text style={{ color: c.muted, marginTop: 4 }}>
+                (No responses are counted as participation but not shown in the bar.)
+              </Text>
+              {myVote == null ? (
+                <Pressable
+                  onPress={async () => {
+                    try {
+                      await clearMyVote(pollId);
+                      await load();
+                    } catch (e: any) {
+                      Alert.alert('Update failed', e.message ?? String(e));
+                    }
+                  }}
+                  style={{ marginTop: 8 }}
+                >
+                  <Text style={{ color: c.muted, textDecorationLine: 'underline' }}>
+                    Clear my No response
+                  </Text>
+                </Pressable>
+              ) : null}
             </View>
           </View>
         ) : (
@@ -402,7 +478,73 @@ export default function PollDetails() {
                 </Pressable>
               );
             }}
-            ListEmptyComponent={<Text style={{ color: c.muted, marginTop: 20 }}>No options.</Text>}
+            ListEmptyComponent={
+              <View style={{ marginTop: 20 }}>
+                <Text style={{ color: c.muted, marginBottom: 12 }}>
+                  No options yet. Add some events to get started.
+                </Text>
+                {poll?.is_active ? (
+                  <View>
+                    {suggested === null ? (
+                      <Text style={{ color: c.muted }}>Loading suggestions…</Text>
+                    ) : suggested?.length ? (
+                      <View style={{ gap: 8 }}>
+                        {suggested.map((e) => (
+                          <Pressable
+                            key={e.id}
+                            disabled={adding}
+                            onPress={async () => {
+                              try {
+                                setAdding(true);
+                                await addPollOption(pollId, e.id);
+                                await load();
+                              } catch (err: any) {
+                                Alert.alert('Add failed', err.message ?? String(err));
+                              } finally {
+                                setAdding(false);
+                              }
+                            }}
+                            style={{
+                              backgroundColor: c.card,
+                              padding: 12,
+                              borderRadius: 12,
+                            }}
+                          >
+                            <Text style={{ color: c.text, fontWeight: '700' }}>{e.title}</Text>
+                            <Text style={{ color: c.muted, marginTop: 4 }}>
+                              {new Date(e.date_time).toLocaleString()} • {e.location}
+                            </Text>
+                            {e.match_percent != null ? (
+                              <Text style={{ color: c.muted, marginTop: 4 }}>
+                                {e.match_percent}% match
+                              </Text>
+                            ) : null}
+                            <Text style={{ color: c.primary, marginTop: 6 }}>Tap to add</Text>
+                          </Pressable>
+                        ))}
+                      </View>
+                    ) : (
+                      <Text style={{ color: c.muted }}>
+                        No suggestions. Use the Browse tab to save events.
+                      </Text>
+                    )}
+                    <Pressable
+                      onPress={() => router.push('/(tabs)/home')}
+                      style={{
+                        alignSelf: 'flex-start',
+                        backgroundColor: c.background,
+                        paddingVertical: 8,
+                        paddingHorizontal: 12,
+                        borderRadius: 10,
+                        marginTop: 16,
+                      }}
+                    >
+                      <Text style={{ color: c.text, fontWeight: '700' }}>Browse Events</Text>
+                    </Pressable>
+                  </View>
+                ) : null}
+              </View>
+            }
             ListHeaderComponent={
               leader ? (
                 <View
@@ -499,7 +641,25 @@ export default function PollDetails() {
                 </Pressable>
               ) : null}
               <Pressable
-                onPress={() => Alert.alert('Calendar', 'Add to calendar coming soon')}
+                onPress={() => {
+                  try {
+                    if (!finalEvent?.date_time) return;
+                    const startIso = new Date(finalEvent.date_time).toISOString();
+                    const endIso = new Date(new Date(finalEvent.date_time).getTime() + 2 * 60 * 60 * 1000).toISOString();
+                    const fmt = (iso: string) => iso.replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+                    const params = new URLSearchParams({
+                      action: 'TEMPLATE',
+                      text: finalEvent.title ?? 'Event',
+                      details: finalEvent.description ?? '',
+                      location: finalEvent.location ?? '',
+                    });
+                    // Google calendar expects dates=START/END (UTC or local). We'll use UTC Z format.
+                    const url = `https://calendar.google.com/calendar/render?${params.toString()}&dates=${fmt(startIso)}/${fmt(endIso)}`;
+                    Linking.openURL(url);
+                  } catch (e: any) {
+                    Alert.alert('Calendar', e.message ?? 'Unable to open calendar');
+                  }
+                }}
                 style={{
                   backgroundColor: c.background,
                   paddingVertical: 6,
@@ -509,52 +669,76 @@ export default function PollDetails() {
               >
                 <Text style={{ color: c.text, fontWeight: '700' }}>Add to Calendar</Text>
               </Pressable>
-              <Pressable
-                onPress={() =>
-                  postStatusUpdate(pollId, 'late_10').catch((e: any) =>
-                    Alert.alert('Error', e.message ?? String(e)),
-                  )
-                }
-                style={{
-                  backgroundColor: c.background,
-                  paddingVertical: 6,
-                  paddingHorizontal: 10,
-                  borderRadius: 8,
-                }}
-              >
-                <Text style={{ color: c.text, fontWeight: '700' }}>Running 10 min late</Text>
-              </Pressable>
             </View>
           </View>
         ) : null}
 
-        {/* Feedback after event */}
-        {!poll?.is_active && isCommitted ? (
-          <View style={{ backgroundColor: c.card, padding: 12, borderRadius: 12, marginTop: 12 }}>
-            <Text style={{ color: c.text, fontWeight: '800' }}>How was it?</Text>
-            <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
-              {[1, 2, 3, 4, 5].map((r) => (
-                <Pressable
-                  key={r}
-                  onPress={() =>
-                    submitFeedback(pollId, r)
-                      .then(() => Alert.alert('Thanks!', 'Feedback saved'))
-                      .catch((e: any) => Alert.alert('Error', e.message ?? String(e)))
-                  }
-                  style={{
-                    backgroundColor: c.background,
-                    paddingVertical: 6,
-                    paddingHorizontal: 10,
-                    borderRadius: 8,
-                  }}
-                >
-                  <Text style={{ color: c.text }}>{r}★</Text>
-                </Pressable>
-              ))}
+        {/* Feedback UI moved to Group feed (below poll) after event; intentionally removed here */}
+      </View>
+      <Modal
+        visible={deleteOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => !deleting && setDeleteOpen(false)}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(0,0,0,0.4)',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 16,
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: c.card,
+              padding: 16,
+              borderRadius: 16,
+              width: '100%',
+              maxWidth: 420,
+            }}
+          >
+            <Text style={{ color: c.text, fontSize: 18, fontWeight: '800' }}>
+              Delete this poll?
+            </Text>
+            <Text style={{ color: c.muted, marginTop: 8 }}>
+              This will permanently remove the poll, its options, votes, ratings, commitments, and
+              feedback. This action cannot be undone.
+            </Text>
+            <View
+              style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}
+            >
+              <Pressable
+                onPress={() => !deleting && setDeleteOpen(false)}
+                style={{
+                  backgroundColor: '#00000030',
+                  paddingHorizontal: 12,
+                  paddingVertical: 10,
+                  borderRadius: 10,
+                }}
+              >
+                <Text style={{ color: c.text, fontWeight: '700' }}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                onPress={onDeletePoll}
+                disabled={deleting}
+                style={{
+                  backgroundColor: '#ef4444',
+                  paddingHorizontal: 12,
+                  paddingVertical: 10,
+                  borderRadius: 10,
+                  opacity: deleting ? 0.6 : 1,
+                }}
+              >
+                <Text style={{ color: '#fff', fontWeight: '800' }}>
+                  {deleting ? 'Deleting…' : 'Delete'}
+                </Text>
+              </Pressable>
             </View>
           </View>
-        ) : null}
-      </View>
+        </View>
+      </Modal>
     </GradientBackground>
   );
 }

@@ -4,7 +4,6 @@ import { useLocalSearchParams } from 'expo-router';
 import dayjs from 'dayjs';
 import * as Calendar from 'expo-calendar';
 import { useThemeColors } from '@/theme/ThemeProvider';
-import GradientBackground from '@/components/GradientBackground';
 import GradientHeader from '@/components/GradientHeader';
 import Chip from '@/components/Chip';
 import { supabase } from '@/services/supabase';
@@ -52,13 +51,17 @@ export default function EventDetails() {
 
   if (!event) return null;
   return (
-    <GradientBackground variant="dim">
+    <View style={{ flex: 1, backgroundColor: c.background }}>
       <View style={{ flex: 1 }}>
         {event.image_url ? (
           <Image source={{ uri: event.image_url }} style={{ width: '100%', height: 220 }} />
         ) : null}
         <View style={{ padding: 16 }}>
-          <GradientHeader title={event.title} />
+          <GradientHeader
+            title={event.title}
+            onBack={() => router.replace('/(tabs)/home')}
+            backLabel="Back to home"
+          />
           <Text style={{ color: c.muted, marginTop: 4 }}>
             {dayjs(event.date_time).format('ddd, MMM D • h:mm A')} • {event.location}
           </Text>
@@ -100,6 +103,6 @@ export default function EventDetails() {
           </View>
         </View>
       </View>
-    </GradientBackground>
+    </View>
   );
 }

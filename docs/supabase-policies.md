@@ -20,6 +20,7 @@ All core tables have Row Level Security enabled. Policies are defined across `00
 
 ## Groups and polls
 - Groups are visible to creators and members (membership check in policy).
+- Group members: prior to migration `0014_group_members_visibility.sql`, users could only select their own row (`gm_select_self_or_group`) which broke aggregate counts (e.g. poll participation showing 0/1). That migration replaces it with `gm_select_group_members` allowing any member of a group to see all rows in that group.
 - Polls and options are accessible to group members; voting policies live in `0007_polls_votes.sql`.
 
 ## Practical notes

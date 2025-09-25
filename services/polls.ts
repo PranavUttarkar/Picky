@@ -92,6 +92,7 @@ export async function getPoll(pollId: number): Promise<{ poll: any; options: Pol
         const set = new Set<string>(((ratingsRows as any[]) ?? []).map((r: any) => r.user_id));
         responderIds = Array.from(set);
       } else {
+        // include NULL event_id rows (explicit No responses) as participation
         const { data: votesRows } = await supabase.from('poll_votes').select('user_id').eq('poll_id', pollId);
         const set = new Set<string>(((votesRows as any[]) ?? []).map((r: any) => r.user_id));
         responderIds = Array.from(set);
@@ -149,6 +150,11 @@ export async function clearMyVote(pollId: number): Promise<void> {
   if (error) throw error;
 }
 
+export async function recordNoVote(pollId: number): Promise<void> {
+  const { error } = await supabase.rpc('record_no_vote', { p_poll_id: pollId });
+  if (error) throw error;
+}
+
 export function onPollRealtime(pollId: number, onChange: () => void) {
   const channel = supabase
     .channel(`poll-${pollId}`)
@@ -193,6 +199,12 @@ export async function toggleCommitment(pollId: number): Promise<void> {
   if (error) throw error;
 }
 
+// Add a new option (event) to an existing poll. Requires user to be a group member (enforced by RLS via poll_options policies).
+export async function addPollOption(pollId: number, eventId: number): Promise<void> {
+  const { error } = await supabase.from('poll_options').insert({ poll_id: pollId, event_id: eventId });
+  if (error) throw error;
+}
+
 export async function postStatusUpdate(pollId: number, kind: 'late_10' | 'note', message?: string): Promise<void> {
   const user = (await supabase.auth.getUser()).data.user;
   if (!user) throw new Error('Not authenticated');
@@ -204,5 +216,10 @@ export async function submitFeedback(pollId: number, rating: number, comment?: s
   const user = (await supabase.auth.getUser()).data.user;
   if (!user) throw new Error('Not authenticated');
   const { error } = await supabase.from('post_event_feedback').upsert({ poll_id: pollId, user_id: user.id, rating, comment: comment ?? null }, { onConflict: 'poll_id,user_id' });
+  if (error) throw error;
+}
+
+export async function deletePoll(pollId: number): Promise<void> {
+  const { error } = await supabase.rpc('delete_poll', { p_poll_id: pollId });
   if (error) throw error;
 }

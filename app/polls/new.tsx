@@ -17,7 +17,12 @@ import { supabase } from '@/services/supabase';
 import { router, useLocalSearchParams } from 'expo-router';
 import { getMyGroups } from '@/services/groups';
 import { createPollWithOptions } from '@/services/polls';
-import { getTopUserMatches, getTopGroupMatches, searchEvents } from '@/services/events';
+import {
+  getTopUserMatches,
+  getTopGroupMatches,
+  searchEvents,
+  getUpcomingEvents,
+} from '@/services/events';
 import type { Event } from '@/types/models';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import dayjs from 'dayjs';
@@ -30,6 +35,7 @@ export default function NewPoll() {
     params.groupId ? Number(params.groupId) : null,
   );
   const [topMatches, setTopMatches] = useState<any[]>([]);
+  const [fallbackUpcoming, setFallbackUpcoming] = useState<any[] | null>(null);
   const [search, setSearch] = useState('');
   const [results, setResults] = useState<Event[]>([]);
   const [hasMore, setHasMore] = useState(false);
@@ -55,6 +61,16 @@ export default function NewPoll() {
       if (!mounted) return;
       setGroups(gs);
       setTopMatches(evs);
+      if (evs.length === 0) {
+        try {
+          const up = await getUpcomingEvents(3);
+          setFallbackUpcoming(up);
+        } catch {
+          setFallbackUpcoming([]);
+        }
+      } else {
+        setFallbackUpcoming(null);
+      }
       if (!groupId && gs.length) setGroupId(gs[0].id);
       if (params.eventId) {
         const eid = Number(params.eventId);
@@ -72,7 +88,19 @@ export default function NewPoll() {
     (async () => {
       try {
         const evs = groupId ? await getTopGroupMatches(groupId, 4) : await getTopUserMatches(4);
-        if (!cancelled) setTopMatches(evs);
+        if (!cancelled) {
+          setTopMatches(evs);
+          if (evs.length === 0) {
+            try {
+              const up = await getUpcomingEvents(3);
+              setFallbackUpcoming(up);
+            } catch {
+              setFallbackUpcoming([]);
+            }
+          } else {
+            setFallbackUpcoming(null);
+          }
+        }
       } catch {}
     })();
     return () => {
@@ -300,7 +328,44 @@ export default function NewPoll() {
           {groupId ? 'Top matches for this group' : 'Your top matches'}
         </Text>
         {topMatches.length === 0 ? (
-          <Text style={{ color: c.muted, marginBottom: 12 }}>No matches yet. Try searching.</Text>
+          <View style={{ marginBottom: 12 }}>
+            <Text style={{ color: c.muted, marginBottom: 8 }}>
+              No personalized matches yet. Here are a few upcoming events:
+            </Text>
+            {fallbackUpcoming === null ? (
+              <Text style={{ color: c.muted }}>Loading…</Text>
+            ) : fallbackUpcoming?.length ? (
+              fallbackUpcoming.map((item: any) => {
+                const sel = selected.has(item.id);
+                return (
+                  <Pressable
+                    key={item.id}
+                    onPress={() => toggle(item.id)}
+                    style={{ marginBottom: 8 }}
+                  >
+                    <ThreeDCard
+                      style={{
+                        borderWidth: sel ? 2 : 1,
+                        borderColor: sel ? c.primary : '#00000020',
+                        padding: 12,
+                        borderRadius: 12,
+                      }}
+                    >
+                      <Text style={{ color: c.text, fontWeight: '700' }}>{item.title}</Text>
+                      <Text style={{ color: c.muted, marginTop: 4 }}>
+                        {new Date(item.date_time).toLocaleString()} • {item.location}
+                      </Text>
+                      {sel ? (
+                        <Text style={{ color: c.primary, marginTop: 6 }}>Selected</Text>
+                      ) : null}
+                    </ThreeDCard>
+                  </Pressable>
+                );
+              })
+            ) : (
+              <Text style={{ color: c.muted }}>No upcoming events found.</Text>
+            )}
+          </View>
         ) : (
           <View style={{ marginBottom: 12 }}>
             {topMatches.map((item: any) => {
