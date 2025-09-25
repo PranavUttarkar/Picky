@@ -712,7 +712,6 @@ export default function Home() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
 
-
   // Pagination + caching
   const PAGE_SIZE = 10;
   const CACHE_KEY = 'events_cache_v1';
@@ -773,13 +772,13 @@ export default function Home() {
       } else {
         setEvents((prev) => {
           const map = new Map<number, Event>();
-            for (const e of prev) map.set((e as any).id, e as Event);
-            for (const e of next as any[]) map.set((e as any).id, e as Event);
-            const merged = Array.from(map.values()).sort(
-              (a: any, b: any) => dayjs(a.date_time).valueOf() - dayjs(b.date_time).valueOf(),
-            );
-            saveCache(merged);
-            return merged;
+          for (const e of prev) map.set((e as any).id, e as Event);
+          for (const e of next as any[]) map.set((e as any).id, e as Event);
+          const merged = Array.from(map.values()).sort(
+            (a: any, b: any) => dayjs(a.date_time).valueOf() - dayjs(b.date_time).valueOf(),
+          );
+          saveCache(merged);
+          return merged;
         });
         if (next.length < PAGE_SIZE) setHasMore(false);
         setPage((p) => p + 1);
