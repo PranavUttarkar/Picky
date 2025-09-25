@@ -40,8 +40,12 @@ type AdminHeaderProps = {
   setFTitle: (v: string) => void;
   fDesc: string;
   setFDesc: (v: string) => void;
-  fImage: string;
-  setFImage: (v: string) => void;
+  fImage1: string;
+  setFImage1: (v: string) => void;
+  fImage2: string;
+  setFImage2: (v: string) => void;
+  fImage3: string;
+  setFImage3: (v: string) => void;
   fDateTime: string;
   setFDateTime: (v: string) => void;
   fLocation: string;
@@ -80,8 +84,12 @@ const AdminHeader = memo(function AdminHeader(props: AdminHeaderProps) {
     setFTitle,
     fDesc,
     setFDesc,
-    fImage,
-    setFImage,
+  fImage1,
+  setFImage1,
+  fImage2,
+  setFImage2,
+  fImage3,
+  setFImage3,
     fDateTime,
     setFDateTime,
     fLocation,
@@ -103,7 +111,9 @@ const AdminHeader = memo(function AdminHeader(props: AdminHeaderProps) {
   // Local admin form state to avoid re-rendering parent on each keystroke
   const [titleLocal, setTitleLocal] = useState(fTitle);
   const [descLocal, setDescLocal] = useState(fDesc);
-  const [imageLocal, setImageLocal] = useState(fImage);
+  const [image1Local, setImage1Local] = useState(fImage1);
+  const [image2Local, setImage2Local] = useState(fImage2);
+  const [image3Local, setImage3Local] = useState(fImage3);
   const [dateTimeLocal, setDateTimeLocal] = useState(fDateTime);
   const [locationLocal, setLocationLocal] = useState(fLocation);
   const [tagsCsvLocal, setTagsCsvLocal] = useState(fTagsCsv);
@@ -112,12 +122,14 @@ const AdminHeader = memo(function AdminHeader(props: AdminHeaderProps) {
   useEffect(() => {
     setTitleLocal(fTitle);
     setDescLocal(fDesc);
-    setImageLocal(fImage);
+  setImage1Local(fImage1);
+  setImage2Local(fImage2);
+  setImage3Local(fImage3);
     setDateTimeLocal(fDateTime);
     setLocationLocal(fLocation);
     setTagsCsvLocal(fTagsCsv);
     setRsvpLocal(fRsvp);
-  }, [editingId, fTitle, fDesc, fImage, fDateTime, fLocation, fTagsCsv, fRsvp]);
+  }, [editingId, fTitle, fDesc, fImage1, fImage2, fImage3, fDateTime, fLocation, fTagsCsv, fRsvp]);
 
   return (
     <View style={{ paddingBottom: 12 }}>
@@ -164,15 +176,35 @@ const AdminHeader = memo(function AdminHeader(props: AdminHeaderProps) {
               autoComplete="off"
               blurOnSubmit={false}
             />
-            <TextInput
-              placeholder="Image URL"
-              placeholderTextColor={c.muted}
-              value={imageLocal}
-              onChangeText={setImageLocal}
-              style={{ color: c.text, backgroundColor: '#00000010', padding: 10, borderRadius: 8 }}
-              autoComplete="off"
-              blurOnSubmit={false}
-            />
+            <View style={{ gap: 6 }}>
+              {[{
+                label: 'Image 1 URL (cover)',
+                value: image1Local,
+                setter: setImage1Local,
+              }, {
+                label: 'Image 2 URL',
+                value: image2Local,
+                setter: setImage2Local,
+              }, {
+                label: 'Image 3 URL',
+                value: image3Local,
+                setter: setImage3Local,
+              }].map((cfg, idx) => (
+                <TextInput
+                  key={idx}
+                  placeholder={cfg.label}
+                  placeholderTextColor={c.muted}
+                  value={cfg.value}
+                  onChangeText={cfg.setter}
+                  style={{ color: c.text, backgroundColor: '#00000010', padding: 10, borderRadius: 8 }}
+                  autoComplete="off"
+                  blurOnSubmit={false}
+                />
+              ))}
+              <Text style={{ color: c.muted, fontSize: 11 }}>
+                Provide up to 3 images. First acts as card cover; others appear as thumbnails / gallery.
+              </Text>
+            </View>
             {Platform.OS === 'web' ? null : (
               <View style={{ flexDirection: 'row', gap: 8 }}>
                 <Pressable
@@ -276,7 +308,7 @@ const AdminHeader = memo(function AdminHeader(props: AdminHeaderProps) {
                   upsertEvent({
                     title: titleLocal,
                     desc: descLocal,
-                    image: imageLocal,
+                    image: image1Local, // backward compat single field
                     dateTime: dateTimeLocal,
                     location: locationLocal,
                     tagsCsv: tagsCsvLocal,
@@ -308,7 +340,10 @@ const AdminHeader = memo(function AdminHeader(props: AdminHeaderProps) {
                         onPress={() => {
                           setFTitle(e.title);
                           setFDesc(e.description ?? '');
-                          setFImage(e.image_url ?? '');
+                          const imgs = (e as any).image_urls ?? [];
+                          setFImage1(imgs[0] || e.image_url || '');
+                          setFImage2(imgs[1] || '');
+                          setFImage3(imgs[2] || '');
                           setFDateTime(e.date_time);
                           setFLocation(e.location ?? '');
                           setFTagsCsv((e.tags ?? []).join(', '));
@@ -595,7 +630,9 @@ export default function Home() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [fTitle, setFTitle] = useState('');
   const [fDesc, setFDesc] = useState('');
-  const [fImage, setFImage] = useState('');
+  const [fImage1, setFImage1] = useState('');
+  const [fImage2, setFImage2] = useState('');
+  const [fImage3, setFImage3] = useState('');
   const [fDateTime, setFDateTime] = useState(
     dayjs().add(1, 'day').hour(18).minute(0).second(0).toISOString(),
   );
@@ -914,7 +951,9 @@ export default function Home() {
     setEditingId(null);
     setFTitle('');
     setFDesc('');
-    setFImage('');
+  setFImage1('');
+  setFImage2('');
+  setFImage3('');
     setFDateTime(dayjs().add(1, 'day').hour(18).minute(0).second(0).toISOString());
     setFLocation('');
     setFTagsCsv('');
@@ -934,7 +973,7 @@ export default function Home() {
     // Basic validation
     const titleVal = values?.title ?? fTitle;
     const descVal = values?.desc ?? fDesc;
-    const imageVal = values?.image ?? fImage;
+  const imageVal = values?.image ?? fImage1; // legacy single field
     const dateTimeVal = values?.dateTime ?? fDateTime;
     const locationVal = values?.location ?? fLocation;
     const tagsCsvVal = values?.tagsCsv ?? fTagsCsv;
@@ -959,10 +998,14 @@ export default function Home() {
       Alert.alert('Not signed in', 'You must be signed in as admin.');
       return;
     }
+    const imageUrls = [fImage1, fImage2, fImage3]
+      .map((u) => u.trim())
+      .filter((u) => !!u);
     const payload: any = {
       title: titleVal.trim(),
       description: descVal.trim() || null,
       image_url: imageVal.trim() || null,
+      image_urls: imageUrls.length ? imageUrls : null,
       date_time: dtIso,
       location: locationVal.trim() || null,
       tags,
@@ -1037,7 +1080,10 @@ export default function Home() {
     setEditingId(e.id);
     setFTitle(e.title);
     setFDesc(e.description ?? '');
-    setFImage(e.image_url ?? '');
+  const imgs = (e as any).image_urls ?? [];
+  setFImage1(imgs[0] || e.image_url || '');
+  setFImage2(imgs[1] || '');
+  setFImage3(imgs[2] || '');
     setFDateTime(e.date_time);
     setFLocation(e.location ?? '');
     setFTagsCsv((e.tags ?? []).join(', '));
@@ -1065,8 +1111,12 @@ export default function Home() {
         setFTitle={setFTitle}
         fDesc={fDesc}
         setFDesc={setFDesc}
-        fImage={fImage}
-        setFImage={setFImage}
+  fImage1={fImage1}
+  setFImage1={setFImage1}
+  fImage2={fImage2}
+  setFImage2={setFImage2}
+  fImage3={fImage3}
+  setFImage3={setFImage3}
         fDateTime={fDateTime}
         setFDateTime={setFDateTime}
         fLocation={fLocation}
@@ -1092,7 +1142,9 @@ export default function Home() {
       editingId,
       fTitle,
       fDesc,
-      fImage,
+  fImage1,
+  fImage2,
+  fImage3,
       fDateTime,
       fLocation,
       fTagsCsv,
@@ -1220,17 +1272,71 @@ export default function Home() {
               }}
             >
               <ThreeDCard>
-                {item.image_url ? (
-                  <Image
-                    source={{ uri: item.image_url }}
-                    style={{
-                      width: '100%',
-                      height: 160,
-                      borderTopLeftRadius: 16,
-                      borderTopRightRadius: 16,
-                    }}
-                  />
-                ) : null}
+                {/* Multi-image cover: show first image full, up to 2 more as stacked thumbnails */}
+                {(() => {
+                  const imgs: string[] = (item as any).image_urls?.length
+                    ? (item as any).image_urls
+                    : item.image_url
+                      ? [item.image_url]
+                      : [];
+                  if (!imgs.length) return null;
+                  const cover = imgs[0];
+                  const extras = imgs.slice(1, 3);
+                  return (
+                    <View style={{ position: 'relative' }}>
+                      <Image
+                        source={{ uri: cover }}
+                        style={{
+                          width: '100%',
+                          height: 160,
+                          borderTopLeftRadius: 16,
+                          borderTopRightRadius: 16,
+                        }}
+                      />
+                      {extras.length ? (
+                        <View
+                          style={{
+                            position: 'absolute',
+                            right: 8,
+                            bottom: 8,
+                            flexDirection: 'row',
+                            gap: 6,
+                          }}
+                        >
+                          {extras.map((u, i) => (
+                            <Image
+                              key={i}
+                              source={{ uri: u }}
+                              style={{
+                                width: 44,
+                                height: 44,
+                                borderRadius: 8,
+                                borderWidth: 1,
+                                borderColor: '#ffffff55',
+                              }}
+                            />
+                          ))}
+                          {imgs.length > 3 ? (
+                            <View
+                              style={{
+                                width: 44,
+                                height: 44,
+                                borderRadius: 8,
+                                backgroundColor: '#00000070',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                              }}
+                            >
+                              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 12 }}>
+                                +{imgs.length - 3}
+                              </Text>
+                            </View>
+                          ) : null}
+                        </View>
+                      ) : null}
+                    </View>
+                  );
+                })()}
                 <View style={{ padding: 12 }}>
                   <Text style={{ color: c.text, fontSize: 18, fontWeight: '800' }}>
                     {item.title}
@@ -1371,12 +1477,30 @@ export default function Home() {
             </View>
           </BlurView>
           <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
-            {selectedEvent?.image_url ? (
-              <Image
-                source={{ uri: selectedEvent.image_url }}
-                style={{ width: '100%', height: 220 }}
-              />
-            ) : null}
+            {(() => {
+              const imgs: string[] = (selectedEvent as any)?.image_urls?.length
+                ? (selectedEvent as any).image_urls
+                : selectedEvent?.image_url
+                  ? [selectedEvent.image_url]
+                  : [];
+              if (!imgs.length) return null;
+              return (
+                <ScrollView
+                  horizontal
+                  pagingEnabled
+                  showsHorizontalScrollIndicator={false}
+                  style={{ width: '100%', maxHeight: 240 }}
+                >
+                  {imgs.map((u, i) => (
+                    <Image
+                      key={i}
+                      source={{ uri: u }}
+                      style={{ width: 320, height: 220, marginRight: 8, borderRadius: 12 }}
+                    />
+                  ))}
+                </ScrollView>
+              );
+            })()}
             <View style={{ padding: 16 }}>
               <Text style={{ color: c.text, fontSize: 24, fontWeight: '800' }}>
                 {selectedEvent?.title}

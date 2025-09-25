@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { View, Text, Image, Pressable, Linking } from 'react-native';
+import { View, Text, Image, Pressable, Linking, ScrollView } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import dayjs from 'dayjs';
 import * as Calendar from 'expo-calendar';
@@ -53,9 +53,39 @@ export default function EventDetails() {
   return (
     <View style={{ flex: 1, backgroundColor: c.background }}>
       <View style={{ flex: 1 }}>
-        {event.image_url ? (
-          <Image source={{ uri: event.image_url }} style={{ width: '100%', height: 220 }} />
-        ) : null}
+        {(() => {
+          const imgs: string[] = (event as any).image_urls?.length
+            ? (event as any).image_urls
+            : event.image_url
+              ? [event.image_url]
+              : [];
+          if (!imgs.length) return null;
+          if (imgs.length === 1) {
+            return <Image source={{ uri: imgs[0] }} style={{ width: '100%', height: 220 }} />;
+          }
+          return (
+            <ScrollView
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              style={{ width: '100%', maxHeight: 240 }}
+              contentContainerStyle={{ alignItems: 'center', paddingHorizontal: 12 }}
+            >
+              {imgs.map((u, i) => (
+                <Image
+                  key={i}
+                  source={{ uri: u }}
+                  style={{
+                    width: 300,
+                    height: 220,
+                    marginRight: 12,
+                    borderRadius: 12,
+                  }}
+                />
+              ))}
+            </ScrollView>
+          );
+        })()}
         <View style={{ padding: 16 }}>
           <GradientHeader
             title={event.title}

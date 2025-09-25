@@ -11,6 +11,7 @@ export interface Event {
   title: string;
   description?: string | null;
   image_url?: string | null;
+  image_urls?: string[] | null; // up to 3 image URLs (new multi-image support)
   date_time: string; // ISO string
   location?: string | null;
   tags?: string[];

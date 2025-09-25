@@ -15,7 +15,7 @@ export async function getTopUserMatches(limit = 4): Promise<ScoredEvent[]> {
   if (ids.length === 0) return [];
   const { data: events, error: evErr } = await supabase
     .from('events')
-    .select('id,title,description,image_url,date_time,location,tags')
+  .select('id,title,description,image_url,image_urls,date_time,location,tags')
     .in('id', ids)
     .gte('date_time', nowIso);
   if (evErr) throw evErr;
@@ -40,7 +40,7 @@ export async function getTopGroupMatches(groupId: number, limit = 4): Promise<Sc
   if (ids.length === 0) return [];
   const { data: events, error: evErr } = await supabase
     .from('events')
-    .select('id,title,description,image_url,date_time,location,tags')
+  .select('id,title,description,image_url,image_urls,date_time,location,tags')
     .in('id', ids)
     .gte('date_time', nowIso);
   if (evErr) throw evErr;
@@ -60,7 +60,7 @@ export async function searchEvents(query: string, offset = 0, limit = 20): Promi
   const like = `%${q}%`;
   const { data, error } = await supabase
     .from('events')
-    .select('id,title,description,image_url,date_time,location,tags')
+  .select('id,title,description,image_url,image_urls,date_time,location,tags')
     .gte('date_time', nowIso)
     .or(`title.ilike.${like},description.ilike.${like},location.ilike.${like}`)
     .order('date_time', { ascending: true })
@@ -74,7 +74,7 @@ export async function getUpcomingEvents(limit = 5): Promise<Event[]> {
   const nowIso = new Date().toISOString();
   const { data, error } = await supabase
     .from('events')
-    .select('id,title,description,image_url,date_time,location,tags')
+  .select('id,title,description,image_url,image_urls,date_time,location,tags')
     .gte('date_time', nowIso)
     .order('date_time', { ascending: true })
     .limit(limit);
