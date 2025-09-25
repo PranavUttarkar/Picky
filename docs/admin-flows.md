@@ -7,7 +7,11 @@ Admins can create, update, and delete events directly from the Home screen.
 
 ## Create/Update Event
 - Expand the "Admin: Manage Events" panel.
-- Fill in fields: title, description, image URL, date/time, location, tags (comma-separated), RSVP URL.
+- Fill in fields: title, description, up to 3 image URLs, date & time, location, tags (comma-separated), RSVP URL.
+- Date & Time:
+  - Mobile (iOS/Android): tap the date or time boxes to open native pickers.
+  - Web: enter `YYYY-MM-DD` and `HH:MM` (24h). Example: `2025-09-30` + `18:30`.
+  - Stored in UTC as an ISO timestamp (`events.date_time`).
 - "Create Event" inserts a new row with `created_by = auth.uid()`.
 - When editing an existing event, fields are prefilled and the action becomes "Update Event".
 

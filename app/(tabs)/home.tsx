@@ -120,6 +120,9 @@ const AdminHeader = memo(function AdminHeader(props: AdminHeaderProps) {
   const [locationLocal, setLocationLocal] = useState(fLocation);
   const [tagsCsvLocal, setTagsCsvLocal] = useState(fTagsCsv);
   const [rsvpLocal, setRsvpLocal] = useState(fRsvp);
+  // Web-specific date/time text inputs (keep in sync with ISO state)
+  const [dateInput, setDateInput] = useState(dayjs(fDateTime).format('YYYY-MM-DD'));
+  const [timeInput, setTimeInput] = useState(dayjs(fDateTime).format('HH:mm'));
 
   useEffect(() => {
     setTitleLocal(fTitle);
@@ -128,6 +131,8 @@ const AdminHeader = memo(function AdminHeader(props: AdminHeaderProps) {
     setImage2Local(fImage2);
     setImage3Local(fImage3);
     setDateTimeLocal(fDateTime);
+    setDateInput(dayjs(fDateTime).format('YYYY-MM-DD'));
+    setTimeInput(dayjs(fDateTime).format('HH:mm'));
     setLocationLocal(fLocation);
     setTagsCsvLocal(fTagsCsv);
     setRsvpLocal(fRsvp);
@@ -217,40 +222,91 @@ const AdminHeader = memo(function AdminHeader(props: AdminHeaderProps) {
                 gallery.
               </Text>
             </View>
-            {Platform.OS === 'web' ? null : (
-              <View style={{ flexDirection: 'row', gap: 8 }}>
-                <Pressable
-                  onPress={() => setShowDatePicker(true)}
-                  style={{
-                    flex: 1,
-                    backgroundColor: '#00000010',
-                    padding: 10,
-                    borderRadius: 8,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <Text style={{ color: c.text, fontWeight: '700' }}>
-                    {dayjs(dateTimeLocal).format('YYYY-MM-DD')}
-                  </Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => setShowTimePicker(true)}
-                  style={{
-                    flex: 1,
-                    backgroundColor: '#00000010',
-                    padding: 10,
-                    borderRadius: 8,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <Text style={{ color: c.text, fontWeight: '700' }}>
-                    {dayjs(dateTimeLocal).format('h:mm A')}
-                  </Text>
-                </Pressable>
-              </View>
-            )}
+            <View style={{ gap: 6 }}>
+              <Text style={{ color: c.text, fontWeight: '700' }}>Event Date & Time</Text>
+              {Platform.OS === 'web' ? (
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <TextInput
+                    placeholder="YYYY-MM-DD"
+                    placeholderTextColor={c.muted}
+                    value={dateInput}
+                    onChangeText={(val) => {
+                      setDateInput(val);
+                      if (/^\d{4}-\d{2}-\d{2}$/.test(val)) {
+                        const candidate = dayjs(`${val}T${timeInput}`);
+                        if (candidate.isValid()) setDateTimeLocal(candidate.toISOString());
+                      }
+                    }}
+                    style={{
+                      flex: 1,
+                      color: c.text,
+                      backgroundColor: '#00000010',
+                      padding: 10,
+                      borderRadius: 8,
+                    }}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                  <TextInput
+                    placeholder="HH:MM"
+                    placeholderTextColor={c.muted}
+                    value={timeInput}
+                    onChangeText={(val) => {
+                      setTimeInput(val);
+                      if (/^\d{2}:\d{2}$/.test(val)) {
+                        const candidate = dayjs(`${dateInput}T${val}`);
+                        if (candidate.isValid()) setDateTimeLocal(candidate.toISOString());
+                      }
+                    }}
+                    style={{
+                      flex: 1,
+                      color: c.text,
+                      backgroundColor: '#00000010',
+                      padding: 10,
+                      borderRadius: 8,
+                    }}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                </View>
+              ) : (
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <Pressable
+                    onPress={() => setShowDatePicker(true)}
+                    style={{
+                      flex: 1,
+                      backgroundColor: '#00000010',
+                      padding: 10,
+                      borderRadius: 8,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Text style={{ color: c.text, fontWeight: '700' }}>
+                      {dayjs(dateTimeLocal).format('YYYY-MM-DD')}
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => setShowTimePicker(true)}
+                    style={{
+                      flex: 1,
+                      backgroundColor: '#00000010',
+                      padding: 10,
+                      borderRadius: 8,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Text style={{ color: c.text, fontWeight: '700' }}>
+                      {dayjs(dateTimeLocal).format('h:mm A')}
+                    </Text>
+                  </Pressable>
+                </View>
+              )}
+              <Text style={{ color: c.muted, fontSize: 11 }}>
+                Stored in UTC. For web, use 24h time (HH:MM). Example: 2025-09-30 and 18:30.
+              </Text>
+            </View>
             {showDatePicker ? (
               <DateTimePicker
                 mode="date"
@@ -1253,7 +1309,11 @@ export default function Home() {
           const disabled = item.id < 0;
           const isExpanded = expandedId === item.id;
           const fullDesc = item.description ?? '';
-          const truncated = fullDesc.length > 50 ? fullDesc.slice(0, 50) + '…' : fullDesc;
+          const COLLAPSED_LIMIT = 250;
+          const truncated =
+            fullDesc.length > COLLAPSED_LIMIT
+              ? fullDesc.slice(0, COLLAPSED_LIMIT).replace(/\s+$/, '') + '…'
+              : fullDesc;
 
           const IconButton: React.FC<{
             name: keyof typeof Ionicons.glyphMap;
@@ -1377,27 +1437,36 @@ export default function Home() {
                       style={{ marginTop: 10 }}
                     >
                       <View style={{ position: 'relative' }}>
-                        <Text style={{ color: c.text }}>
+                        <Text style={{ color: c.text, lineHeight: 20 }}>
                           {isExpanded ? fullDesc : truncated || ''}
                         </Text>
-                        {!isExpanded && fullDesc.length > truncated.length ? (
+                        {!isExpanded && fullDesc.length > COLLAPSED_LIMIT ? (
                           <LinearGradient
                             colors={
                               scheme === 'light'
-                                ? ['rgba(255,255,255,0)', 'rgba(255,255,255,0.92)']
-                                : ['rgba(0,0,0,0)', 'rgba(0,0,0,0.85)']
+                                ? ['rgba(255,255,255,0)', 'rgba(255,255,255,0.97)']
+                                : ['rgba(0,0,0,0)', 'rgba(0,0,0,0.9)']
                             }
                             style={{
                               position: 'absolute',
+                              left: 0,
                               right: 0,
-                              top: 0,
                               bottom: 0,
-                              width: 50,
+                              height: 38,
                             }}
                             pointerEvents="none"
                           />
                         ) : null}
                       </View>
+                      {!isExpanded && fullDesc.length > COLLAPSED_LIMIT ? (
+                        <Text style={{ color: c.muted, marginTop: 4, fontSize: 12 }}>
+                          Tap to read more
+                        </Text>
+                      ) : isExpanded ? (
+                        <Text style={{ color: c.muted, marginTop: 4, fontSize: 12 }}>
+                          Tap to collapse
+                        </Text>
+                      ) : null}
                     </Pressable>
                   ) : null}
                   {/* Actions row always visible */}
