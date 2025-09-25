@@ -24,7 +24,9 @@ export default function GroupFeed() {
     setGroup(g);
     const { data: p } = await supabase
       .from('polls')
-      .select('id,group_id,is_active,created_at,final_event_id,final:events!polls_final_event_id_fkey(id,title,date_time,location,description)')
+      .select(
+        'id,group_id,is_active,created_at,final_event_id,final:events!polls_final_event_id_fkey(id,title,date_time,location,description)',
+      )
       .eq('group_id', groupId)
       .order('created_at', { ascending: false });
     setPolls(p ?? []);
@@ -161,7 +163,11 @@ export default function GroupFeed() {
         data={polls}
         keyExtractor={(p) => String(p.id)}
         renderItem={({ item }) => {
-          const pastCommitted = !item.is_active && item.final_event_id && item.final?.date_time && new Date(item.final.date_time) < new Date();
+          const pastCommitted =
+            !item.is_active &&
+            item.final_event_id &&
+            item.final?.date_time &&
+            new Date(item.final.date_time) < new Date();
           const myRating = feedbackMap[item.id];
           return (
             <View style={{ marginBottom: 8 }}>
@@ -175,7 +181,9 @@ export default function GroupFeed() {
                 {item.final ? (
                   <Text style={{ color: c.muted, marginTop: 4 }}>
                     Final: {item.final.title} •{' '}
-                    {item.final.date_time ? new Date(item.final.date_time).toLocaleDateString() : ''}
+                    {item.final.date_time
+                      ? new Date(item.final.date_time).toLocaleDateString()
+                      : ''}
                   </Text>
                 ) : null}
                 <Text style={{ color: c.muted, marginTop: 4 }}>

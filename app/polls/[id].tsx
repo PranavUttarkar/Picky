@@ -645,7 +645,9 @@ export default function PollDetails() {
                   try {
                     if (!finalEvent?.date_time) return;
                     const startIso = new Date(finalEvent.date_time).toISOString();
-                    const endIso = new Date(new Date(finalEvent.date_time).getTime() + 2 * 60 * 60 * 1000).toISOString();
+                    const endIso = new Date(
+                      new Date(finalEvent.date_time).getTime() + 2 * 60 * 60 * 1000,
+                    ).toISOString();
                     const fmt = (iso: string) => iso.replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
                     const params = new URLSearchParams({
                       action: 'TEMPLATE',
@@ -654,7 +656,9 @@ export default function PollDetails() {
                       location: finalEvent.location ?? '',
                     });
                     // Google calendar expects dates=START/END (UTC or local). We'll use UTC Z format.
-                    const url = `https://calendar.google.com/calendar/render?${params.toString()}&dates=${fmt(startIso)}/${fmt(endIso)}`;
+                    const url = `https://calendar.google.com/calendar/render?${params.toString()}&dates=${fmt(
+                      startIso,
+                    )}/${fmt(endIso)}`;
                     Linking.openURL(url);
                   } catch (e: any) {
                     Alert.alert('Calendar', e.message ?? 'Unable to open calendar');

@@ -1,5 +1,13 @@
 import { useEffect, useState } from 'react';
-import { View, Text, FlatList, Pressable, LayoutAnimation, Platform, UIManager } from 'react-native';
+import {
+  View,
+  Text,
+  FlatList,
+  Pressable,
+  LayoutAnimation,
+  Platform,
+  UIManager,
+} from 'react-native';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme, useThemeColors } from '@/theme/ThemeProvider';
@@ -94,7 +102,9 @@ export default function Saved() {
                       <Text style={{ color: c.text, fontWeight: '700' }}>Open details</Text>
                     </Pressable>
                     <Pressable
-                      onPress={() => router.push({ pathname: '/polls/new', params: { fromEvent: item.id } })}
+                      onPress={() =>
+                        router.push({ pathname: '/polls/new', params: { fromEvent: item.id } })
+                      }
                       style={{
                         backgroundColor: c.primary,
                         paddingHorizontal: 10,
