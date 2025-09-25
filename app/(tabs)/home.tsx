@@ -16,7 +16,10 @@ import {
 import { ThreeDButton, ThreeDCard } from '@/components/ThreeD';
 import dayjs from 'dayjs';
 import { useTheme, useThemeColors } from '@/theme/ThemeProvider';
+import GradientBackground from '@/components/GradientBackground';
 import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
+import Chip from '@/components/Chip';
 import { supabase } from '@/services/supabase';
 import { router } from 'expo-router';
 import type { Event } from '@/types/models';
@@ -1107,19 +1110,9 @@ export default function Home() {
     listRef.current?.scrollToOffset?.({ offset: 0, animated: true });
   };
 
-  const Container: React.FC<{ children: React.ReactNode }> = ({ children }) =>
-    scheme === 'light' ? (
-      <LinearGradient
-        colors={['#e9fdf5', '#f9fafb']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={{ flex: 1 }}
-      >
-        <View style={{ flex: 1, padding: 12 }}>{children}</View>
-      </LinearGradient>
-    ) : (
-      <View style={{ flex: 1, backgroundColor: c.background, padding: 12 }}>{children}</View>
-    );
+  const Container: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+    <GradientBackground contentContainerStyle={{ flex: 1, padding: 12 }}>{children}</GradientBackground>
+  );
 
   // Admin header memo: only depends on admin form state, not search
   const adminHeader = useMemo(
@@ -1274,26 +1267,9 @@ export default function Home() {
                 <Text style={{ color: c.muted, marginTop: 4 }}>
                   {dayjs(item.date_time).format('ddd, MMM D • h:mm A')} • {item.location}
                 </Text>
-                <View
-                  style={{
-                    flexDirection: 'row',
-                    flexWrap: 'wrap',
-                    gap: 6,
-                    marginTop: 8,
-                  }}
-                >
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
                   {(item.tags ?? []).map((t: string, i: number) => (
-                    <View
-                      key={`${t}-${i}`}
-                      style={{
-                        backgroundColor: '#00000020',
-                        paddingHorizontal: 8,
-                        paddingVertical: 4,
-                        borderRadius: 999,
-                      }}
-                    >
-                      <Text style={{ color: c.text, fontSize: 12 }}>{t}</Text>
-                    </View>
+                    <Chip key={`${t}-${i}`} label={t} />
                   ))}
                 </View>
                 <View
@@ -1353,31 +1329,29 @@ export default function Home() {
         onRequestClose={() => setDetailsOpen(false)}
       >
         <SafeAreaView style={{ flex: 1, backgroundColor: c.background }}>
-          <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
-            <View style={{ padding: 12 }}>
-              <View
+          <BlurView intensity={30} tint={scheme === 'dark' ? 'dark' : 'light'} style={{ padding: 12 }}>
+            <View
+              style={{
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}
+           >
+              <Text style={{ color: c.text, fontSize: 18, fontWeight: '800' }}>Event details</Text>
+              <Pressable
+                onPress={() => setDetailsOpen(false)}
                 style={{
-                  flexDirection: 'row',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
+                  backgroundColor: '#00000020',
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  borderRadius: 10,
                 }}
               >
-                <Text style={{ color: c.text, fontSize: 18, fontWeight: '800' }}>
-                  Event details
-                </Text>
-                <Pressable
-                  onPress={() => setDetailsOpen(false)}
-                  style={{
-                    backgroundColor: '#00000020',
-                    paddingHorizontal: 12,
-                    paddingVertical: 8,
-                    borderRadius: 10,
-                  }}
-                >
-                  <Text style={{ color: c.text }}>Close</Text>
-                </Pressable>
-              </View>
+                <Text style={{ color: c.text }}>Close</Text>
+              </Pressable>
             </View>
+          </BlurView>
+          <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
             {selectedEvent?.image_url ? (
               <Image
                 source={{ uri: selectedEvent.image_url }}

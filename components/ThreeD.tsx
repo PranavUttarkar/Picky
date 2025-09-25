@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, ViewStyle, Text, TextStyle, Pressable } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme, useThemeColors } from '@/theme/ThemeProvider';
 
 // Shared 3D styles
@@ -51,11 +52,26 @@ export const useThreeDStyles = () => {
   return { card, inset, button, buttonText, highlight, shadow };
 };
 
-export const ThreeDCard: React.FC<{ style?: ViewStyle; children?: React.ReactNode }> = ({
-  style,
-  children,
-}) => {
+export const ThreeDCard: React.FC<{
+  style?: ViewStyle;
+  children?: React.ReactNode;
+  gradient?: boolean;
+  gradientColors?: readonly [string, string];
+}> = ({ style, children, gradient = false, gradientColors }) => {
   const { card } = useThreeDStyles();
+  if (gradient) {
+    const colors = gradientColors ?? (['#ffffff', '#f3f4f6'] as const);
+    return (
+      <LinearGradient
+        colors={colors}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[card, style]}
+      >
+        {children}
+      </LinearGradient>
+    );
+  }
   return <View style={[card, style]}>{children}</View>;
 };
 
@@ -65,8 +81,31 @@ export const ThreeDButton: React.FC<{
   style?: ViewStyle;
   textStyle?: TextStyle;
   disabled?: boolean;
-}> = ({ title, onPress, style, textStyle, disabled }) => {
+  gradient?: boolean;
+  gradientColors?: readonly [string, string];
+}> = ({ title, onPress, style, textStyle, disabled, gradient = false, gradientColors }) => {
   const { button, buttonText } = useThreeDStyles();
+  if (gradient) {
+    const colors = gradientColors ?? (['#34d399', '#22d3ee'] as const);
+    return (
+      <Pressable
+        onPress={onPress}
+        disabled={disabled}
+        style={[{ borderRadius: 12 }, disabled ? { opacity: 0.6 } : null]}
+        accessibilityRole="button"
+        accessibilityLabel={title}
+      >
+        <LinearGradient
+          colors={colors}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[button, { backgroundColor: 'transparent' }, style]}
+        >
+          <Text style={[{ color: '#001219', fontWeight: '800' }, textStyle]}>{title}</Text>
+        </LinearGradient>
+      </Pressable>
+    );
+  }
   return (
     <Pressable
       onPress={onPress}

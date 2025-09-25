@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { View, Text, FlatList, Pressable, TextInput, Modal, Alert } from 'react-native';
 import { useTheme, useThemeColors } from '@/theme/ThemeProvider';
-import { LinearGradient } from 'expo-linear-gradient';
+import GradientBackground from '@/components/GradientBackground';
 import { supabase } from '@/services/supabase';
 import { router } from 'expo-router';
 import { createGroup, joinGroupByCode, getMyGroups } from '@/services/groups';
@@ -63,18 +63,8 @@ export default function Groups() {
     }
   };
 
-  const Wrapper = scheme === 'light' ? LinearGradient : View;
-  const wrapperProps =
-    scheme === 'light'
-      ? { colors: ['#e9fdf5', '#f9fafb'], start: { x: 0, y: 0 }, end: { x: 1, y: 1 } }
-      : {};
-  const wrapperStyle = {
-    flex: 1,
-    ...(scheme === 'dark' ? { backgroundColor: c.background } : {}),
-  } as const;
-
   return (
-    <Wrapper style={wrapperStyle} {...(wrapperProps as any)}>
+    <GradientBackground>
       <View style={{ flex: 1, padding: 16 }}>
         <View style={{ flexDirection: 'row', gap: 12, marginBottom: 12 }}>
           <Pressable
@@ -197,6 +187,6 @@ export default function Groups() {
           </View>
         </Modal>
       </View>
-    </Wrapper>
+    </GradientBackground>
   );
 }

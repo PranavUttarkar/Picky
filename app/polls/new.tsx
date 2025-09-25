@@ -10,6 +10,8 @@ import {
 } from 'react-native';
 import { ThreeDButton, ThreeDCard } from '@/components/ThreeD';
 import { useThemeColors } from '@/theme/ThemeProvider';
+import GradientBackground from '@/components/GradientBackground';
+import GradientHeader from '@/components/GradientHeader';
 import { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/services/supabase';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -144,59 +146,35 @@ export default function NewPoll() {
   const showSearchResults = search.trim().length >= 3;
 
   return (
-    <View style={{ flex: 1, backgroundColor: c.background, padding: 16 }}>
-      <Text style={{ color: c.text, fontWeight: '800', fontSize: 18, marginBottom: 12 }}>
-        New Poll
-      </Text>
+    <GradientBackground variant="dim">
+      <View style={{ flex: 1, padding: 16 }}>
+        <GradientHeader title="New Poll" />
 
-      {/* Optional title */}
-      <Text style={{ color: c.muted, marginBottom: 6 }}>Title (optional)</Text>
-      <View
-        style={{
-          backgroundColor: c.card,
-          borderRadius: 10,
-          paddingHorizontal: 10,
-          marginBottom: 12,
-        }}
-      >
-        <TextInput
-          placeholder="e.g., Saturday Night Plans"
-          placeholderTextColor={c.muted}
-          value={title}
-          onChangeText={setTitle}
-          style={{ color: c.text, paddingVertical: 10 }}
-        />
-      </View>
+        {/* Optional title */}
+        <Text style={{ color: c.muted, marginBottom: 6 }}>Title (optional)</Text>
+        <View
+          style={{
+            backgroundColor: c.card,
+            borderRadius: 10,
+            paddingHorizontal: 10,
+            marginBottom: 12,
+          }}
+        >
+          <TextInput
+            placeholder="e.g., Saturday Night Plans"
+            placeholderTextColor={c.muted}
+            value={title}
+            onChangeText={setTitle}
+            style={{ color: c.text, paddingVertical: 10 }}
+          />
+        </View>
 
-      {/* Optional deadline */}
-      <Text style={{ color: c.muted, marginBottom: 6 }}>Deadline (optional)</Text>
-      <View style={{ backgroundColor: c.card, borderRadius: 10, padding: 10, marginBottom: 12 }}>
-        <View style={{ flexDirection: 'row', gap: 8 }}>
-          <Pressable
-            onPress={() => setShowDatePicker('date')}
-            style={{
-              paddingVertical: 8,
-              paddingHorizontal: 12,
-              borderRadius: 8,
-              backgroundColor: c.background,
-            }}
-          >
-            <Text style={{ color: c.text }}>Pick date</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => setShowDatePicker('time')}
-            style={{
-              paddingVertical: 8,
-              paddingHorizontal: 12,
-              borderRadius: 8,
-              backgroundColor: c.background,
-            }}
-          >
-            <Text style={{ color: c.text }}>Pick time</Text>
-          </Pressable>
-          {deadlineDate ? (
+        {/* Optional deadline */}
+        <Text style={{ color: c.muted, marginBottom: 6 }}>Deadline (optional)</Text>
+        <View style={{ backgroundColor: c.card, borderRadius: 10, padding: 10, marginBottom: 12 }}>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
             <Pressable
-              onPress={() => setDeadlineDate(null)}
+              onPress={() => setShowDatePicker('date')}
               style={{
                 paddingVertical: 8,
                 paddingHorizontal: 12,
@@ -204,248 +182,277 @@ export default function NewPoll() {
                 backgroundColor: c.background,
               }}
             >
-              <Text style={{ color: c.text }}>Clear</Text>
+              <Text style={{ color: c.text }}>Pick date</Text>
             </Pressable>
-          ) : null}
-        </View>
-        <Text style={{ color: c.muted, marginTop: 8 }}>
-          {deadlineDate
-            ? dayjs(deadlineDate).format('ddd, MMM D YYYY • h:mm A')
-            : 'No deadline set'}
-        </Text>
-      </View>
-      {showDatePicker && (
-        <DateTimePicker
-          value={deadlineDate ?? new Date()}
-          mode={showDatePicker}
-          onChange={(e, selectedDate) => {
-            if (Platform.OS !== 'ios') setShowDatePicker(null);
-            if (selectedDate) {
-              if (!deadlineDate) {
-                setDeadlineDate(selectedDate);
-              } else {
-                // Merge date/time parts depending on picker
-                const curr = new Date(deadlineDate);
-                const s = new Date(selectedDate);
-                if (showDatePicker === 'date') {
-                  curr.setFullYear(s.getFullYear(), s.getMonth(), s.getDate());
-                } else {
-                  curr.setHours(s.getHours(), s.getMinutes(), 0, 0);
-                }
-                setDeadlineDate(new Date(curr));
-              }
-            }
-          }}
-          display={Platform.select({ ios: 'inline', default: 'default' }) as any}
-        />
-      )}
-
-      {/* Poll mode */}
-      <Text style={{ color: c.muted, marginBottom: 6 }}>Vote Mode</Text>
-      <View style={{ backgroundColor: c.card, borderRadius: 10, padding: 10, marginBottom: 12 }}>
-        <View style={{ flexDirection: 'row', gap: 8 }}>
-          <Pressable
-            onPress={() => setMode('single')}
-            style={{
-              paddingVertical: 6,
-              paddingHorizontal: 10,
-              borderRadius: 8,
-              backgroundColor: mode === 'single' ? c.primary : c.background,
-            }}
-          >
-            <Text style={{ color: c.text }}>Single choice</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => setMode('rating')}
-            style={{
-              paddingVertical: 6,
-              paddingHorizontal: 10,
-              borderRadius: 8,
-              backgroundColor: mode === 'rating' ? c.primary : c.background,
-            }}
-          >
-            <Text style={{ color: c.text }}>Ratings</Text>
-          </Pressable>
-        </View>
-        <Text style={{ color: c.muted, marginTop: 6 }}>
-          {mode === 'single'
-            ? 'Each person picks one option.'
-            : "Each person rates every option: Love it / It's fine / Not for me."}
-        </Text>
-      </View>
-
-      <Text style={{ color: c.muted, marginBottom: 6 }}>Group</Text>
-      <View style={{ backgroundColor: c.card, borderRadius: 10, padding: 10, marginBottom: 12 }}>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-          {groups.map((g) => (
             <Pressable
-              key={g.id}
-              onPress={() => setGroupId(g.id)}
+              onPress={() => setShowDatePicker('time')}
+              style={{
+                paddingVertical: 8,
+                paddingHorizontal: 12,
+                borderRadius: 8,
+                backgroundColor: c.background,
+              }}
+            >
+              <Text style={{ color: c.text }}>Pick time</Text>
+            </Pressable>
+            {deadlineDate ? (
+              <Pressable
+                onPress={() => setDeadlineDate(null)}
+                style={{
+                  paddingVertical: 8,
+                  paddingHorizontal: 12,
+                  borderRadius: 8,
+                  backgroundColor: c.background,
+                }}
+              >
+                <Text style={{ color: c.text }}>Clear</Text>
+              </Pressable>
+            ) : null}
+          </View>
+          <Text style={{ color: c.muted, marginTop: 8 }}>
+            {deadlineDate
+              ? dayjs(deadlineDate).format('ddd, MMM D YYYY • h:mm A')
+              : 'No deadline set'}
+          </Text>
+        </View>
+        {showDatePicker && (
+          <DateTimePicker
+            value={deadlineDate ?? new Date()}
+            mode={showDatePicker}
+            onChange={(e, selectedDate) => {
+              if (Platform.OS !== 'ios') setShowDatePicker(null);
+              if (selectedDate) {
+                if (!deadlineDate) {
+                  setDeadlineDate(selectedDate);
+                } else {
+                  // Merge date/time parts depending on picker
+                  const curr = new Date(deadlineDate);
+                  const s = new Date(selectedDate);
+                  if (showDatePicker === 'date') {
+                    curr.setFullYear(s.getFullYear(), s.getMonth(), s.getDate());
+                  } else {
+                    curr.setHours(s.getHours(), s.getMinutes(), 0, 0);
+                  }
+                  setDeadlineDate(new Date(curr));
+                }
+              }
+            }}
+            display={Platform.select({ ios: 'inline', default: 'default' }) as any}
+          />
+        )}
+
+        {/* Poll mode */}
+        <Text style={{ color: c.muted, marginBottom: 6 }}>Vote Mode</Text>
+        <View style={{ backgroundColor: c.card, borderRadius: 10, padding: 10, marginBottom: 12 }}>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <Pressable
+              onPress={() => setMode('single')}
               style={{
                 paddingVertical: 6,
                 paddingHorizontal: 10,
                 borderRadius: 8,
-                backgroundColor: groupId === g.id ? c.primary : c.background,
+                backgroundColor: mode === 'single' ? c.primary : c.background,
               }}
             >
-              <Text style={{ color: c.text }}>{g.name}</Text>
+              <Text style={{ color: c.text }}>Single choice</Text>
             </Pressable>
-          ))}
-        </View>
-      </View>
-
-      {/* Top matches */}
-      <Text style={{ color: c.muted, marginBottom: 6 }}>
-        {groupId ? 'Top matches for this group' : 'Your top matches'}
-      </Text>
-      {topMatches.length === 0 ? (
-        <Text style={{ color: c.muted, marginBottom: 12 }}>No matches yet. Try searching.</Text>
-      ) : (
-        <View style={{ marginBottom: 12 }}>
-          {topMatches.map((item: any) => {
-            const sel = selected.has(item.id);
-            return (
-              <Pressable
-                key={item.id}
-                onPress={() => toggle(item.id)}
-                style={{
-                  marginBottom: 8,
-                }}
-              >
-                <ThreeDCard
-                  style={{
-                    borderWidth: sel ? 2 : 1,
-                    borderColor: sel ? c.primary : '#00000020',
-                    padding: 12,
-                    borderRadius: 12,
-                  }}
-                >
-                  <Text style={{ color: c.text, fontWeight: '700' }}>{item.title}</Text>
-                  <Text style={{ color: c.muted, marginTop: 4 }}>
-                    {new Date(item.date_time).toLocaleString()} • {item.location}
-                  </Text>
-                  {item.match_percent != null ? (
-                    <Text style={{ color: c.muted, marginTop: 4 }}>
-                      {item.match_percent}% match
-                    </Text>
-                  ) : null}
-                  {sel ? <Text style={{ color: c.primary, marginTop: 6 }}>Selected</Text> : null}
-                </ThreeDCard>
-              </Pressable>
-            );
-          })}
-        </View>
-      )}
-
-      {/* Quick actions */}
-      <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
-        <ThreeDButton title="View Saved" onPress={() => router.push('/(tabs)/saved')} />
-        <ThreeDButton title="Browse" onPress={() => router.push('/(tabs)/home')} />
-      </View>
-
-      {/* Search input */}
-      <View
-        style={{
-          backgroundColor: c.card,
-          borderRadius: 10,
-          paddingHorizontal: 10,
-          marginBottom: 8,
-        }}
-      >
-        <TextInput
-          placeholder="Search events to add (min 3 chars)"
-          placeholderTextColor={c.muted}
-          value={search}
-          onChangeText={setSearch}
-          style={{ color: c.text, paddingVertical: 10 }}
-        />
-      </View>
-
-      {mode === 'single' && selectedCount === 1 ? (
-        <Text style={{ color: c.muted, marginBottom: 8 }}>
-          A single selection makes a Yes/No poll for that event.
-        </Text>
-      ) : null}
-
-      {/* Search results */}
-      {showSearchResults ? (
-        <FlatList
-          data={results}
-          keyExtractor={(e) => String(e.id)}
-          contentContainerStyle={{ paddingBottom: 120 }}
-          onEndReachedThreshold={0.5}
-          onEndReached={loadMore}
-          ListFooterComponent={
-            loadingMore ? (
-              <View style={{ paddingVertical: 12 }}>
-                <ActivityIndicator color={c.text} />
-              </View>
-            ) : null
-          }
-          renderItem={({ item }) => {
-            const sel = selected.has(item.id);
-            return (
-              <Pressable
-                onPress={() => toggle(item.id)}
-                style={{
-                  marginBottom: 8,
-                }}
-              >
-                <ThreeDCard
-                  style={{
-                    borderWidth: sel ? 2 : 1,
-                    borderColor: sel ? c.primary : '#00000020',
-                    padding: 12,
-                    borderRadius: 12,
-                  }}
-                >
-                  <Text style={{ color: c.text, fontWeight: '700' }}>{item.title}</Text>
-                  <Text style={{ color: c.muted, marginTop: 4 }}>
-                    {new Date(item.date_time).toLocaleString()} • {item.location}
-                  </Text>
-                  {sel ? <Text style={{ color: c.primary, marginTop: 6 }}>Selected</Text> : null}
-                </ThreeDCard>
-              </Pressable>
-            );
-          }}
-        />
-      ) : (
-        <Text style={{ color: c.muted }}>Search to add more events.</Text>
-      )}
-      {/* Sticky bottom action bar */}
-      <View
-        style={{
-          position: 'absolute',
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: c.background,
-          borderTopWidth: 1,
-          borderTopColor: '#00000020',
-          padding: 12,
-        }}
-      >
-        {creating ? (
-          <View
-            style={{ flexDirection: 'row', alignItems: 'center', gap: 8, justifyContent: 'center' }}
-          >
-            <ActivityIndicator color={c.text} />
-            <Text style={{ color: c.text, fontWeight: '700' }}>Creating…</Text>
+            <Pressable
+              onPress={() => setMode('rating')}
+              style={{
+                paddingVertical: 6,
+                paddingHorizontal: 10,
+                borderRadius: 8,
+                backgroundColor: mode === 'rating' ? c.primary : c.background,
+              }}
+            >
+              <Text style={{ color: c.text }}>Ratings</Text>
+            </Pressable>
           </View>
+          <Text style={{ color: c.muted, marginTop: 6 }}>
+            {mode === 'single'
+              ? 'Each person picks one option.'
+              : "Each person rates every option: Love it / It's fine / Not for me."}
+          </Text>
+        </View>
+
+        <Text style={{ color: c.muted, marginBottom: 6 }}>Group</Text>
+        <View style={{ backgroundColor: c.card, borderRadius: 10, padding: 10, marginBottom: 12 }}>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            {groups.map((g) => (
+              <Pressable
+                key={g.id}
+                onPress={() => setGroupId(g.id)}
+                style={{
+                  paddingVertical: 6,
+                  paddingHorizontal: 10,
+                  borderRadius: 8,
+                  backgroundColor: groupId === g.id ? c.primary : c.background,
+                }}
+              >
+                <Text style={{ color: c.text }}>{g.name}</Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+
+        {/* Top matches */}
+        <Text style={{ color: c.muted, marginBottom: 6 }}>
+          {groupId ? 'Top matches for this group' : 'Your top matches'}
+        </Text>
+        {topMatches.length === 0 ? (
+          <Text style={{ color: c.muted, marginBottom: 12 }}>No matches yet. Try searching.</Text>
         ) : (
-          <ThreeDButton
-            title={
-              selectedCount === 1 && mode === 'single'
-                ? 'Create Yes/No Poll'
-                : selectedCount > 1
-                ? `Create Poll (${selectedCount} selected)`
-                : 'Create Poll'
-            }
-            onPress={onCreate}
-            style={{ alignSelf: 'center' }}
-          />
+          <View style={{ marginBottom: 12 }}>
+            {topMatches.map((item: any) => {
+              const sel = selected.has(item.id);
+              return (
+                <Pressable
+                  key={item.id}
+                  onPress={() => toggle(item.id)}
+                  style={{
+                    marginBottom: 8,
+                  }}
+                >
+                  <ThreeDCard
+                    style={{
+                      borderWidth: sel ? 2 : 1,
+                      borderColor: sel ? c.primary : '#00000020',
+                      padding: 12,
+                      borderRadius: 12,
+                    }}
+                  >
+                    <Text style={{ color: c.text, fontWeight: '700' }}>{item.title}</Text>
+                    <Text style={{ color: c.muted, marginTop: 4 }}>
+                      {new Date(item.date_time).toLocaleString()} • {item.location}
+                    </Text>
+                    {item.match_percent != null ? (
+                      <Text style={{ color: c.muted, marginTop: 4 }}>
+                        {item.match_percent}% match
+                      </Text>
+                    ) : null}
+                    {sel ? <Text style={{ color: c.primary, marginTop: 6 }}>Selected</Text> : null}
+                  </ThreeDCard>
+                </Pressable>
+              );
+            })}
+          </View>
         )}
+
+        {/* Quick actions */}
+        <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+          <ThreeDButton title="View Saved" onPress={() => router.push('/(tabs)/saved')} />
+          <ThreeDButton title="Browse" onPress={() => router.push('/(tabs)/home')} />
+        </View>
+
+        {/* Search input */}
+        <View
+          style={{
+            backgroundColor: c.card,
+            borderRadius: 10,
+            paddingHorizontal: 10,
+            marginBottom: 8,
+          }}
+        >
+          <TextInput
+            placeholder="Search events to add (min 3 chars)"
+            placeholderTextColor={c.muted}
+            value={search}
+            onChangeText={setSearch}
+            style={{ color: c.text, paddingVertical: 10 }}
+          />
+        </View>
+
+        {mode === 'single' && selectedCount === 1 ? (
+          <Text style={{ color: c.muted, marginBottom: 8 }}>
+            A single selection makes a Yes/No poll for that event.
+          </Text>
+        ) : null}
+
+        {/* Search results */}
+        {showSearchResults ? (
+          <FlatList
+            data={results}
+            keyExtractor={(e) => String(e.id)}
+            contentContainerStyle={{ paddingBottom: 120 }}
+            onEndReachedThreshold={0.5}
+            onEndReached={loadMore}
+            ListFooterComponent={
+              loadingMore ? (
+                <View style={{ paddingVertical: 12 }}>
+                  <ActivityIndicator color={c.text} />
+                </View>
+              ) : null
+            }
+            renderItem={({ item }) => {
+              const sel = selected.has(item.id);
+              return (
+                <Pressable
+                  onPress={() => toggle(item.id)}
+                  style={{
+                    marginBottom: 8,
+                  }}
+                >
+                  <ThreeDCard
+                    style={{
+                      borderWidth: sel ? 2 : 1,
+                      borderColor: sel ? c.primary : '#00000020',
+                      padding: 12,
+                      borderRadius: 12,
+                    }}
+                  >
+                    <Text style={{ color: c.text, fontWeight: '700' }}>{item.title}</Text>
+                    <Text style={{ color: c.muted, marginTop: 4 }}>
+                      {new Date(item.date_time).toLocaleString()} • {item.location}
+                    </Text>
+                    {sel ? <Text style={{ color: c.primary, marginTop: 6 }}>Selected</Text> : null}
+                  </ThreeDCard>
+                </Pressable>
+              );
+            }}
+          />
+        ) : (
+          <Text style={{ color: c.muted }}>Search to add more events.</Text>
+        )}
+        {/* Sticky bottom action bar */}
+        <View
+          style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'transparent',
+            borderTopWidth: 1,
+            borderTopColor: '#00000020',
+            padding: 12,
+          }}
+        >
+          {creating ? (
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 8,
+                justifyContent: 'center',
+              }}
+            >
+              <ActivityIndicator color={c.text} />
+              <Text style={{ color: c.text, fontWeight: '700' }}>Creating…</Text>
+            </View>
+          ) : (
+            <ThreeDButton
+              title={
+                selectedCount === 1 && mode === 'single'
+                  ? 'Create Yes/No Poll'
+                  : selectedCount > 1
+                  ? `Create Poll (${selectedCount} selected)`
+                  : 'Create Poll'
+              }
+              onPress={onCreate}
+              style={{ alignSelf: 'center' }}
+            />
+          )}
+        </View>
       </View>
-    </View>
+    </GradientBackground>
   );
 }

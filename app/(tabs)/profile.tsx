@@ -1,6 +1,7 @@
 import { View, Text, Pressable } from 'react-native';
 import { useTheme, useThemeColors } from '@/theme/ThemeProvider';
-import { LinearGradient } from 'expo-linear-gradient';
+import GradientBackground from '@/components/GradientBackground';
+import GradientHeader from '@/components/GradientHeader';
 import { supabase } from '@/services/supabase';
 import { useEffect, useState } from 'react';
 import { router } from 'expo-router';
@@ -28,32 +29,15 @@ export default function Profile() {
       sub.subscription.unsubscribe();
     };
   }, []);
-  const Container: React.FC<{ children: React.ReactNode }> = ({ children }) =>
-    scheme === 'light' ? (
-      <LinearGradient
-        colors={['#e9fdf5', '#f9fafb']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={{ flex: 1 }}
-      >
-        <View style={{ flex: 1, padding: 16 }}>{children}</View>
-      </LinearGradient>
-    ) : (
-      <View style={{ flex: 1, backgroundColor: c.background, padding: 16 }}>{children}</View>
-    );
+  const Container: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+    <GradientBackground contentContainerStyle={{ flex: 1, padding: 16 }}>
+      {children}
+    </GradientBackground>
+  );
 
   return (
     <Container>
-      <Text
-        style={{
-          color: c.text,
-          fontWeight: '800',
-          fontSize: 22,
-          marginBottom: 12,
-        }}
-      >
-        Your Profile
-      </Text>
+      <GradientHeader title="Your Profile" />
       {authed === false && (
         <>
           <Text style={{ color: c.muted, marginBottom: 12 }}>You’re not signed in.</Text>

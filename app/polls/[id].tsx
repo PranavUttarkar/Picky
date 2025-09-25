@@ -1,5 +1,7 @@
 import { View, Text, Pressable, FlatList, Alert, Image, Linking } from 'react-native';
 import { useThemeColors } from '@/theme/ThemeProvider';
+import GradientBackground from '@/components/GradientBackground';
+import GradientHeader from '@/components/GradientHeader';
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/services/supabase';
 import { useLocalSearchParams, router } from 'expo-router';
@@ -103,443 +105,456 @@ export default function PollDetails() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: c.background, padding: 16 }}>
-      <Text style={{ color: c.text, fontWeight: '800', fontSize: 18 }}>
-        {poll?.title || `Poll #${pollId}`}
-      </Text>
-      <Text style={{ color: c.muted, marginTop: 6 }}>
-        {poll?.is_active ? 'Open' : 'Closed'}
-        {poll?.deadline_at ? ` • closes ${new Date(poll.deadline_at).toLocaleString()}` : ''}
-      </Text>
+    <GradientBackground variant="dim">
+      <View style={{ flex: 1, padding: 16 }}>
+        <GradientHeader
+          title={poll?.title || `Poll #${pollId}`}
+          subtitle={poll?.is_active ? 'Open' : 'Closed'}
+        />
+        <Text style={{ color: c.muted, marginTop: 6 }}>
+          {poll?.is_active ? 'Open' : 'Closed'}
+          {poll?.deadline_at ? ` • closes ${new Date(poll.deadline_at).toLocaleString()}` : ''}
+        </Text>
 
-      {/* Response progress */}
-      {totalMembers > 0 ? (
-        <View style={{ backgroundColor: c.card, padding: 10, borderRadius: 12, marginTop: 10 }}>
-          <Text style={{ color: c.text, fontWeight: '700' }}>
-            {responded}/{totalMembers} responded ({progressPct}%)
-          </Text>
-          <View
+        {/* Response progress */}
+        {totalMembers > 0 ? (
+          <View style={{ backgroundColor: c.card, padding: 10, borderRadius: 12, marginTop: 10 }}>
+            <Text style={{ color: c.text, fontWeight: '700' }}>
+              {responded}/{totalMembers} responded ({progressPct}%)
+            </Text>
+            <View
+              style={{
+                height: 6,
+                backgroundColor: c.background,
+                borderRadius: 6,
+                marginTop: 6,
+                overflow: 'hidden',
+              }}
+            >
+              <View style={{ width: `${progressPct}%`, backgroundColor: c.primary, flex: 1 }} />
+            </View>
+            {waiting && waiting.length > 0 ? (
+              <Text style={{ color: c.muted, marginTop: 6 }}>
+                Waiting on{' '}
+                {waiting
+                  .slice(0, 3)
+                  .map((w) => w.name || 'Someone')
+                  .join(', ')}
+                {waiting.length > 3 ? ` +${waiting.length - 3}` : ''}
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
+
+        {poll?.is_active ? (
+          <Pressable
+            onPress={onClose}
             style={{
-              height: 6,
-              backgroundColor: c.background,
-              borderRadius: 6,
-              marginTop: 6,
-              overflow: 'hidden',
+              alignSelf: 'flex-start',
+              backgroundColor: c.card,
+              paddingVertical: 8,
+              paddingHorizontal: 12,
+              borderRadius: 10,
+              marginTop: 12,
             }}
           >
-            <View style={{ width: `${progressPct}%`, backgroundColor: c.primary, flex: 1 }} />
-          </View>
-          {waiting && waiting.length > 0 ? (
-            <Text style={{ color: c.muted, marginTop: 6 }}>
-              Waiting on{' '}
-              {waiting
-                .slice(0, 3)
-                .map((w) => w.name || 'Someone')
-                .join(', ')}
-              {waiting.length > 3 ? ` +${waiting.length - 3}` : ''}
-            </Text>
-          ) : null}
-        </View>
-      ) : null}
-
-      {poll?.is_active ? (
-        <Pressable
-          onPress={onClose}
-          style={{
-            alignSelf: 'flex-start',
-            backgroundColor: c.card,
-            paddingVertical: 8,
-            paddingHorizontal: 12,
-            borderRadius: 10,
-            marginTop: 12,
-          }}
-        >
-          <Text style={{ color: c.text, fontWeight: '700' }}>Close Poll</Text>
-        </Pressable>
-      ) : null}
-
-      {options.length === 1 && poll?.mode !== 'rating' ? (
-        <View style={{ marginTop: 20 }}>
-          <Pressable
-            onPress={() => router.push(`/events/${options[0].event_id}`)}
-            style={{ backgroundColor: c.card, padding: 12, borderRadius: 12 }}
-          >
-            {options[0].event?.image_url ? (
-              <Image
-                source={{ uri: options[0].event.image_url }}
-                style={{ width: '100%', height: 160, borderRadius: 10, marginBottom: 8 }}
-              />
-            ) : null}
-            <Text style={{ color: c.text, fontWeight: '700' }}>
-              {options[0].event?.title ?? `Event #${options[0].event_id}`}
-            </Text>
-            <Text style={{ color: c.muted, marginTop: 4 }}>
-              {options[0].event?.date_time
-                ? new Date(options[0].event.date_time).toLocaleString()
-                : ''}
-              {options[0].event?.location ? ` • ${options[0].event.location}` : ''}
-            </Text>
-            {options[0].match_percent != null ? (
-              <Text style={{ color: c.muted, marginTop: 4 }}>
-                {options[0].match_percent}% group match
-              </Text>
-            ) : null}
-            {options[0].event?.rsvp_url ? (
-              <Pressable
-                onPress={() => {
-                  if (options[0].event?.rsvp_url) Linking.openURL(options[0].event.rsvp_url);
-                }}
-                style={{
-                  alignSelf: 'flex-start',
-                  backgroundColor: c.background,
-                  paddingVertical: 6,
-                  paddingHorizontal: 10,
-                  borderRadius: 8,
-                  marginTop: 8,
-                }}
-              >
-                <Text style={{ color: c.text }}>Open RSVP</Text>
-              </Pressable>
-            ) : null}
+            <Text style={{ color: c.text, fontWeight: '700' }}>Close Poll</Text>
           </Pressable>
-          <Text style={{ color: c.text, fontWeight: '700', marginBottom: 12, marginTop: 12 }}>
-            Do you want to attend?
-          </Text>
-          <View style={{ flexDirection: 'row', gap: 12 }}>
+        ) : null}
+
+        {options.length === 1 && poll?.mode !== 'rating' ? (
+          <View style={{ marginTop: 20 }}>
             <Pressable
-              onPress={() => onVote(options[0].event_id)}
-              disabled={!poll?.is_active}
-              style={{
-                flex: 1,
-                backgroundColor: myVote === options[0].event_id ? c.primary : c.card,
-                padding: 14,
-                borderRadius: 12,
-                alignItems: 'center',
-              }}
+              onPress={() => router.push(`/events/${options[0].event_id}`)}
+              style={{ backgroundColor: c.card, padding: 12, borderRadius: 12 }}
             >
-              <Text style={{ color: c.text, fontWeight: '700' }}>Yes</Text>
-            </Pressable>
-            <Pressable
-              onPress={async () => {
-                try {
-                  await clearMyVote(pollId);
-                  await load();
-                } catch (e: any) {
-                  Alert.alert('Update failed', e.message ?? String(e));
-                }
-              }}
-              disabled={!poll?.is_active || myVote == null}
-              style={{
-                flex: 1,
-                backgroundColor: myVote == null ? c.card : c.accent,
-                padding: 14,
-                borderRadius: 12,
-                alignItems: 'center',
-              }}
-            >
-              <Text style={{ color: c.text, fontWeight: '700' }}>No</Text>
-            </Pressable>
-          </View>
-          <View style={{ backgroundColor: c.card, padding: 12, borderRadius: 12, marginTop: 12 }}>
-            <Text style={{ color: c.muted }}>Yes votes: {totalVotes}</Text>
-          </View>
-        </View>
-      ) : (
-        <FlatList
-          style={{ marginTop: 16 }}
-          data={options}
-          keyExtractor={(o) => String(o.event_id)}
-          renderItem={({ item }) => {
-            const count = item.votes ?? 0;
-            const pct = totalVotes === 0 ? 0 : Math.round((count * 100) / totalVotes);
-            const isMine = myVote === item.event_id;
-            return (
-              <Pressable
-                onPress={() => {
-                  if (poll?.mode !== 'rating') onVote(item.event_id);
-                }}
-                disabled={poll?.mode !== 'rating' ? !poll?.is_active : true}
-                style={{ backgroundColor: c.card, borderRadius: 12, padding: 12, marginBottom: 10 }}
-              >
-                {item.event?.image_url ? (
-                  <Image
-                    source={{ uri: item.event.image_url }}
-                    style={{ width: '100%', height: 140, borderRadius: 10, marginBottom: 8 }}
-                  />
-                ) : null}
-                <Text style={{ color: c.text, fontWeight: '700' }}>
-                  {item.event?.title ?? `Event #${item.event_id}`}
-                </Text>
+              {options[0].event?.image_url ? (
+                <Image
+                  source={{ uri: options[0].event.image_url }}
+                  style={{ width: '100%', height: 160, borderRadius: 10, marginBottom: 8 }}
+                />
+              ) : null}
+              <Text style={{ color: c.text, fontWeight: '700' }}>
+                {options[0].event?.title ?? `Event #${options[0].event_id}`}
+              </Text>
+              <Text style={{ color: c.muted, marginTop: 4 }}>
+                {options[0].event?.date_time
+                  ? new Date(options[0].event.date_time).toLocaleString()
+                  : ''}
+                {options[0].event?.location ? ` • ${options[0].event.location}` : ''}
+              </Text>
+              {options[0].match_percent != null ? (
                 <Text style={{ color: c.muted, marginTop: 4 }}>
-                  {item.event?.date_time ? new Date(item.event.date_time).toLocaleString() : ''}
-                  {item.event?.location ? ` • ${item.event.location}` : ''}
+                  {options[0].match_percent}% group match
                 </Text>
-                {item.match_percent != null ? (
-                  <Text style={{ color: c.muted, marginTop: 4 }}>
-                    {item.match_percent}% group match
+              ) : null}
+              {options[0].event?.rsvp_url ? (
+                <Pressable
+                  onPress={() => {
+                    if (options[0].event?.rsvp_url) Linking.openURL(options[0].event.rsvp_url);
+                  }}
+                  style={{
+                    alignSelf: 'flex-start',
+                    backgroundColor: c.background,
+                    paddingVertical: 6,
+                    paddingHorizontal: 10,
+                    borderRadius: 8,
+                    marginTop: 8,
+                  }}
+                >
+                  <Text style={{ color: c.text }}>Open RSVP</Text>
+                </Pressable>
+              ) : null}
+            </Pressable>
+            <Text style={{ color: c.text, fontWeight: '700', marginBottom: 12, marginTop: 12 }}>
+              Do you want to attend?
+            </Text>
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              <Pressable
+                onPress={() => onVote(options[0].event_id)}
+                disabled={!poll?.is_active}
+                style={{
+                  flex: 1,
+                  backgroundColor: myVote === options[0].event_id ? c.primary : c.card,
+                  padding: 14,
+                  borderRadius: 12,
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={{ color: c.text, fontWeight: '700' }}>Yes</Text>
+              </Pressable>
+              <Pressable
+                onPress={async () => {
+                  try {
+                    await clearMyVote(pollId);
+                    await load();
+                  } catch (e: any) {
+                    Alert.alert('Update failed', e.message ?? String(e));
+                  }
+                }}
+                disabled={!poll?.is_active || myVote == null}
+                style={{
+                  flex: 1,
+                  backgroundColor: myVote == null ? c.card : c.accent,
+                  padding: 14,
+                  borderRadius: 12,
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={{ color: c.text, fontWeight: '700' }}>No</Text>
+              </Pressable>
+            </View>
+            <View style={{ backgroundColor: c.card, padding: 12, borderRadius: 12, marginTop: 12 }}>
+              <Text style={{ color: c.muted }}>Yes votes: {totalVotes}</Text>
+            </View>
+          </View>
+        ) : (
+          <FlatList
+            style={{ marginTop: 16 }}
+            data={options}
+            keyExtractor={(o) => String(o.event_id)}
+            renderItem={({ item }) => {
+              const count = item.votes ?? 0;
+              const pct = totalVotes === 0 ? 0 : Math.round((count * 100) / totalVotes);
+              const isMine = myVote === item.event_id;
+              return (
+                <Pressable
+                  onPress={() => {
+                    if (poll?.mode !== 'rating') onVote(item.event_id);
+                  }}
+                  disabled={poll?.mode !== 'rating' ? !poll?.is_active : true}
+                  style={{
+                    backgroundColor: c.card,
+                    borderRadius: 12,
+                    padding: 12,
+                    marginBottom: 10,
+                  }}
+                >
+                  {item.event?.image_url ? (
+                    <Image
+                      source={{ uri: item.event.image_url }}
+                      style={{ width: '100%', height: 140, borderRadius: 10, marginBottom: 8 }}
+                    />
+                  ) : null}
+                  <Text style={{ color: c.text, fontWeight: '700' }}>
+                    {item.event?.title ?? `Event #${item.event_id}`}
                   </Text>
-                ) : null}
-                {poll?.mode === 'rating' ? (
-                  <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
-                    <Pressable
-                      onPress={async () => {
-                        try {
-                          await castRating(pollId, item.event_id, 1);
-                          await load();
-                        } catch (e: any) {
-                          Alert.alert('Rate failed', e.message ?? String(e));
-                        }
-                      }}
-                      style={{
-                        paddingVertical: 6,
-                        paddingHorizontal: 10,
-                        borderRadius: 8,
-                        backgroundColor:
-                          (myRatings?.[item.event_id] ?? 0) === 1 ? c.primary : c.background,
-                      }}
-                    >
-                      <Text style={{ color: c.text }}>Love it ({item.love_it ?? 0})</Text>
-                    </Pressable>
-                    <Pressable
-                      onPress={async () => {
-                        try {
-                          await castRating(pollId, item.event_id, 0);
-                          await load();
-                        } catch (e: any) {
-                          Alert.alert('Rate failed', e.message ?? String(e));
-                        }
-                      }}
-                      style={{
-                        paddingVertical: 6,
-                        paddingHorizontal: 10,
-                        borderRadius: 8,
-                        backgroundColor:
-                          (myRatings?.[item.event_id] ?? -99) === 0 ? c.primary : c.background,
-                      }}
-                    >
-                      <Text style={{ color: c.text }}>It's fine ({item.fine ?? 0})</Text>
-                    </Pressable>
-                    <Pressable
-                      onPress={async () => {
-                        try {
-                          await castRating(pollId, item.event_id, -1);
-                          await load();
-                        } catch (e: any) {
-                          Alert.alert('Rate failed', e.message ?? String(e));
-                        }
-                      }}
-                      style={{
-                        paddingVertical: 6,
-                        paddingHorizontal: 10,
-                        borderRadius: 8,
-                        backgroundColor:
-                          (myRatings?.[item.event_id] ?? 0) === -1 ? c.primary : c.background,
-                      }}
-                    >
-                      <Text style={{ color: c.text }}>Not for me ({item.not_for_me ?? 0})</Text>
-                    </Pressable>
-                  </View>
-                ) : (
-                  <View
-                    style={{
-                      height: 8,
-                      backgroundColor: c.background,
-                      borderRadius: 6,
-                      marginTop: 8,
-                      overflow: 'hidden',
-                    }}
-                  >
+                  <Text style={{ color: c.muted, marginTop: 4 }}>
+                    {item.event?.date_time ? new Date(item.event.date_time).toLocaleString() : ''}
+                    {item.event?.location ? ` • ${item.event.location}` : ''}
+                  </Text>
+                  {item.match_percent != null ? (
+                    <Text style={{ color: c.muted, marginTop: 4 }}>
+                      {item.match_percent}% group match
+                    </Text>
+                  ) : null}
+                  {poll?.mode === 'rating' ? (
+                    <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
+                      <Pressable
+                        onPress={async () => {
+                          try {
+                            await castRating(pollId, item.event_id, 1);
+                            await load();
+                          } catch (e: any) {
+                            Alert.alert('Rate failed', e.message ?? String(e));
+                          }
+                        }}
+                        style={{
+                          paddingVertical: 6,
+                          paddingHorizontal: 10,
+                          borderRadius: 8,
+                          backgroundColor:
+                            (myRatings?.[item.event_id] ?? 0) === 1 ? c.primary : c.background,
+                        }}
+                      >
+                        <Text style={{ color: c.text }}>Love it ({item.love_it ?? 0})</Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={async () => {
+                          try {
+                            await castRating(pollId, item.event_id, 0);
+                            await load();
+                          } catch (e: any) {
+                            Alert.alert('Rate failed', e.message ?? String(e));
+                          }
+                        }}
+                        style={{
+                          paddingVertical: 6,
+                          paddingHorizontal: 10,
+                          borderRadius: 8,
+                          backgroundColor:
+                            (myRatings?.[item.event_id] ?? -99) === 0 ? c.primary : c.background,
+                        }}
+                      >
+                        <Text style={{ color: c.text }}>It's fine ({item.fine ?? 0})</Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={async () => {
+                          try {
+                            await castRating(pollId, item.event_id, -1);
+                            await load();
+                          } catch (e: any) {
+                            Alert.alert('Rate failed', e.message ?? String(e));
+                          }
+                        }}
+                        style={{
+                          paddingVertical: 6,
+                          paddingHorizontal: 10,
+                          borderRadius: 8,
+                          backgroundColor:
+                            (myRatings?.[item.event_id] ?? 0) === -1 ? c.primary : c.background,
+                        }}
+                      >
+                        <Text style={{ color: c.text }}>Not for me ({item.not_for_me ?? 0})</Text>
+                      </Pressable>
+                    </View>
+                  ) : (
                     <View
                       style={{
-                        width: `${pct}%`,
-                        backgroundColor: isMine ? c.primary : c.accent,
-                        flex: 1,
-                      }}
-                    />
-                  </View>
-                )}
-                <View
-                  style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 }}
-                >
-                  {poll?.mode === 'rating' ? (
-                    <>
-                      <Text style={{ color: c.muted }}>
-                        Love {item.love_it ?? 0} • Fine {item.fine ?? 0} • Not{' '}
-                        {item.not_for_me ?? 0}
-                      </Text>
-                      {item.event?.rsvp_url ? (
-                        <Pressable
-                          onPress={() => {
-                            if (item.event?.rsvp_url) Linking.openURL(item.event.rsvp_url);
-                          }}
-                          style={{
-                            paddingVertical: 4,
-                            paddingHorizontal: 8,
-                            backgroundColor: c.background,
-                            borderRadius: 8,
-                          }}
-                        >
-                          <Text style={{ color: c.text }}>RSVP</Text>
-                        </Pressable>
-                      ) : null}
-                    </>
-                  ) : (
-                    <>
-                      <Text style={{ color: c.muted }}>{count} votes</Text>
-                      <Text style={{ color: c.muted }}>{pct}%</Text>
-                    </>
-                  )}
-                </View>
-              </Pressable>
-            );
-          }}
-          ListEmptyComponent={<Text style={{ color: c.muted, marginTop: 20 }}>No options.</Text>}
-          ListHeaderComponent={
-            leader ? (
-              <View
-                style={{ backgroundColor: c.card, padding: 12, borderRadius: 12, marginBottom: 10 }}
-              >
-                <Text style={{ color: c.text, fontWeight: '800' }}>Suggested choice</Text>
-                <Text style={{ color: c.muted, marginTop: 4 }}>
-                  Based on votes and group match,{' '}
-                  {leader.event?.title ?? `Event #${leader.event_id}`} is leading.
-                </Text>
-                {poll?.is_active ? (
-                  <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
-                    <Pressable
-                      onPress={async () => {
-                        try {
-                          await commitPoll(pollId, leader.event_id);
-                          await load();
-                        } catch (e: any) {
-                          Alert.alert('Commit failed', e.message ?? String(e));
-                        }
-                      }}
-                      style={{
-                        alignSelf: 'flex-start',
-                        backgroundColor: c.primary,
-                        paddingVertical: 6,
-                        paddingHorizontal: 10,
-                        borderRadius: 8,
-                      }}
-                    >
-                      <Text style={{ color: c.text, fontWeight: '700' }}>Commit to this</Text>
-                    </Pressable>
-                    <Pressable
-                      onPress={onClose}
-                      style={{
-                        alignSelf: 'flex-start',
+                        height: 8,
                         backgroundColor: c.background,
-                        paddingVertical: 6,
-                        paddingHorizontal: 10,
-                        borderRadius: 8,
+                        borderRadius: 6,
+                        marginTop: 8,
+                        overflow: 'hidden',
                       }}
                     >
-                      <Text style={{ color: c.text, fontWeight: '700' }}>Close poll</Text>
-                    </Pressable>
+                      <View
+                        style={{
+                          width: `${pct}%`,
+                          backgroundColor: isMine ? c.primary : c.accent,
+                          flex: 1,
+                        }}
+                      />
+                    </View>
+                  )}
+                  <View
+                    style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 }}
+                  >
+                    {poll?.mode === 'rating' ? (
+                      <>
+                        <Text style={{ color: c.muted }}>
+                          Love {item.love_it ?? 0} • Fine {item.fine ?? 0} • Not{' '}
+                          {item.not_for_me ?? 0}
+                        </Text>
+                        {item.event?.rsvp_url ? (
+                          <Pressable
+                            onPress={() => {
+                              if (item.event?.rsvp_url) Linking.openURL(item.event.rsvp_url);
+                            }}
+                            style={{
+                              paddingVertical: 4,
+                              paddingHorizontal: 8,
+                              backgroundColor: c.background,
+                              borderRadius: 8,
+                            }}
+                          >
+                            <Text style={{ color: c.text }}>RSVP</Text>
+                          </Pressable>
+                        ) : null}
+                      </>
+                    ) : (
+                      <>
+                        <Text style={{ color: c.muted }}>{count} votes</Text>
+                        <Text style={{ color: c.muted }}>{pct}%</Text>
+                      </>
+                    )}
                   </View>
-                ) : null}
-              </View>
-            ) : null
-          }
-        />
-      )}
+                </Pressable>
+              );
+            }}
+            ListEmptyComponent={<Text style={{ color: c.muted, marginTop: 20 }}>No options.</Text>}
+            ListHeaderComponent={
+              leader ? (
+                <View
+                  style={{
+                    backgroundColor: c.card,
+                    padding: 12,
+                    borderRadius: 12,
+                    marginBottom: 10,
+                  }}
+                >
+                  <Text style={{ color: c.text, fontWeight: '800' }}>Suggested choice</Text>
+                  <Text style={{ color: c.muted, marginTop: 4 }}>
+                    Based on votes and group match,{' '}
+                    {leader.event?.title ?? `Event #${leader.event_id}`} is leading.
+                  </Text>
+                  {poll?.is_active ? (
+                    <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                      <Pressable
+                        onPress={async () => {
+                          try {
+                            await commitPoll(pollId, leader.event_id);
+                            await load();
+                          } catch (e: any) {
+                            Alert.alert('Commit failed', e.message ?? String(e));
+                          }
+                        }}
+                        style={{
+                          alignSelf: 'flex-start',
+                          backgroundColor: c.primary,
+                          paddingVertical: 6,
+                          paddingHorizontal: 10,
+                          borderRadius: 8,
+                        }}
+                      >
+                        <Text style={{ color: c.text, fontWeight: '700' }}>Commit to this</Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={onClose}
+                        style={{
+                          alignSelf: 'flex-start',
+                          backgroundColor: c.background,
+                          paddingVertical: 6,
+                          paddingHorizontal: 10,
+                          borderRadius: 8,
+                        }}
+                      >
+                        <Text style={{ color: c.text, fontWeight: '700' }}>Close poll</Text>
+                      </Pressable>
+                    </View>
+                  ) : null}
+                </View>
+              ) : null
+            }
+          />
+        )}
 
-      {/* Post-commit actions */}
-      {isCommitted && finalEvent ? (
-        <View style={{ backgroundColor: c.card, padding: 12, borderRadius: 12, marginTop: 12 }}>
-          <Text style={{ color: c.text, fontWeight: '800' }}>We’re on!</Text>
-          <Text style={{ color: c.muted, marginTop: 4 }}>
-            {finalEvent.title} at{' '}
-            {finalEvent.date_time ? new Date(finalEvent.date_time).toLocaleString() : ''}
-          </Text>
-          <View style={{ flexDirection: 'row', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
-            <Pressable
-              onPress={() =>
-                toggleCommitment(pollId)
-                  .then(load)
-                  .catch((e: any) => Alert.alert('Error', e.message ?? String(e)))
-              }
-              style={{
-                backgroundColor: c.primary,
-                paddingVertical: 6,
-                paddingHorizontal: 10,
-                borderRadius: 8,
-              }}
-            >
-              <Text style={{ color: c.text, fontWeight: '700' }}>
-                👍 I’m coming ({commitments?.length ?? 0})
-              </Text>
-            </Pressable>
-            {finalEvent.rsvp_url ? (
+        {/* Post-commit actions */}
+        {isCommitted && finalEvent ? (
+          <View style={{ backgroundColor: c.card, padding: 12, borderRadius: 12, marginTop: 12 }}>
+            <Text style={{ color: c.text, fontWeight: '800' }}>We’re on!</Text>
+            <Text style={{ color: c.muted, marginTop: 4 }}>
+              {finalEvent.title} at{' '}
+              {finalEvent.date_time ? new Date(finalEvent.date_time).toLocaleString() : ''}
+            </Text>
+            <View style={{ flexDirection: 'row', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
               <Pressable
-                onPress={() => finalEvent.rsvp_url && Linking.openURL(finalEvent.rsvp_url)}
-                style={{
-                  backgroundColor: c.background,
-                  paddingVertical: 6,
-                  paddingHorizontal: 10,
-                  borderRadius: 8,
-                }}
-              >
-                <Text style={{ color: c.text, fontWeight: '700' }}>Book/RSVP</Text>
-              </Pressable>
-            ) : null}
-            <Pressable
-              onPress={() => Alert.alert('Calendar', 'Add to calendar coming soon')}
-              style={{
-                backgroundColor: c.background,
-                paddingVertical: 6,
-                paddingHorizontal: 10,
-                borderRadius: 8,
-              }}
-            >
-              <Text style={{ color: c.text, fontWeight: '700' }}>Add to Calendar</Text>
-            </Pressable>
-            <Pressable
-              onPress={() =>
-                postStatusUpdate(pollId, 'late_10').catch((e: any) =>
-                  Alert.alert('Error', e.message ?? String(e)),
-                )
-              }
-              style={{
-                backgroundColor: c.background,
-                paddingVertical: 6,
-                paddingHorizontal: 10,
-                borderRadius: 8,
-              }}
-            >
-              <Text style={{ color: c.text, fontWeight: '700' }}>Running 10 min late</Text>
-            </Pressable>
-          </View>
-        </View>
-      ) : null}
-
-      {/* Feedback after event */}
-      {!poll?.is_active && isCommitted ? (
-        <View style={{ backgroundColor: c.card, padding: 12, borderRadius: 12, marginTop: 12 }}>
-          <Text style={{ color: c.text, fontWeight: '800' }}>How was it?</Text>
-          <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
-            {[1, 2, 3, 4, 5].map((r) => (
-              <Pressable
-                key={r}
                 onPress={() =>
-                  submitFeedback(pollId, r)
-                    .then(() => Alert.alert('Thanks!', 'Feedback saved'))
+                  toggleCommitment(pollId)
+                    .then(load)
                     .catch((e: any) => Alert.alert('Error', e.message ?? String(e)))
                 }
                 style={{
+                  backgroundColor: c.primary,
+                  paddingVertical: 6,
+                  paddingHorizontal: 10,
+                  borderRadius: 8,
+                }}
+              >
+                <Text style={{ color: c.text, fontWeight: '700' }}>
+                  👍 I’m coming ({commitments?.length ?? 0})
+                </Text>
+              </Pressable>
+              {finalEvent.rsvp_url ? (
+                <Pressable
+                  onPress={() => finalEvent.rsvp_url && Linking.openURL(finalEvent.rsvp_url)}
+                  style={{
+                    backgroundColor: c.background,
+                    paddingVertical: 6,
+                    paddingHorizontal: 10,
+                    borderRadius: 8,
+                  }}
+                >
+                  <Text style={{ color: c.text, fontWeight: '700' }}>Book/RSVP</Text>
+                </Pressable>
+              ) : null}
+              <Pressable
+                onPress={() => Alert.alert('Calendar', 'Add to calendar coming soon')}
+                style={{
                   backgroundColor: c.background,
                   paddingVertical: 6,
                   paddingHorizontal: 10,
                   borderRadius: 8,
                 }}
               >
-                <Text style={{ color: c.text }}>{r}★</Text>
+                <Text style={{ color: c.text, fontWeight: '700' }}>Add to Calendar</Text>
               </Pressable>
-            ))}
+              <Pressable
+                onPress={() =>
+                  postStatusUpdate(pollId, 'late_10').catch((e: any) =>
+                    Alert.alert('Error', e.message ?? String(e)),
+                  )
+                }
+                style={{
+                  backgroundColor: c.background,
+                  paddingVertical: 6,
+                  paddingHorizontal: 10,
+                  borderRadius: 8,
+                }}
+              >
+                <Text style={{ color: c.text, fontWeight: '700' }}>Running 10 min late</Text>
+              </Pressable>
+            </View>
           </View>
-        </View>
-      ) : null}
-    </View>
+        ) : null}
+
+        {/* Feedback after event */}
+        {!poll?.is_active && isCommitted ? (
+          <View style={{ backgroundColor: c.card, padding: 12, borderRadius: 12, marginTop: 12 }}>
+            <Text style={{ color: c.text, fontWeight: '800' }}>How was it?</Text>
+            <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+              {[1, 2, 3, 4, 5].map((r) => (
+                <Pressable
+                  key={r}
+                  onPress={() =>
+                    submitFeedback(pollId, r)
+                      .then(() => Alert.alert('Thanks!', 'Feedback saved'))
+                      .catch((e: any) => Alert.alert('Error', e.message ?? String(e)))
+                  }
+                  style={{
+                    backgroundColor: c.background,
+                    paddingVertical: 6,
+                    paddingHorizontal: 10,
+                    borderRadius: 8,
+                  }}
+                >
+                  <Text style={{ color: c.text }}>{r}★</Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        ) : null}
+      </View>
+    </GradientBackground>
   );
 }

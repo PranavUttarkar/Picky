@@ -1,6 +1,8 @@
 import { View, Text, Pressable, FlatList, Alert, Platform } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { useThemeColors } from '@/theme/ThemeProvider';
+import GradientBackground from '@/components/GradientBackground';
+import GradientHeader from '@/components/GradientHeader';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/services/supabase';
 import { useLocalSearchParams, router } from 'expo-router';
@@ -124,64 +126,64 @@ export default function GroupFeed() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: c.background, padding: 16 }}>
-      <Text style={{ color: c.text, fontWeight: '800', fontSize: 18 }}>
-        {group?.name ?? 'Group'}
-      </Text>
-      {group?.invite_code ? (
-        <View
-          style={{
-            marginTop: 8,
-            marginBottom: 12,
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 12,
-          }}
-        >
-          <Text style={{ color: c.muted }}>Invite code:</Text>
-          <Text style={{ color: c.text, letterSpacing: 2 }}>{group.invite_code}</Text>
-          <View style={{ flex: 1 }} />
-          <Pressable onPress={onCopy}>
-            <Text style={{ color: c.text, fontWeight: '700' }}>Copy</Text>
-          </Pressable>
-          <Pressable onPress={onRegenerate}>
-            <Text style={{ color: c.primary, fontWeight: '700' }}>Regenerate</Text>
-          </Pressable>
-        </View>
-      ) : null}
-
-      <Pressable
-        onPress={() => router.push(`/(tabs)/polls/new?groupId=${groupId}`)}
-        style={{ backgroundColor: c.card, padding: 12, borderRadius: 12, marginBottom: 12 }}
-      >
-        <Text style={{ color: c.text, fontWeight: '700' }}>New Poll</Text>
-      </Pressable>
-
-      <FlatList
-        data={polls}
-        keyExtractor={(p) => String(p.id)}
-        renderItem={({ item }) => (
-          <Pressable
-            onPress={() => router.push(`/(tabs)/polls/${item.id}`)}
-            style={{ backgroundColor: c.card, padding: 12, borderRadius: 12, marginBottom: 8 }}
+    <GradientBackground variant="dim">
+      <View style={{ flex: 1, padding: 16 }}>
+        <GradientHeader title={group?.name ?? 'Group'} />
+        {group?.invite_code ? (
+          <View
+            style={{
+              marginTop: 8,
+              marginBottom: 12,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 12,
+            }}
           >
-            <Text style={{ color: c.text, fontWeight: '800' }}>
-              {item.title || `Poll #${item.id}`} {item.is_active ? '' : '(Closed)'}
-            </Text>
-            <Text style={{ color: c.muted, marginTop: 4 }}>
-              {item.deadline_at
-                ? `Due ${new Date(item.deadline_at).toLocaleString()}`
-                : `Created ${new Date(item.created_at).toLocaleString()}`}
-            </Text>
-            {item.final_event_id ? (
-              <Text style={{ color: c.muted, marginTop: 4 }}>
-                Committed: Event #{item.final_event_id}
+            <Text style={{ color: c.muted }}>Invite code:</Text>
+            <Text style={{ color: c.text, letterSpacing: 2 }}>{group.invite_code}</Text>
+            <View style={{ flex: 1 }} />
+            <Pressable onPress={onCopy}>
+              <Text style={{ color: c.text, fontWeight: '700' }}>Copy</Text>
+            </Pressable>
+            <Pressable onPress={onRegenerate}>
+              <Text style={{ color: c.primary, fontWeight: '700' }}>Regenerate</Text>
+            </Pressable>
+          </View>
+        ) : null}
+
+        <Pressable
+          onPress={() => router.push(`/(tabs)/polls/new?groupId=${groupId}`)}
+          style={{ backgroundColor: c.card, padding: 12, borderRadius: 12, marginBottom: 12 }}
+        >
+          <Text style={{ color: c.text, fontWeight: '700' }}>New Poll</Text>
+        </Pressable>
+
+        <FlatList
+          data={polls}
+          keyExtractor={(p) => String(p.id)}
+          renderItem={({ item }) => (
+            <Pressable
+              onPress={() => router.push(`/(tabs)/polls/${item.id}`)}
+              style={{ backgroundColor: c.card, padding: 12, borderRadius: 12, marginBottom: 8 }}
+            >
+              <Text style={{ color: c.text, fontWeight: '800' }}>
+                {item.title || `Poll #${item.id}`} {item.is_active ? '' : '(Closed)'}
               </Text>
-            ) : null}
-          </Pressable>
-        )}
-        ListEmptyComponent={<Text style={{ color: c.muted }}>No polls yet.</Text>}
-      />
-    </View>
+              <Text style={{ color: c.muted, marginTop: 4 }}>
+                {item.deadline_at
+                  ? `Due ${new Date(item.deadline_at).toLocaleString()}`
+                  : `Created ${new Date(item.created_at).toLocaleString()}`}
+              </Text>
+              {item.final_event_id ? (
+                <Text style={{ color: c.muted, marginTop: 4 }}>
+                  Committed: Event #{item.final_event_id}
+                </Text>
+              ) : null}
+            </Pressable>
+          )}
+          ListEmptyComponent={<Text style={{ color: c.muted }}>No polls yet.</Text>}
+        />
+      </View>
+    </GradientBackground>
   );
 }
