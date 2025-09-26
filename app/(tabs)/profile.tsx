@@ -151,6 +151,21 @@ export default function Profile() {
           {email ? (
             <Text style={{ color: c.muted, marginBottom: 12 }}>Signed in as {email}</Text>
           ) : null}
+          {/* Link to Saved events now lives here */}
+          <Pressable
+            onPress={() => router.push('/(tabs)/saved')}
+            style={{
+              backgroundColor: c.card,
+              padding: 12,
+              borderRadius: 12,
+              alignItems: 'center',
+              marginBottom: 12,
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Open saved events"
+          >
+            <Text style={{ color: c.text, fontWeight: '700' }}>Saved events</Text>
+          </Pressable>
           <Pressable
             onPress={() => supabase.auth.signOut()}
             style={{

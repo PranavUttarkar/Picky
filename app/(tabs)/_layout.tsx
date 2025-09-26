@@ -74,10 +74,10 @@ export default function TabsLayout() {
   return (
     <Tabs screenOptions={screenOptions}>
       <Tabs.Screen
-        name="home"
+        name="events"
         options={{
           title: '',
-          tabBarIcon: ({ color, size }) => <Ionicons name="home" size={size} color={color} />,
+          tabBarIcon: ({ color, size }) => <Ionicons name="calendar" size={size} color={color} />,
         }}
       />
       <Tabs.Screen
@@ -90,13 +90,8 @@ export default function TabsLayout() {
       <Tabs.Screen name="groups/[id]" options={{ href: null }} />
       <Tabs.Screen name="polls/[id]" options={{ href: null }} />
       <Tabs.Screen name="polls/new" options={{ href: null }} />
-      <Tabs.Screen
-        name="saved"
-        options={{
-          title: '',
-          tabBarIcon: ({ color, size }) => <Ionicons name="bookmark" size={size} color={color} />,
-        }}
-      />
+      <Tabs.Screen name="saved" options={{ href: null }} />
+
       <Tabs.Screen
         name="profile"
         options={{
