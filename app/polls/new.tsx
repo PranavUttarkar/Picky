@@ -45,12 +45,16 @@ export default function NewPoll() {
   const [creating, setCreating] = useState(false);
   const [title, setTitle] = useState('');
   const [deadlineDate, setDeadlineDate] = useState<Date | null>(null);
-  const [showDatePicker, setShowDatePicker] = useState<null | 'date' | 'time'>(null);
+  // Admin manage events style deadline pickers
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [dateInput, setDateInput] = useState('');
+  const [timeInput, setTimeInput] = useState('');
   const [mode, setMode] = useState<'single' | 'rating'>('single');
 
   useEffect(() => {
     let mounted = true;
-    (async () => {
+    const run = async () => {
       const user = (await supabase.auth.getUser()).data.user;
       if (!user) {
         router.replace('/onboarding/welcome');
@@ -76,7 +80,8 @@ export default function NewPoll() {
         const eid = Number(params.eventId);
         if (!Number.isNaN(eid)) setSelected(new Set([eid]));
       }
-    })();
+    };
+    run();
     return () => {
       mounted = false;
     };
@@ -197,77 +202,7 @@ export default function NewPoll() {
           />
         </View>
 
-        {/* Optional deadline */}
-        <Text style={{ color: c.muted, marginBottom: 6 }}>Deadline (optional)</Text>
-        <View style={{ backgroundColor: c.card, borderRadius: 10, padding: 10, marginBottom: 12 }}>
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            <Pressable
-              onPress={() => setShowDatePicker('date')}
-              style={{
-                paddingVertical: 8,
-                paddingHorizontal: 12,
-                borderRadius: 8,
-                backgroundColor: c.background,
-              }}
-            >
-              <Text style={{ color: c.text }}>Pick date</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => setShowDatePicker('time')}
-              style={{
-                paddingVertical: 8,
-                paddingHorizontal: 12,
-                borderRadius: 8,
-                backgroundColor: c.background,
-              }}
-            >
-              <Text style={{ color: c.text }}>Pick time</Text>
-            </Pressable>
-            {deadlineDate ? (
-              <Pressable
-                onPress={() => setDeadlineDate(null)}
-                style={{
-                  paddingVertical: 8,
-                  paddingHorizontal: 12,
-                  borderRadius: 8,
-                  backgroundColor: c.background,
-                }}
-              >
-                <Text style={{ color: c.text }}>Clear</Text>
-              </Pressable>
-            ) : null}
-          </View>
-          <Text style={{ color: c.muted, marginTop: 8 }}>
-            {deadlineDate
-              ? dayjs(deadlineDate).format('ddd, MMM D YYYY • h:mm A')
-              : 'No deadline set'}
-          </Text>
-        </View>
-        {showDatePicker && (
-          <DateTimePicker
-            value={deadlineDate ?? new Date()}
-            mode={showDatePicker}
-            onChange={(e, selectedDate) => {
-              if (Platform.OS !== 'ios') setShowDatePicker(null);
-              if (selectedDate) {
-                if (!deadlineDate) {
-                  setDeadlineDate(selectedDate);
-                } else {
-                  // Merge date/time parts depending on picker
-                  const curr = new Date(deadlineDate);
-                  const s = new Date(selectedDate);
-                  if (showDatePicker === 'date') {
-                    curr.setFullYear(s.getFullYear(), s.getMonth(), s.getDate());
-                  } else {
-                    curr.setHours(s.getHours(), s.getMinutes(), 0, 0);
-                  }
-                  setDeadlineDate(new Date(curr));
-                }
-              }
-            }}
-            display={Platform.select({ ios: 'inline', default: 'default' }) as any}
-          />
-        )}
+        {/* Deadline removed temporarily for parsing debug */}
 
         {/* Poll mode */}
         <Text style={{ color: c.muted, marginBottom: 6 }}>Vote Mode</Text>
@@ -335,7 +270,7 @@ export default function NewPoll() {
             {fallbackUpcoming === null ? (
               <Text style={{ color: c.muted }}>Loading…</Text>
             ) : fallbackUpcoming?.length ? (
-              fallbackUpcoming.map((item: any) => {
+              fallbackUpcoming?.map((item: any) => {
                 const sel = selected.has(item.id);
                 return (
                   <Pressable

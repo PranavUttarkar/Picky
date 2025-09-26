@@ -10,6 +10,7 @@ import GradientHeader from '@/components/GradientHeader';
 import Chip from '@/components/Chip';
 import { supabase } from '@/services/supabase';
 import { router } from 'expo-router';
+import { shareEvent } from '@/utils/share';
 import type { Event } from '@/types/models';
 
 export default function EventDetails() {
@@ -69,6 +70,7 @@ export default function EventDetails() {
             title={event.title}
             onBack={() => router.replace('/(tabs)/home')}
             backLabel="Back to home"
+            shareUrl={'https://usepicky.app'}
           />
           <Text style={{ color: c.muted, marginTop: 4 }}>
             {dayjs(event.date_time).format('ddd, MMM D • h:mm A')} • {event.location}
@@ -79,7 +81,7 @@ export default function EventDetails() {
             ))}
           </View>
           <Text style={{ color: c.text, marginTop: 12 }}>{event.description}</Text>
-          <View style={{ flexDirection: 'row', gap: 8, marginTop: 16 }}>
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
             <Pressable
               onPress={addToCalendar}
               style={{
@@ -89,6 +91,12 @@ export default function EventDetails() {
               }}
             >
               <Text style={{ color: '#000', fontWeight: '700' }}>Add to calendar</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => event && shareEvent({ id: event.id, title: event.title })}
+              style={{ backgroundColor: '#00000030', padding: 12, borderRadius: 12 }}
+            >
+              <Text style={{ color: c.text, fontWeight: '700' }}>Share</Text>
             </Pressable>
             {event.rsvp_url ? (
               <Pressable

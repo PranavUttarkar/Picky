@@ -219,6 +219,7 @@ export default function PollDetails() {
         <GradientHeader
           title={poll?.title || `Poll #${pollId}`}
           subtitle={poll?.is_active ? 'Open' : 'Closed'}
+          shareUrl={'https://usepicky.app'}
           onBack={() => {
             const gid = poll?.group_id;
             if (gid) router.replace(`/(tabs)/groups/${gid}`);
@@ -507,7 +508,9 @@ export default function PollDetails() {
                         }}
                         accessibilityLabel={`Not for me ${item.not_for_me ?? 0}`}
                       >
-                        <Text style={{ color: c.text, fontSize: 12 }}>🙅 {item.not_for_me ?? 0}</Text>
+                        <Text style={{ color: c.text, fontSize: 12 }}>
+                          🙅 {item.not_for_me ?? 0}
+                        </Text>
                       </Pressable>
                     </View>
                   ) : (

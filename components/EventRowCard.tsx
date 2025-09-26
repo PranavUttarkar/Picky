@@ -8,6 +8,7 @@ import LazyImage from '@/components/LazyImage';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import type { Event } from '@/types/models';
+import { shareEvent } from '@/utils/share';
 
 export interface EventRowCardProps {
   event: Event;
@@ -125,6 +126,13 @@ export const EventRowCard: React.FC<EventRowCardProps> = memo(
                 style={{ padding: 4 }}
               >
                 <Ionicons name="expand-outline" size={18} color={c.text} />
+              </Pressable>
+              <Pressable
+                onPress={() => shareEvent(event)}
+                accessibilityLabel="Share event"
+                style={{ padding: 4 }}
+              >
+                <Ionicons name="share-social-outline" size={18} color={c.text} />
               </Pressable>
               <Pressable
                 onPress={() => onToggleSave(event.id)}
