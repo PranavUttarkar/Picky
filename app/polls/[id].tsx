@@ -23,6 +23,7 @@ import { optimisticUpdate } from '@/utils/optimistic';
 import { getTopGroupMatches, getTopUserMatches } from '@/services/events';
 import SwipeDeck from '@/components/SwipeDeck';
 import * as Haptics from 'expo-haptics';
+import EventRowCard from '@/components/EventRowCard';
 
 export default function PollDetails() {
   const c = useThemeColors();
@@ -41,6 +42,8 @@ export default function PollDetails() {
   const [finalEvent, setFinalEvent] = useState<any | undefined>(undefined);
   const [adding, setAdding] = useState(false);
   const [suggested, setSuggested] = useState<any[] | null>(null);
+  const [suggestSelected, setSuggestSelected] = useState<Set<number>>(new Set());
+  const [addingMany, setAddingMany] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
@@ -130,6 +133,7 @@ export default function PollDetails() {
           ? getTopGroupMatches(poll.group_id, 3)
           : getTopUserMatches(3));
         setSuggested(evs);
+        setSuggestSelected(new Set());
       } catch {
         setSuggested([]);
       }
@@ -402,48 +406,19 @@ export default function PollDetails() {
         {mode === 'list' ? (
           options.length === 1 && poll?.mode !== 'rating' ? (
             <View style={{ marginTop: 20 }}>
-              <Pressable
-                onPress={() => router.push(`/events/${options[0].event_id}`)}
-                style={{ backgroundColor: c.card, padding: 12, borderRadius: 12 }}
-              >
-                {options[0].event?.image_url ? (
-                  <Image
-                    source={{ uri: options[0].event.image_url }}
-                    style={{ width: '100%', height: 160, borderRadius: 10, marginBottom: 8 }}
-                  />
-                ) : null}
-                <Text style={{ color: c.text, fontWeight: '700' }}>
-                  {options[0].event?.title ?? `Event #${options[0].event_id}`}
-                </Text>
-                <Text style={{ color: c.muted, marginTop: 4 }}>
-                  {options[0].event?.date_time
-                    ? new Date(options[0].event.date_time).toLocaleString()
-                    : ''}
-                  {options[0].event?.location ? ` • ${options[0].event.location}` : ''}
-                </Text>
-                {options[0].match_percent != null ? (
-                  <Text style={{ color: c.muted, marginTop: 4 }}>
-                    {options[0].match_percent}% group match
-                  </Text>
-                ) : null}
-                {options[0].event?.rsvp_url ? (
-                  <Pressable
-                    onPress={() => {
-                      if (options[0].event?.rsvp_url) Linking.openURL(options[0].event.rsvp_url);
-                    }}
-                    style={{
-                      alignSelf: 'flex-start',
-                      backgroundColor: c.background,
-                      paddingVertical: 6,
-                      paddingHorizontal: 10,
-                      borderRadius: 8,
-                      marginTop: 8,
-                    }}
-                  >
-                    <Text style={{ color: c.text }}>Open RSVP</Text>
-                  </Pressable>
-                ) : null}
-              </Pressable>
+              <EventRowCard
+                event={
+                  (options[0].event ?? {
+                    id: options[0].event_id,
+                    title: `Event #${options[0].event_id}`,
+                    date_time: new Date().toISOString(),
+                  }) as any
+                }
+                isSaved={false}
+                onToggleSave={() => {}}
+                onOpenDetails={() => router.push(`/events/${options[0].event_id}`)}
+                matchPercent={options[0].match_percent}
+              />
               <Text style={{ color: c.text, fontWeight: '700', marginBottom: 12, marginTop: 12 }}>
                 Do you want to attend?
               </Text>
@@ -521,31 +496,12 @@ export default function PollDetails() {
                 const isMine = myVote === item.event_id;
                 const isLeader = leader && leader.event_id === item.event_id;
                 return (
-                  <Pressable
-                    onPress={() => {
-                      if (poll?.mode !== 'rating') onVote(item.event_id);
-                    }}
-                    disabled={poll?.mode !== 'rating' ? !poll?.is_active : true}
-                    style={{
-                      backgroundColor: c.card,
-                      borderRadius: 12,
-                      padding: 10, // reduced padding
-                      marginBottom: 8, // tighter spacing
-                      borderWidth: isLeader ? 2 : 1,
-                      borderColor: isLeader ? c.primary : c.background,
-                      shadowColor: isLeader ? c.primary : '#000',
-                      shadowOpacity: isLeader ? 0.4 : 0.15,
-                      shadowRadius: isLeader ? 8 : 4,
-                      shadowOffset: { width: 0, height: 2 },
-                      position: 'relative',
-                    }}
-                  >
+                  <View style={{ marginBottom: 10 }}>
+                    {/* Leader badge */}
                     {isLeader ? (
                       <View
                         style={{
-                          position: 'absolute',
-                          top: -8,
-                          left: 10,
+                          alignSelf: 'flex-start',
                           backgroundColor: c.primary,
                           paddingHorizontal: 8,
                           paddingVertical: 2,
@@ -553,6 +509,7 @@ export default function PollDetails() {
                           flexDirection: 'row',
                           alignItems: 'center',
                           gap: 4,
+                          marginBottom: 6,
                         }}
                       >
                         <Text style={{ color: c.text, fontSize: 12, fontWeight: '800' }}>
@@ -560,24 +517,19 @@ export default function PollDetails() {
                         </Text>
                       </View>
                     ) : null}
-                    {item.event?.image_url ? (
-                      <Image
-                        source={{ uri: item.event.image_url }}
-                        style={{ width: '100%', height: 110, borderRadius: 10, marginBottom: 6 }}
-                      />
-                    ) : null}
-                    <Text style={{ color: c.text, fontWeight: '700', fontSize: 15 }}>
-                      {item.event?.title ?? `Event #${item.event_id}`}
-                    </Text>
-                    <Text style={{ color: c.muted, marginTop: 3, fontSize: 12 }}>
-                      {item.event?.date_time ? new Date(item.event.date_time).toLocaleString() : ''}
-                      {item.event?.location ? ` • ${item.event.location}` : ''}
-                    </Text>
-                    {item.match_percent != null ? (
-                      <Text style={{ color: c.muted, marginTop: 3, fontSize: 12 }}>
-                        {item.match_percent}% group match
-                      </Text>
-                    ) : null}
+                    <EventRowCard
+                      event={
+                        (item.event ?? {
+                          id: item.event_id,
+                          title: `Event #${item.event_id}`,
+                          date_time: new Date().toISOString(),
+                        }) as any
+                      }
+                      isSaved={false}
+                      onToggleSave={() => {}}
+                      onOpenDetails={() => router.push(`/events/${item.event_id}`)}
+                      matchPercent={item.match_percent}
+                    />
                     {poll?.mode === 'rating' ? (
                       <View style={{ flexDirection: 'row', gap: 6, marginTop: 8 }}>
                         <Pressable
@@ -631,37 +583,52 @@ export default function PollDetails() {
                         </Pressable>
                       </View>
                     ) : (
-                      <View
-                        style={{
-                          height: 6,
-                          backgroundColor: c.background,
-                          borderRadius: 6,
-                          marginTop: 6,
-                          overflow: 'hidden',
-                        }}
-                      >
+                      <>
                         <View
                           style={{
-                            width: `${pct}%`,
-                            backgroundColor: isMine ? c.primary : c.accent,
-                            flex: 1,
+                            height: 6,
+                            backgroundColor: c.background,
+                            borderRadius: 6,
+                            marginTop: 6,
+                            overflow: 'hidden',
                           }}
-                        />
-                      </View>
+                        >
+                          <View
+                            style={{
+                              width: `${pct}%`,
+                              backgroundColor: isMine ? c.primary : c.accent,
+                              flex: 1,
+                            }}
+                          />
+                        </View>
+                        <View
+                          style={{
+                            flexDirection: 'row',
+                            justifyContent: 'space-between',
+                            marginTop: 4,
+                          }}
+                        >
+                          <Text style={{ color: c.muted, fontSize: 12 }}>{count} votes</Text>
+                          <Text style={{ color: c.muted, fontSize: 12 }}>{pct}%</Text>
+                        </View>
+                        {poll?.is_active ? (
+                          <Pressable
+                            onPress={() => onVote(item.event_id)}
+                            style={{
+                              alignSelf: 'flex-start',
+                              backgroundColor: c.primary,
+                              paddingVertical: 6,
+                              paddingHorizontal: 10,
+                              borderRadius: 8,
+                              marginTop: 6,
+                            }}
+                          >
+                            <Text style={{ color: c.text, fontWeight: '700' }}>Vote for this</Text>
+                          </Pressable>
+                        ) : null}
+                      </>
                     )}
-                    {poll?.mode === 'rating' ? null : (
-                      <View
-                        style={{
-                          flexDirection: 'row',
-                          justifyContent: 'space-between',
-                          marginTop: 4,
-                        }}
-                      >
-                        <Text style={{ color: c.muted, fontSize: 12 }}>{count} votes</Text>
-                        <Text style={{ color: c.muted, fontSize: 12 }}>{pct}%</Text>
-                      </View>
-                    )}
-                  </Pressable>
+                  </View>
                 );
               }}
               ListEmptyComponent={
@@ -675,39 +642,73 @@ export default function PollDetails() {
                         <Text style={{ color: c.muted }}>Loading suggestions…</Text>
                       ) : suggested?.length ? (
                         <View style={{ gap: 8 }}>
-                          {suggested.map((e) => (
+                          {suggested.map((e) => {
+                            const selected = suggestSelected.has(e.id);
+                            return (
+                              <Pressable
+                                key={e.id}
+                                onPress={() => {
+                                  setSuggestSelected((prev) => {
+                                    const next = new Set(prev);
+                                    if (next.has(e.id)) next.delete(e.id);
+                                    else next.add(e.id);
+                                    return next;
+                                  });
+                                }}
+                                style={{ opacity: addingMany ? 0.6 : 1 }}
+                              >
+                                <EventRowCard
+                                  event={e as any}
+                                  isSaved={false}
+                                  onToggleSave={() => {}}
+                                  onOpenDetails={() => router.push(`/events/${e.id}`)}
+                                  matchPercent={e.match_percent}
+                                />
+                                <Text
+                                  style={{
+                                    color: selected ? c.primary : c.muted,
+                                    marginTop: 6,
+                                    marginLeft: 6,
+                                  }}
+                                >
+                                  {selected ? 'Selected' : 'Tap to select'}
+                                </Text>
+                              </Pressable>
+                            );
+                          })}
+                          {suggestSelected.size > 0 ? (
                             <Pressable
-                              key={e.id}
-                              disabled={adding}
                               onPress={async () => {
+                                if (addingMany) return;
                                 try {
-                                  setAdding(true);
-                                  await addPollOption(pollId, e.id);
+                                  setAddingMany(true);
+                                  // Add all selected suggestions
+                                  for (const eid of Array.from(suggestSelected)) {
+                                    await addPollOption(pollId, eid);
+                                  }
+                                  setSuggestSelected(new Set());
                                   await load();
                                 } catch (err: any) {
                                   Alert.alert('Add failed', err.message ?? String(err));
                                 } finally {
-                                  setAdding(false);
+                                  setAddingMany(false);
                                 }
                               }}
                               style={{
-                                backgroundColor: c.card,
-                                padding: 12,
-                                borderRadius: 12,
+                                alignSelf: 'flex-start',
+                                backgroundColor: c.primary,
+                                paddingVertical: 8,
+                                paddingHorizontal: 12,
+                                borderRadius: 10,
+                                marginTop: 8,
+                                opacity: addingMany ? 0.7 : 1,
                               }}
                             >
-                              <Text style={{ color: c.text, fontWeight: '700' }}>{e.title}</Text>
-                              <Text style={{ color: c.muted, marginTop: 4 }}>
-                                {new Date(e.date_time).toLocaleString()} • {e.location}
+                              <Text style={{ color: c.text, fontWeight: '800' }}>
+                                {addingMany ? 'Adding…' : `Add selected (${suggestSelected.size})`}
                               </Text>
-                              {e.match_percent != null ? (
-                                <Text style={{ color: c.muted, marginTop: 4 }}>
-                                  {e.match_percent}% match
-                                </Text>
-                              ) : null}
-                              <Text style={{ color: c.primary, marginTop: 6 }}>Tap to add</Text>
                             </Pressable>
-                          ))}
+                          ) : null}
                         </View>
                       ) : (
                         <Text style={{ color: c.muted }}>
