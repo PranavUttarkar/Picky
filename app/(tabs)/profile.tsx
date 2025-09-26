@@ -11,7 +11,11 @@ export default function Profile() {
   const { scheme } = useTheme();
   const [authed, setAuthed] = useState<boolean | null>(null);
   const [email, setEmail] = useState<string | null>(null);
+  // Legacy CSV representation kept for backwards compat (used only when loading)
   const [interestsCsv, setInterestsCsv] = useState('');
+  // Normalized tag list state
+  const [tags, setTags] = useState<string[]>([]);
+  const [newTagInput, setNewTagInput] = useState('');
   const [loadingInterests, setLoadingInterests] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
@@ -31,8 +35,9 @@ export default function Profile() {
           .select('names')
           .eq('user_id', user.id)
           .maybeSingle();
-        const names: string[] = (data?.names as any) ?? [];
+        const names: string[] = ((data?.names as any) ?? []).map((n: string) => n.toLowerCase());
         setInterestsCsv(names.join(', '));
+        setTags(names);
         setLoadingInterests(false);
       }
     })();
@@ -47,8 +52,9 @@ export default function Profile() {
             .select('names')
             .eq('user_id', sess.user!.id)
             .maybeSingle();
-          const names: string[] = (data?.names as any) ?? [];
+          const names: string[] = ((data?.names as any) ?? []).map((n: string) => n.toLowerCase());
           setInterestsCsv(names.join(', '));
+          setTags(names);
           setLoadingInterests(false);
         })();
       } else {
@@ -66,14 +72,33 @@ export default function Profile() {
     </GradientBackground>
   );
 
-  const parsedInterests = useCallback((): string[] => {
-    return interestsCsv
-      .split(/[,\n]/)
-      .map((s) => s.trim())
-      .filter(Boolean)
-      .filter((v, i, a) => a.indexOf(v) === i)
-      .slice(0, 24); // safety cap
-  }, [interestsCsv]);
+  // Ensure tag list uniqueness & cap
+  const normalized = useCallback(
+    (items: string[]) =>
+      items
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean)
+        .filter((v, i, a) => a.indexOf(v) === i)
+        .slice(0, 24),
+    [],
+  );
+
+  const addTagsFromInput = useCallback(
+    (raw: string) => {
+      if (!raw) return;
+      const split = raw
+        .split(/[\n,]/)
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean);
+      if (!split.length) return;
+      setTags((prev) => normalized([...prev, ...split]));
+    },
+    [normalized],
+  );
+
+  const removeTag = useCallback((t: string) => {
+    setTags((prev) => prev.filter((x) => x !== t));
+  }, []);
 
   const saveInterests = useCallback(async () => {
     const user = (await supabase.auth.getUser()).data.user;
@@ -81,7 +106,7 @@ export default function Profile() {
       router.push('/onboarding/welcome');
       return;
     }
-    const arr = parsedInterests();
+    const arr = normalized(tags);
     if (arr.length < 1) {
       setSaveMsg('Add at least 1 interest (comma separated).');
       return;
@@ -97,7 +122,7 @@ export default function Profile() {
       setSaveMsg(`Saved ${arr.length} interest${arr.length === 1 ? '' : 's'}.`);
     }
     setSaving(false);
-  }, [parsedInterests, interestsCsv]);
+  }, [normalized, tags]);
 
   return (
     <Container>
@@ -139,14 +164,14 @@ export default function Profile() {
           >
             <Text style={{ color: '#000', fontWeight: '700' }}>Sign out</Text>
           </Pressable>
-          {/* Interests CSV Editor */}
+          {/* Interests Editor (inline tags) */}
           <View style={{ marginTop: 28 }}>
             <Text style={{ color: c.text, fontSize: 18, fontWeight: '700', marginBottom: 6 }}>
               Your interests
             </Text>
             <Text style={{ color: c.muted, fontSize: 12, marginBottom: 8 }}>
-              Edit as a comma separated list (e.g. Music, Food, Tech). Duplicates removed
-              automatically.
+              Add interests separated by commas. Press Enter or type a comma to turn text into a
+              tag. Tap a tagʼs × to remove it. Up to 24.
             </Text>
             {loadingInterests ? (
               <View
@@ -163,38 +188,80 @@ export default function Profile() {
                 <Text style={{ color: c.muted }}>Loading interests…</Text>
               </View>
             ) : (
-              <TextInput
-                value={interestsCsv}
-                onChangeText={setInterestsCsv}
-                placeholder="Add interests separated by commas"
-                placeholderTextColor={c.muted}
-                multiline
-                style={{
-                  minHeight: 80,
-                  backgroundColor: '#00000015',
-                  color: c.text,
-                  borderRadius: 12,
-                  padding: 12,
-                  textAlignVertical: 'top',
-                  fontSize: 14,
-                }}
-              />
-            )}
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 12 }}>
-              {parsedInterests().map((tag) => (
+              <View>
                 <View
-                  key={tag}
                   style={{
-                    paddingHorizontal: 10,
-                    paddingVertical: 4,
-                    backgroundColor: c.primary,
-                    borderRadius: 999,
+                    flexDirection: 'row',
+                    flexWrap: 'wrap',
+                    gap: 6,
+                    marginBottom: 10,
                   }}
                 >
-                  <Text style={{ color: '#000', fontSize: 12, fontWeight: '700' }}>{tag}</Text>
+                  {tags.map((tag) => (
+                    <View
+                      key={tag}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        paddingHorizontal: 10,
+                        paddingVertical: 4,
+                        backgroundColor: c.primary,
+                        borderRadius: 999,
+                        gap: 4,
+                      }}
+                    >
+                      <Text style={{ color: '#000', fontSize: 12, fontWeight: '700' }}>{tag}</Text>
+                      <Pressable
+                        onPress={() => removeTag(tag)}
+                        accessibilityLabel={`Remove ${tag}`}
+                        style={{ paddingHorizontal: 4, paddingVertical: 2 }}
+                      >
+                        <Text style={{ color: '#000', fontWeight: '700' }}>×</Text>
+                      </Pressable>
+                    </View>
+                  ))}
                 </View>
-              ))}
-            </View>
+                <TextInput
+                  value={newTagInput}
+                  onChangeText={(val) => {
+                    // If user typed a comma or newline, commit accumulated input
+                    if (/[\n,]/.test(val)) {
+                      addTagsFromInput(val);
+                      setNewTagInput('');
+                    } else {
+                      setNewTagInput(val);
+                    }
+                  }}
+                  onSubmitEditing={() => {
+                    addTagsFromInput(newTagInput);
+                    setNewTagInput('');
+                  }}
+                  placeholder={tags.length ? 'Add another interest' : 'Add an interest'}
+                  placeholderTextColor={c.muted}
+                  style={{
+                    backgroundColor: '#00000015',
+                    color: c.text,
+                    borderRadius: 12,
+                    padding: 12,
+                    fontSize: 14,
+                  }}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  blurOnSubmit={false}
+                  returnKeyType="done"
+                />
+                {tags.length ? (
+                  <Pressable
+                    onPress={() => setTags([])}
+                    style={{ marginTop: 8, alignSelf: 'flex-start', padding: 4 }}
+                    accessibilityLabel="Clear all interests"
+                  >
+                    <Text style={{ color: c.muted, fontSize: 12 }}>Clear all</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            )}
+
             {saveMsg ? (
               <Text
                 style={{ color: saveMsg.startsWith('Saved') ? c.muted : '#ff6666', marginTop: 8 }}

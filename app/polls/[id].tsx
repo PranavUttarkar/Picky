@@ -403,6 +403,7 @@ export default function PollDetails() {
               const count = item.votes ?? 0;
               const pct = totalVotes === 0 ? 0 : Math.round((count * 100) / totalVotes);
               const isMine = myVote === item.event_id;
+              const isLeader = leader && leader.event_id === item.event_id;
               return (
                 <Pressable
                   onPress={() => {
@@ -412,80 +413,110 @@ export default function PollDetails() {
                   style={{
                     backgroundColor: c.card,
                     borderRadius: 12,
-                    padding: 12,
-                    marginBottom: 10,
+                    padding: 10, // reduced padding
+                    marginBottom: 8, // tighter spacing
+                    borderWidth: isLeader ? 2 : 1,
+                    borderColor: isLeader ? c.primary : c.background,
+                    shadowColor: isLeader ? c.primary : '#000',
+                    shadowOpacity: isLeader ? 0.4 : 0.15,
+                    shadowRadius: isLeader ? 8 : 4,
+                    shadowOffset: { width: 0, height: 2 },
+                    position: 'relative',
                   }}
                 >
+                  {isLeader ? (
+                    <View
+                      style={{
+                        position: 'absolute',
+                        top: -8,
+                        left: 10,
+                        backgroundColor: c.primary,
+                        paddingHorizontal: 8,
+                        paddingVertical: 2,
+                        borderRadius: 8,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 4,
+                      }}
+                    >
+                      <Text style={{ color: c.text, fontSize: 12, fontWeight: '800' }}>
+                        👑 Lead
+                      </Text>
+                    </View>
+                  ) : null}
                   {item.event?.image_url ? (
                     <Image
                       source={{ uri: item.event.image_url }}
-                      style={{ width: '100%', height: 140, borderRadius: 10, marginBottom: 8 }}
+                      style={{ width: '100%', height: 110, borderRadius: 10, marginBottom: 6 }}
                     />
                   ) : null}
-                  <Text style={{ color: c.text, fontWeight: '700' }}>
+                  <Text style={{ color: c.text, fontWeight: '700', fontSize: 15 }}>
                     {item.event?.title ?? `Event #${item.event_id}`}
                   </Text>
-                  <Text style={{ color: c.muted, marginTop: 4 }}>
+                  <Text style={{ color: c.muted, marginTop: 3, fontSize: 12 }}>
                     {item.event?.date_time ? new Date(item.event.date_time).toLocaleString() : ''}
                     {item.event?.location ? ` • ${item.event.location}` : ''}
                   </Text>
                   {item.match_percent != null ? (
-                    <Text style={{ color: c.muted, marginTop: 4 }}>
+                    <Text style={{ color: c.muted, marginTop: 3, fontSize: 12 }}>
                       {item.match_percent}% group match
                     </Text>
                   ) : null}
                   {poll?.mode === 'rating' ? (
-                    <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
+                    <View style={{ flexDirection: 'row', gap: 6, marginTop: 8 }}>
                       <Pressable
                         onPress={() => handleRating(item.event_id, 1)}
                         disabled={ratingInFlight.current.has(item.event_id)}
                         style={{
-                          paddingVertical: 6,
-                          paddingHorizontal: 10,
+                          paddingVertical: 4,
+                          paddingHorizontal: 8,
                           borderRadius: 8,
                           opacity: ratingInFlight.current.has(item.event_id) ? 0.6 : 1,
                           backgroundColor:
                             (myRatings?.[item.event_id] ?? 0) === 1 ? c.primary : c.background,
                         }}
+                        accessibilityLabel={`Love it ${item.love_it ?? 0}`}
                       >
-                        <Text style={{ color: c.text }}>Love it ({item.love_it ?? 0})</Text>
+                        <Text style={{ color: c.text, fontSize: 12 }}>❤️ {item.love_it ?? 0}</Text>
                       </Pressable>
                       <Pressable
                         onPress={() => handleRating(item.event_id, 0)}
                         disabled={ratingInFlight.current.has(item.event_id)}
                         style={{
-                          paddingVertical: 6,
-                          paddingHorizontal: 10,
+                          paddingVertical: 4,
+                          paddingHorizontal: 8,
                           borderRadius: 8,
                           opacity: ratingInFlight.current.has(item.event_id) ? 0.6 : 1,
                           backgroundColor:
                             (myRatings?.[item.event_id] ?? -99) === 0 ? c.primary : c.background,
                         }}
+                        accessibilityLabel={`It's fine ${item.fine ?? 0}`}
                       >
-                        <Text style={{ color: c.text }}>It's fine ({item.fine ?? 0})</Text>
+                        <Text style={{ color: c.text, fontSize: 12 }}>🙂 {item.fine ?? 0}</Text>
                       </Pressable>
                       <Pressable
                         onPress={() => handleRating(item.event_id, -1)}
                         disabled={ratingInFlight.current.has(item.event_id)}
                         style={{
-                          paddingVertical: 6,
-                          paddingHorizontal: 10,
+                          paddingVertical: 4,
+                          paddingHorizontal: 8,
                           borderRadius: 8,
                           opacity: ratingInFlight.current.has(item.event_id) ? 0.6 : 1,
                           backgroundColor:
                             (myRatings?.[item.event_id] ?? 0) === -1 ? c.primary : c.background,
                         }}
+                        accessibilityLabel={`Not for me ${item.not_for_me ?? 0}`}
                       >
-                        <Text style={{ color: c.text }}>Not for me ({item.not_for_me ?? 0})</Text>
+                        <Text style={{ color: c.text, fontSize: 12 }}>🙅 {item.not_for_me ?? 0}</Text>
                       </Pressable>
                     </View>
                   ) : (
                     <View
                       style={{
-                        height: 8,
+                        height: 6,
                         backgroundColor: c.background,
                         borderRadius: 6,
-                        marginTop: 8,
+                        marginTop: 6,
                         overflow: 'hidden',
                       }}
                     >
@@ -498,38 +529,18 @@ export default function PollDetails() {
                       />
                     </View>
                   )}
-                  <View
-                    style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 }}
-                  >
-                    {poll?.mode === 'rating' ? (
-                      <>
-                        <Text style={{ color: c.muted }}>
-                          Love {item.love_it ?? 0} • Fine {item.fine ?? 0} • Not{' '}
-                          {item.not_for_me ?? 0}
-                        </Text>
-                        {item.event?.rsvp_url ? (
-                          <Pressable
-                            onPress={() => {
-                              if (item.event?.rsvp_url) Linking.openURL(item.event.rsvp_url);
-                            }}
-                            style={{
-                              paddingVertical: 4,
-                              paddingHorizontal: 8,
-                              backgroundColor: c.background,
-                              borderRadius: 8,
-                            }}
-                          >
-                            <Text style={{ color: c.text }}>RSVP</Text>
-                          </Pressable>
-                        ) : null}
-                      </>
-                    ) : (
-                      <>
-                        <Text style={{ color: c.muted }}>{count} votes</Text>
-                        <Text style={{ color: c.muted }}>{pct}%</Text>
-                      </>
-                    )}
-                  </View>
+                  {poll?.mode === 'rating' ? null : (
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        justifyContent: 'space-between',
+                        marginTop: 4,
+                      }}
+                    >
+                      <Text style={{ color: c.muted, fontSize: 12 }}>{count} votes</Text>
+                      <Text style={{ color: c.muted, fontSize: 12 }}>{pct}%</Text>
+                    </View>
+                  )}
                 </Pressable>
               );
             }}
@@ -608,12 +619,13 @@ export default function PollDetails() {
                     padding: 12,
                     borderRadius: 12,
                     marginBottom: 10,
+                    borderWidth: 2,
+                    borderColor: c.primary,
                   }}
                 >
-                  <Text style={{ color: c.text, fontWeight: '800' }}>Suggested choice</Text>
+                  <Text style={{ color: c.text, fontWeight: '800' }}>Suggested choice 👑</Text>
                   <Text style={{ color: c.muted, marginTop: 4 }}>
-                    Based on votes and group match,{' '}
-                    {leader.event?.title ?? `Event #${leader.event_id}`} is leading.
+                    This event currently leads. It has a crown badge below.
                   </Text>
                   {poll?.is_active ? (
                     <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>

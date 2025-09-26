@@ -531,6 +531,7 @@ type FiltersScrollableProps = {
   myTags: string[];
   activeTags: string[];
   setActiveTags: React.Dispatch<React.SetStateAction<string[]>>;
+  setMyTags: React.Dispatch<React.SetStateAction<string[]>>;
   allTags: string[];
   query: string;
   setQuery: (v: string) => void;
@@ -543,15 +544,78 @@ const FiltersScrollable = memo(function FiltersScrollable({
   myTags,
   activeTags,
   setActiveTags,
+  setMyTags,
   allTags,
   query,
   setQuery,
   filteredCount,
   mode,
 }: FiltersScrollableProps) {
+  const [editing, setEditing] = useState(false);
+  const [editTags, setEditTags] = useState<string[]>(myTags);
+  const [newTagInput, setNewTagInput] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  // Sync when myTags changes externally (e.g., after profile edit)
+  if (!editing && editTags !== myTags) {
+    // simple reference inequality check; safe to update
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    useEffect(() => {
+      setEditTags(myTags);
+    }, [myTags]);
+  }
+
+  const normalize = (arr: string[]) =>
+    arr
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean)
+      .filter((v, i, a) => a.indexOf(v) === i)
+      .slice(0, 24);
+
+  const commitInput = (raw: string) => {
+    if (!raw) return;
+    const parts = raw
+      .split(/[\n,]/)
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean);
+    if (!parts.length) return;
+    setEditTags((prev) => normalize([...prev, ...parts]));
+  };
+
+  const removeTag = (t: string) => setEditTags((prev) => prev.filter((x) => x !== t));
+
+  const save = async () => {
+    setSaving(true);
+    setMsg(null);
+    const user = (await supabase.auth.getUser()).data.user;
+    if (!user) {
+      router.push('/onboarding/welcome');
+      setSaving(false);
+      return;
+    }
+    const arr = normalize(editTags);
+    if (arr.length < 1) {
+      setMsg('Add at least one interest.');
+      setSaving(false);
+      return;
+    }
+    const { error } = await supabase
+      .from('user_interests_temp')
+      .upsert({ user_id: user.id, names: arr });
+    if (error) {
+      setMsg(error.message);
+    } else {
+      setMyTags(arr);
+      setMsg(`Saved ${arr.length} interest${arr.length === 1 ? '' : 's'}.`);
+      setEditing(false);
+    }
+    setSaving(false);
+  };
+
   return (
     <View style={{ paddingBottom: 12 }}>
-      {myTags.length ? (
+      {myTags.length || editing ? (
         <View
           style={{
             backgroundColor: c.card,
@@ -571,41 +635,163 @@ const FiltersScrollable = memo(function FiltersScrollable({
             }}
           >
             <Text style={{ color: c.text, fontWeight: '800' }}>Your interests</Text>
-            <Pressable
-              onPress={() => router.push('/onboarding/interests')}
-              style={{
-                backgroundColor: '#00000020',
-                paddingHorizontal: 10,
-                paddingVertical: 6,
-                borderRadius: 8,
-              }}
-            >
-              <Text style={{ color: c.text }}>Edit</Text>
-            </Pressable>
-          </View>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-            {myTags.map((t, i) => {
-              const active = activeTags.includes(t);
-              return (
+            <View style={{ flexDirection: 'row', gap: 6 }}>
+              {editing ? (
                 <Pressable
-                  key={`${t}-${i}`}
-                  onPress={() =>
-                    setActiveTags((prev) =>
-                      prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t],
-                    )
-                  }
+                  onPress={() => {
+                    setEditing(false);
+                    setEditTags(myTags);
+                    setMsg(null);
+                  }}
+                  disabled={saving}
                   style={{
-                    backgroundColor: active ? c.primary : '#00000020',
+                    backgroundColor: '#00000030',
                     paddingHorizontal: 10,
                     paddingVertical: 6,
-                    borderRadius: 999,
+                    borderRadius: 8,
                   }}
                 >
-                  <Text style={{ color: active ? '#000' : c.text, fontSize: 12 }}>#{t}</Text>
+                  <Text style={{ color: c.text }}>Cancel</Text>
                 </Pressable>
-              );
-            })}
+              ) : null}
+              <Pressable
+                onPress={() => {
+                  setEditing((v) => !v);
+                  setMsg(null);
+                }}
+                disabled={saving}
+                style={{
+                  backgroundColor: editing ? c.primary : '#00000020',
+                  paddingHorizontal: 10,
+                  paddingVertical: 6,
+                  borderRadius: 8,
+                }}
+              >
+                <Text style={{ color: editing ? '#000' : c.text }}>
+                  {editing ? (saving ? 'Saving…' : 'Editing') : 'Edit'}
+                </Text>
+              </Pressable>
+            </View>
           </View>
+          {editing ? (
+            <View>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+                {editTags.map((t) => (
+                  <View
+                    key={t}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      paddingHorizontal: 10,
+                      paddingVertical: 4,
+                      backgroundColor: c.primary,
+                      borderRadius: 999,
+                      gap: 4,
+                    }}
+                  >
+                    <Text style={{ color: '#000', fontSize: 12, fontWeight: '700' }}>{t}</Text>
+                    <Pressable onPress={() => removeTag(t)} accessibilityLabel={`Remove ${t}`}>
+                      <Text style={{ color: '#000', fontWeight: '700' }}>×</Text>
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
+              <TextInput
+                value={newTagInput}
+                onChangeText={(val) => {
+                  if (/[,\n]/.test(val)) {
+                    commitInput(val);
+                    setNewTagInput('');
+                  } else {
+                    setNewTagInput(val);
+                  }
+                }}
+                onSubmitEditing={() => {
+                  commitInput(newTagInput);
+                  setNewTagInput('');
+                }}
+                placeholder={editTags.length ? 'Add another interest' : 'Add an interest'}
+                placeholderTextColor={c.muted}
+                style={{
+                  backgroundColor: '#00000020',
+                  color: c.text,
+                  borderRadius: 8,
+                  paddingHorizontal: 10,
+                  paddingVertical: 8,
+                  fontSize: 14,
+                }}
+                autoCapitalize="none"
+                autoCorrect={false}
+                returnKeyType="done"
+                blurOnSubmit={false}
+              />
+              <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
+                <Pressable
+                  onPress={save}
+                  disabled={saving}
+                  style={{
+                    backgroundColor: saving ? c.muted : c.primary,
+                    paddingHorizontal: 14,
+                    paddingVertical: 8,
+                    borderRadius: 8,
+                  }}
+                >
+                  <Text style={{ color: '#000', fontWeight: '700' }}>
+                    {saving ? 'Saving…' : 'Save'}
+                  </Text>
+                </Pressable>
+                {editTags.length ? (
+                  <Pressable
+                    onPress={() => setEditTags([])}
+                    disabled={saving}
+                    style={{
+                      backgroundColor: '#00000030',
+                      paddingHorizontal: 14,
+                      paddingVertical: 8,
+                      borderRadius: 8,
+                    }}
+                  >
+                    <Text style={{ color: c.text, fontWeight: '700' }}>Clear</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+              {msg ? (
+                <Text
+                  style={{
+                    marginTop: 6,
+                    color: msg.startsWith('Saved') ? c.muted : '#ff6666',
+                    fontSize: 12,
+                  }}
+                >
+                  {msg}
+                </Text>
+              ) : null}
+            </View>
+          ) : (
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              {myTags.map((t, i) => {
+                const active = activeTags.includes(t);
+                return (
+                  <Pressable
+                    key={`${t}-${i}`}
+                    onPress={() =>
+                      setActiveTags((prev) =>
+                        prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t],
+                      )
+                    }
+                    style={{
+                      backgroundColor: active ? c.primary : '#00000020',
+                      paddingHorizontal: 10,
+                      paddingVertical: 6,
+                      borderRadius: 999,
+                    }}
+                  >
+                    <Text style={{ color: active ? '#000' : c.text, fontSize: 12 }}>#{t}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          )}
         </View>
       ) : null}
 
@@ -819,7 +1005,7 @@ export default function Home() {
         .select('names')
         .eq('user_id', user.id)
         .maybeSingle();
-      setMyTags(data?.names ?? []);
+      setMyTags(((data?.names as any) ?? []).map((t: string) => t.toLowerCase()));
 
       const se = await supabase.from('saved_events').select('event_id').eq('user_id', user.id);
       setSaved((se.data ?? []).map((r: any) => r.event_id));
@@ -880,11 +1066,37 @@ export default function Home() {
     // Prefer server-computed score when available
     const fromServer = scores[eventId];
     if (typeof fromServer === 'number') return fromServer;
-    // Fallback local estimate if RPC not available yet
+    // Optimistic local fallback
     if (!tags || tags.length === 0 || myTags.length === 0) return 0;
-    const overlap = tags.filter((t) => myTags.includes(t)).length;
-    const pct = Math.round((overlap / Math.max(tags.length, myTags.length)) * 100);
-    return Math.max(0, Math.min(100, pct));
+    const uniqueEvent = Array.from(new Set(tags));
+    const uniqueUser = Array.from(new Set(myTags));
+    const e = uniqueEvent.length;
+    const u = uniqueUser.length;
+    if (e === 0 || u === 0) return 0;
+    let inter = 0;
+    for (const t of uniqueEvent) if (uniqueUser.includes(t)) inter++;
+    if (inter === 0) return 0;
+    const coverage = inter / e; // how much of event is covered
+    const affinity = inter / Math.sqrt(e * u); // cosine-like
+    const dice = (2 * inter) / (e + u);
+    const anyMatch = 1; // since inter>0
+    let raw = 0.55 * coverage + 0.25 * affinity + 0.15 * dice + 0.05 * anyMatch; // 0..1 base
+    if (raw < 0.15) raw = 0.15; // optimistic floor for any overlap
+    // Recency boost (client approximation): up to +10% relative if within 14 days
+    const eventObj = events.find((ev: any) => ev.id === eventId);
+    if (eventObj?.date_time) {
+      const dt = dayjs(eventObj.date_time);
+      if (dt.isAfter(dayjs())) {
+        const horizon = 14;
+        const daysAhead = Math.min(horizon, Math.max(0, dt.diff(dayjs(), 'day')));
+        const recency = (horizon - daysAhead) / horizon; // 1 today -> 0 at horizon
+        raw = raw * (0.9 + 0.1 * recency);
+      }
+    }
+    // Square root easing curve to lift low scores and compress very high scores slightly
+    raw = Math.sqrt(Math.max(0, Math.min(1, raw)));
+    const pct = Math.round(raw * 100);
+    return pct;
   };
 
   // Parse query to extract hashtags as tag filters and plain text terms
@@ -981,8 +1193,9 @@ export default function Home() {
       : dayjs().add(1, 'day').toISOString();
     const tags = tagsCsvVal
       .split(',')
-      .map((t) => t.trim())
-      .filter(Boolean);
+      .map((t) => t.trim().toLowerCase())
+      .filter(Boolean)
+      .filter((v, i, a) => a.indexOf(v) === i);
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -1073,7 +1286,7 @@ export default function Home() {
     setFImage3(imgs[2] || '');
     setFDateTime(e.date_time);
     setFLocation(e.location ?? '');
-    setFTagsCsv((e.tags ?? []).join(', '));
+    setFTagsCsv((e.tags ?? []).map((t: string) => t.toLowerCase()).join(', '));
     setFRsvp(e.rsvp_url ?? '');
     // Scroll to top to reveal the admin panel
     listRef.current?.scrollToOffset?.({ offset: 0, animated: true });
@@ -1162,6 +1375,7 @@ export default function Home() {
         myTags={myTags}
         activeTags={activeTags}
         setActiveTags={setActiveTags}
+        setMyTags={setMyTags}
         allTags={allTags}
         query={query}
         setQuery={setQuery}
