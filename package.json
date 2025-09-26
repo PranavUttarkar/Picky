@@ -11,7 +11,8 @@
   "build:web": "expo export --platform web",
   "build": "expo export --platform web",
   "lint": "eslint . --ext .js,.jsx,.ts,.tsx || exit 0",
-  "typecheck": "tsc --noEmit"
+  "typecheck": "tsc --noEmit",
+  "clean": "powershell -NoProfile -Command \"Remove-Item -Recurse -Force .\\node_modules\\.cache -ErrorAction SilentlyContinue; Remove-Item -Recurse -Force .\\.turbo -ErrorAction SilentlyContinue; Remove-Item -Recurse -Force .\\dist -ErrorAction SilentlyContinue; Remove-Item -Recurse -Force .\\build -ErrorAction SilentlyContinue; Get-ChildItem -Recurse -Filter tsconfig.tsbuildinfo | Remove-Item -Force -ErrorAction SilentlyContinue\""
 },
   "dependencies": {
     "@expo-google-fonts/pacifico": "^0.4.1",

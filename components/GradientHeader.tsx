@@ -1,5 +1,14 @@
 import React, { useState } from 'react';
-import { View, Text, ViewStyle, TextStyle, Pressable, Animated, Share, Platform } from 'react-native';
+import {
+  View,
+  Text,
+  ViewStyle,
+  TextStyle,
+  Pressable,
+  Animated,
+  Share,
+  Platform,
+} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useThemeColors } from '@/theme/ThemeProvider';
 import * as Clipboard from 'expo-clipboard';

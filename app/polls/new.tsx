@@ -24,8 +24,7 @@ import {
   getUpcomingEvents,
 } from '@/services/events';
 import type { Event } from '@/types/models';
-import DateTimePicker from '@react-native-community/datetimepicker';
-import dayjs from 'dayjs';
+import PollDeadlinePicker from '@/components/PollDeadlinePicker';
 
 export default function NewPoll() {
   const c = useThemeColors();
@@ -44,12 +43,7 @@ export default function NewPoll() {
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [creating, setCreating] = useState(false);
   const [title, setTitle] = useState('');
-  const [deadlineDate, setDeadlineDate] = useState<Date | null>(null);
-  // Admin manage events style deadline pickers
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [showTimePicker, setShowTimePicker] = useState(false);
-  const [dateInput, setDateInput] = useState('');
-  const [timeInput, setTimeInput] = useState('');
+  const [deadlineAt, setDeadlineAt] = useState<string | null>(null);
   const [mode, setMode] = useState<'single' | 'rating'>('single');
 
   useEffect(() => {
@@ -164,7 +158,7 @@ export default function NewPoll() {
       setCreating(true);
       const pollId = await createPollWithOptions(groupId, ids, {
         title: title?.trim() || null,
-        deadlineAt: deadlineDate ? deadlineDate.toISOString() : null,
+        deadlineAt,
         mode,
       });
       router.replace(`/polls/${pollId}`);
@@ -202,7 +196,8 @@ export default function NewPoll() {
           />
         </View>
 
-        {/* Deadline removed temporarily for parsing debug */}
+        {/* Deadline picker */}
+        <PollDeadlinePicker value={deadlineAt} onChange={setDeadlineAt} colorPalette={c} />
 
         {/* Poll mode */}
         <Text style={{ color: c.muted, marginBottom: 6 }}>Vote Mode</Text>
