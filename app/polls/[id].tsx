@@ -2,7 +2,7 @@ import { View, Text, Pressable, FlatList, Alert, Image, Linking, Modal } from 'r
 import { useThemeColors } from '@/theme/ThemeProvider';
 import GradientBackground from '@/components/GradientBackground';
 import GradientHeader from '@/components/GradientHeader';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { supabase } from '@/services/supabase';
 import { useLocalSearchParams, router } from 'expo-router';
 import {
@@ -19,6 +19,7 @@ import {
   recordNoVote,
   deletePoll,
 } from '@/services/polls';
+import { optimisticUpdate } from '@/utils/optimistic';
 import { getTopGroupMatches, getTopUserMatches } from '@/services/events';
 
 export default function PollDetails() {
@@ -40,6 +41,62 @@ export default function PollDetails() {
   const [suggested, setSuggested] = useState<any[] | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  // Prevent concurrent rating mutations per event
+  const ratingInFlight = useRef<Set<number>>(new Set());
+
+  const handleRating = async (eventId: number, target: -1 | 0 | 1) => {
+    if (poll?.mode !== 'rating' || ratingInFlight.current.has(eventId)) return;
+    ratingInFlight.current.add(eventId);
+    const previous = { myRatings: { ...(myRatings || {}) }, options: [...options] };
+    const prevRating = previous.myRatings[eventId];
+    // Toggle off if the same rating pressed again
+    const nextRating: -1 | 0 | 1 | null = prevRating === target ? null : target;
+    await optimisticUpdate({
+      apply: () => {
+        // Update myRatings optimistically
+        setMyRatings((r) => {
+          const clone = { ...(r || {}) } as Record<number, number>;
+          if (nextRating === null) delete clone[eventId];
+          else clone[eventId] = nextRating;
+          return clone;
+        });
+        // Adjust aggregate counts
+        setOptions((opts) =>
+          opts.map((o) => {
+            if (o.event_id !== eventId) return o;
+            const updated = { ...o };
+            // Decrement previous bucket
+            if (prevRating === 1 && updated.love_it != null)
+              updated.love_it = Math.max(0, (updated.love_it || 0) - 1);
+            if (prevRating === 0 && updated.fine != null)
+              updated.fine = Math.max(0, (updated.fine || 0) - 1);
+            if (prevRating === -1 && updated.not_for_me != null)
+              updated.not_for_me = Math.max(0, (updated.not_for_me || 0) - 1);
+            // Increment new bucket
+            if (nextRating === 1) updated.love_it = (updated.love_it || 0) + 1;
+            if (nextRating === 0) updated.fine = (updated.fine || 0) + 1;
+            if (nextRating === -1) updated.not_for_me = (updated.not_for_me || 0) + 1;
+            return updated;
+          }),
+        );
+        return previous;
+      },
+      rollback: (snap) => {
+        setMyRatings(snap.myRatings);
+        setOptions(snap.options);
+      },
+      mutate: async () => {
+        await castRating(pollId, eventId, nextRating);
+        load().catch(() => {});
+      },
+    })
+      .catch((e) => {
+        Alert.alert('Rate failed', (e as any)?.message ?? String(e));
+      })
+      .finally(() => {
+        ratingInFlight.current.delete(eventId);
+      });
+  };
 
   const load = async () => {
     const {
@@ -105,13 +162,26 @@ export default function PollDetails() {
   const isCommitted = !!finalEvent;
 
   const onVote = async (eventId: number) => {
-    try {
-      if (!poll?.is_active) return;
-      await castVote(pollId, eventId);
-      await load();
-    } catch (e: any) {
-      Alert.alert('Vote failed', e.message ?? String(e));
-    }
+    if (!poll?.is_active) return;
+    const previous = { myVote, options: [...options] };
+    await optimisticUpdate({
+      apply: () => {
+        setMyVote(eventId);
+        setOptions((opts) =>
+          opts.map((o) => (o.event_id === eventId ? { ...o, votes: (o.votes ?? 0) + 1 } : o)),
+        );
+        return previous;
+      },
+      rollback: (snap) => {
+        setMyVote(snap.myVote);
+        setOptions(snap.options);
+      },
+      mutate: async () => {
+        await castVote(pollId, eventId);
+        // Refresh in background (do not block UI)
+        load().catch(() => {});
+      },
+    });
   };
 
   const onClose = async () => {
@@ -367,18 +437,13 @@ export default function PollDetails() {
                   {poll?.mode === 'rating' ? (
                     <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
                       <Pressable
-                        onPress={async () => {
-                          try {
-                            await castRating(pollId, item.event_id, 1);
-                            await load();
-                          } catch (e: any) {
-                            Alert.alert('Rate failed', e.message ?? String(e));
-                          }
-                        }}
+                        onPress={() => handleRating(item.event_id, 1)}
+                        disabled={ratingInFlight.current.has(item.event_id)}
                         style={{
                           paddingVertical: 6,
                           paddingHorizontal: 10,
                           borderRadius: 8,
+                          opacity: ratingInFlight.current.has(item.event_id) ? 0.6 : 1,
                           backgroundColor:
                             (myRatings?.[item.event_id] ?? 0) === 1 ? c.primary : c.background,
                         }}
@@ -386,18 +451,13 @@ export default function PollDetails() {
                         <Text style={{ color: c.text }}>Love it ({item.love_it ?? 0})</Text>
                       </Pressable>
                       <Pressable
-                        onPress={async () => {
-                          try {
-                            await castRating(pollId, item.event_id, 0);
-                            await load();
-                          } catch (e: any) {
-                            Alert.alert('Rate failed', e.message ?? String(e));
-                          }
-                        }}
+                        onPress={() => handleRating(item.event_id, 0)}
+                        disabled={ratingInFlight.current.has(item.event_id)}
                         style={{
                           paddingVertical: 6,
                           paddingHorizontal: 10,
                           borderRadius: 8,
+                          opacity: ratingInFlight.current.has(item.event_id) ? 0.6 : 1,
                           backgroundColor:
                             (myRatings?.[item.event_id] ?? -99) === 0 ? c.primary : c.background,
                         }}
@@ -405,18 +465,13 @@ export default function PollDetails() {
                         <Text style={{ color: c.text }}>It's fine ({item.fine ?? 0})</Text>
                       </Pressable>
                       <Pressable
-                        onPress={async () => {
-                          try {
-                            await castRating(pollId, item.event_id, -1);
-                            await load();
-                          } catch (e: any) {
-                            Alert.alert('Rate failed', e.message ?? String(e));
-                          }
-                        }}
+                        onPress={() => handleRating(item.event_id, -1)}
+                        disabled={ratingInFlight.current.has(item.event_id)}
                         style={{
                           paddingVertical: 6,
                           paddingHorizontal: 10,
                           borderRadius: 8,
+                          opacity: ratingInFlight.current.has(item.event_id) ? 0.6 : 1,
                           backgroundColor:
                             (myRatings?.[item.event_id] ?? 0) === -1 ? c.primary : c.background,
                         }}

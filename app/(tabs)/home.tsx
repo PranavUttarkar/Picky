@@ -28,6 +28,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import Chip from '@/components/Chip';
 import { supabase } from '@/services/supabase';
+import { optimisticUpdate } from '@/utils/optimistic';
 import { sanitizeEventImageUrls } from '@/utils/images';
 import { router } from 'expo-router';
 import type { Event } from '@/types/models';
@@ -848,14 +849,32 @@ export default function Home() {
     const authed = await requireAuth();
     if (!authed) return;
     const user = (await supabase.auth.getUser()).data.user!;
-    if (saved.includes(id)) {
-      await supabase.from('saved_events').delete().eq('user_id', user.id).eq('event_id', id);
-      setSaved((s) => s.filter((x) => x !== id));
-    } else {
-      await supabase.from('saved_events').insert({ user_id: user.id, event_id: id });
-      setSaved((s) => [...s, id]);
-    }
+    const isSaved = saved.includes(id);
+    await optimisticUpdate({
+      apply: () => {
+        const prev = saved;
+        setSaved((s) => (isSaved ? s.filter((x) => x !== id) : [...s, id]));
+        return prev;
+      },
+      rollback: (prev) => setSaved(prev),
+      mutate: async () => {
+        if (isSaved) {
+          const { error } = await supabase
+            .from('saved_events')
+            .delete()
+            .eq('user_id', user.id)
+            .eq('event_id', id);
+          if (error) throw error;
+        } else {
+          const { error } = await supabase
+            .from('saved_events')
+            .insert({ user_id: user.id, event_id: id });
+          if (error) throw error;
+        }
+      },
+    });
   };
+  const savedSet = useMemo(() => new Set(saved), [saved]);
 
   const match = (eventId: number, tags?: string[]) => {
     // Prefer server-computed score when available
@@ -1206,30 +1225,27 @@ export default function Home() {
             />
           </View>
         }
-        renderItem={({ item }) => {
-          const savedState = saved.includes(item.id);
-          return (
-            <EventRowCard
-              event={item}
-              isSaved={savedState}
-              onToggleSave={() => toggleSave(item.id)}
-              onOpenDetails={() => onOpenDetails(item)}
-              onPoll={
-                item.id > 0
-                  ? async () => {
-                      const authed = await requireAuth();
-                      if (!authed) return;
-                      router.push({ pathname: '/polls/new', params: { fromEvent: item.id } });
-                    }
-                  : undefined
-              }
-              onEdit={isAdmin && item.id > 0 ? () => prefillForEdit(item) : undefined}
-              onDelete={isAdmin && item.id > 0 ? () => deleteEvent(item.id) : undefined}
-              isAdmin={isAdmin}
-              matchPercent={match(item.id, item.tags)}
-            />
-          );
-        }}
+        renderItem={({ item }) => (
+          <EventRowCard
+            event={item}
+            isSaved={savedSet.has(item.id)}
+            onToggleSave={toggleSave}
+            onOpenDetails={() => onOpenDetails(item)}
+            onPoll={
+              item.id > 0
+                ? async () => {
+                    const authed = await requireAuth();
+                    if (!authed) return;
+                    router.push({ pathname: '/polls/new', params: { fromEvent: item.id } });
+                  }
+                : undefined
+            }
+            onEdit={isAdmin && item.id > 0 ? () => prefillForEdit(item) : undefined}
+            onDelete={isAdmin && item.id > 0 ? () => deleteEvent(item.id) : undefined}
+            isAdmin={isAdmin}
+            matchPercent={match(item.id, item.tags)}
+          />
+        )}
       />
 
       {/* Event Details Modal */}
