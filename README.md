@@ -196,6 +196,49 @@ Actions preserved: save/unsave, open details, start poll, (admin) edit/delete. F
 
 If you’re looking for how the admin delete confirmation works, see `docs/admin-flows.md`.
 
+## Deployment (Vercel)
+
+This project is configured for a static export of the Expo (web) bundle and deployment on Vercel with client‑side routing handled by `expo-router`.
+
+Key points:
+- We export to a static directory (`dist/`). The `app.config.ts` sets `web.output = 'static'` so `expo export --platform web` writes HTML/JS assets there.
+- `vercel.json` uses `@vercel/static-build` with `distDir: "dist"` and adds a filesystem handler plus a catch‑all route: any non-file path (e.g. `/`, `/(tabs)/home`, `/onboarding/welcome`) falls back to `index.html` so the SPA router can resolve it.
+- Without the `{ "handle": "filesystem" }` entry, all asset requests might also be routed through `index.html`, or if missing the catch‑all, reloading a nested route (like `/home`) would 404 because Vercel would look for a physical folder. The updated config avoids both issues.
+
+### Deploy Steps
+1. Ensure environment variables (Supabase URL and anon key) are configured in Vercel Project Settings using the `EXPO_PUBLIC_*` names.
+2. Commit the updated `vercel.json` and push to the `main` branch (or your deployment branch).
+3. In Vercel, set the Build Command to rely on the package `build` script (auto-detected) or manually specify:
+	```
+	npm run build
+	```
+4. Output directory: leave empty (Vercel reads `distDir` from `vercel.json`).
+5. Trigger a deploy. You should see `expo export --platform web` run, producing `dist/`.
+6. After deployment, test deep links by directly loading URLs like:
+	- `/`
+	- `/(tabs)/home` (internal path that redirects from index)
+	- `/onboarding/welcome`
+	- `/polls/new`
+
+If any path 404s, verify the deployed `vercel.json` in the build output (Project → Deployments → View Source) matches the repo version and that the build actually produced `dist/index.html`.
+
+### Local Production Preview
+To simulate the static export locally:
+```powershell
+npm run build
+```
+Then serve the `dist` folder with any static server (for example using `npx serve dist`) and test reloading nested routes.
+
+### Common Issues
+- 404 on refresh of nested route: missing catch‑all route → ensure `vercel.json` has the routes array with `{ "handle": "filesystem" }` followed by the wildcard mapping.
+- Wrong output folder (empty deploy): make sure `distDir` matches the folder produced by Expo export (`dist`).
+- Stale assets after deploy: Vercel caches aggressively; force a redeploy or append a cache-busting query parameter during testing.
+
+### Custom Domains & HTTPS
+Once verified, attach your custom domain in Vercel. HTTPS is automatic; no extra configuration needed for SPA routing.
+
+---
+
 ## Branding assets (icons/favicons)
 
 Place your branding assets in `assets/branding/`:
