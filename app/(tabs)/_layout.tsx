@@ -74,6 +74,13 @@ export default function TabsLayout() {
   return (
     <Tabs screenOptions={screenOptions}>
       <Tabs.Screen
+        name="home"
+        options={{
+          title: '',
+          tabBarIcon: ({ color, size }) => <Ionicons name="home" size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
         name="events"
         options={{
           title: '',
@@ -90,6 +97,9 @@ export default function TabsLayout() {
       <Tabs.Screen name="groups/[id]" options={{ href: null }} />
       <Tabs.Screen name="polls/[id]" options={{ href: null }} />
       <Tabs.Screen name="polls/new" options={{ href: null }} />
+  {/** decisions under tabs to preserve header/tab bar */}
+  <Tabs.Screen name="decisions/[id]" options={{ href: null }} />
+  <Tabs.Screen name="decisions/new" options={{ href: null }} />
       <Tabs.Screen name="saved" options={{ href: null }} />
 
       <Tabs.Screen

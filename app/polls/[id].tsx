@@ -21,6 +21,8 @@ import {
 } from '@/services/polls';
 import { optimisticUpdate } from '@/utils/optimistic';
 import { getTopGroupMatches, getTopUserMatches } from '@/services/events';
+import SwipeDeck from '@/components/SwipeDeck';
+import * as Haptics from 'expo-haptics';
 
 export default function PollDetails() {
   const c = useThemeColors();
@@ -41,6 +43,8 @@ export default function PollDetails() {
   const [suggested, setSuggested] = useState<any[] | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [showConfetti, setShowConfetti] = useState(false);
+  const [mode, setMode] = useState<'list' | 'swipe'>('swipe');
   // Prevent concurrent rating mutations per event
   const ratingInFlight = useRef<Set<number>>(new Set());
 
@@ -213,6 +217,18 @@ export default function PollDetails() {
     }
   };
 
+  // Confetti when transitioning to committed
+  const prevCommittedRef = useRef<boolean>(false);
+  useEffect(() => {
+    const committed = !!finalEvent;
+    if (committed && !prevCommittedRef.current) {
+      setShowConfetti(true);
+      setTimeout(() => setShowConfetti(false), 2500);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    }
+    prevCommittedRef.current = committed;
+  }, [finalEvent]);
+
   return (
     <GradientBackground variant="dim">
       <View style={{ flex: 1, padding: 16 }}>
@@ -287,389 +303,491 @@ export default function PollDetails() {
           <Text style={{ color: '#ff5555', fontWeight: '700' }}>Delete Poll</Text>
         </Pressable>
 
-        {options.length === 1 && poll?.mode !== 'rating' ? (
-          <View style={{ marginTop: 20 }}>
+        {/* Mode toggle and Swipe deck */}
+        {options.length > 0 ? (
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
             <Pressable
-              onPress={() => router.push(`/events/${options[0].event_id}`)}
-              style={{ backgroundColor: c.card, padding: 12, borderRadius: 12 }}
+              onPress={() => setMode('swipe')}
+              style={{
+                backgroundColor: mode === 'swipe' ? c.primary : c.background,
+                paddingVertical: 6,
+                paddingHorizontal: 10,
+                borderRadius: 8,
+              }}
             >
-              {options[0].event?.image_url ? (
-                <Image
-                  source={{ uri: options[0].event.image_url }}
-                  style={{ width: '100%', height: 160, borderRadius: 10, marginBottom: 8 }}
-                />
-              ) : null}
-              <Text style={{ color: c.text, fontWeight: '700' }}>
-                {options[0].event?.title ?? `Event #${options[0].event_id}`}
-              </Text>
-              <Text style={{ color: c.muted, marginTop: 4 }}>
-                {options[0].event?.date_time
-                  ? new Date(options[0].event.date_time).toLocaleString()
-                  : ''}
-                {options[0].event?.location ? ` • ${options[0].event.location}` : ''}
-              </Text>
-              {options[0].match_percent != null ? (
-                <Text style={{ color: c.muted, marginTop: 4 }}>
-                  {options[0].match_percent}% group match
-                </Text>
-              ) : null}
-              {options[0].event?.rsvp_url ? (
-                <Pressable
-                  onPress={() => {
-                    if (options[0].event?.rsvp_url) Linking.openURL(options[0].event.rsvp_url);
-                  }}
-                  style={{
-                    alignSelf: 'flex-start',
-                    backgroundColor: c.background,
-                    paddingVertical: 6,
-                    paddingHorizontal: 10,
-                    borderRadius: 8,
-                    marginTop: 8,
-                  }}
-                >
-                  <Text style={{ color: c.text }}>Open RSVP</Text>
-                </Pressable>
-              ) : null}
+              <Text style={{ color: c.text, fontWeight: '700' }}>Swipe</Text>
             </Pressable>
-            <Text style={{ color: c.text, fontWeight: '700', marginBottom: 12, marginTop: 12 }}>
-              Do you want to attend?
-            </Text>
-            <View style={{ flexDirection: 'row', gap: 12 }}>
-              <Pressable
-                onPress={() => onVote(options[0].event_id)}
-                disabled={!poll?.is_active}
-                style={{
-                  flex: 1,
-                  backgroundColor: myVote === options[0].event_id ? c.primary : c.card,
-                  padding: 14,
-                  borderRadius: 12,
-                  alignItems: 'center',
-                }}
-              >
-                <Text style={{ color: c.text, fontWeight: '700' }}>Yes</Text>
-              </Pressable>
-              <Pressable
-                onPress={async () => {
-                  if (!poll?.is_active) return;
-                  try {
-                    await recordNoVote(pollId);
-                    await load();
-                    Alert.alert('Recorded', 'You responded No');
-                  } catch (e: any) {
-                    Alert.alert('Update failed', e.message ?? String(e));
-                  }
-                }}
-                disabled={!poll?.is_active}
-                style={{
-                  flex: 1,
-                  backgroundColor: myVote == null ? c.accent : c.background,
-                  padding: 14,
-                  borderRadius: 12,
-                  alignItems: 'center',
-                }}
-              >
-                <Text style={{ color: c.text, fontWeight: '700' }}>No</Text>
-              </Pressable>
-            </View>
-            <View style={{ backgroundColor: c.card, padding: 12, borderRadius: 12, marginTop: 12 }}>
-              <Text style={{ color: c.muted }}>Yes votes: {totalVotes}</Text>
-              <Text style={{ color: c.muted, marginTop: 4 }}>
-                (No responses are counted as participation but not shown in the bar.)
-              </Text>
-              {myVote == null ? (
-                <Pressable
-                  onPress={async () => {
-                    try {
-                      await clearMyVote(pollId);
-                      await load();
-                    } catch (e: any) {
-                      Alert.alert('Update failed', e.message ?? String(e));
-                    }
-                  }}
-                  style={{ marginTop: 8 }}
-                >
-                  <Text style={{ color: c.muted, textDecorationLine: 'underline' }}>
-                    Clear my No response
-                  </Text>
-                </Pressable>
-              ) : null}
-            </View>
+            <Pressable
+              onPress={() => setMode('list')}
+              style={{
+                backgroundColor: mode === 'list' ? c.primary : c.background,
+                paddingVertical: 6,
+                paddingHorizontal: 10,
+                borderRadius: 8,
+              }}
+            >
+              <Text style={{ color: c.text, fontWeight: '700' }}>List</Text>
+            </Pressable>
           </View>
-        ) : (
-          <FlatList
-            style={{ marginTop: 16 }}
-            data={options}
-            keyExtractor={(o) => String(o.event_id)}
-            renderItem={({ item }) => {
-              const count = item.votes ?? 0;
-              const pct = totalVotes === 0 ? 0 : Math.round((count * 100) / totalVotes);
-              const isMine = myVote === item.event_id;
-              const isLeader = leader && leader.event_id === item.event_id;
-              return (
-                <Pressable
-                  onPress={() => {
-                    if (poll?.mode !== 'rating') onVote(item.event_id);
-                  }}
-                  disabled={poll?.mode !== 'rating' ? !poll?.is_active : true}
+        ) : null}
+
+        {mode === 'swipe' && options.length > 0 ? (
+          <View style={{ flex: 1, marginTop: 16 }}>
+            <SwipeDeck
+              data={options}
+              keyExtractor={(o) => String(o.event_id)}
+              renderCard={(item) => (
+                <View
                   style={{
                     backgroundColor: c.card,
-                    borderRadius: 12,
-                    padding: 10, // reduced padding
-                    marginBottom: 8, // tighter spacing
-                    borderWidth: isLeader ? 2 : 1,
-                    borderColor: isLeader ? c.primary : c.background,
-                    shadowColor: isLeader ? c.primary : '#000',
-                    shadowOpacity: isLeader ? 0.4 : 0.15,
-                    shadowRadius: isLeader ? 8 : 4,
-                    shadowOffset: { width: 0, height: 2 },
-                    position: 'relative',
+                    borderRadius: 16,
+                    padding: 12,
+                    width: '100%',
                   }}
                 >
-                  {isLeader ? (
-                    <View
-                      style={{
-                        position: 'absolute',
-                        top: -8,
-                        left: 10,
-                        backgroundColor: c.primary,
-                        paddingHorizontal: 8,
-                        paddingVertical: 2,
-                        borderRadius: 8,
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        gap: 4,
-                      }}
-                    >
-                      <Text style={{ color: c.text, fontSize: 12, fontWeight: '800' }}>
-                        👑 Lead
-                      </Text>
-                    </View>
-                  ) : null}
                   {item.event?.image_url ? (
                     <Image
                       source={{ uri: item.event.image_url }}
-                      style={{ width: '100%', height: 110, borderRadius: 10, marginBottom: 6 }}
+                      style={{ width: '100%', height: 240, borderRadius: 12, marginBottom: 8 }}
                     />
                   ) : null}
-                  <Text style={{ color: c.text, fontWeight: '700', fontSize: 15 }}>
+                  <Text style={{ color: c.text, fontWeight: '800', fontSize: 18 }}>
                     {item.event?.title ?? `Event #${item.event_id}`}
                   </Text>
-                  <Text style={{ color: c.muted, marginTop: 3, fontSize: 12 }}>
+                  <Text style={{ color: c.muted, marginTop: 4 }}>
                     {item.event?.date_time ? new Date(item.event.date_time).toLocaleString() : ''}
                     {item.event?.location ? ` • ${item.event.location}` : ''}
                   </Text>
                   {item.match_percent != null ? (
-                    <Text style={{ color: c.muted, marginTop: 3, fontSize: 12 }}>
-                      {item.match_percent}% group match
+                    <Text style={{ color: c.muted, marginTop: 4 }}>
+                      {item.match_percent}% match for group
                     </Text>
                   ) : null}
-                  {poll?.mode === 'rating' ? (
-                    <View style={{ flexDirection: 'row', gap: 6, marginTop: 8 }}>
-                      <Pressable
-                        onPress={() => handleRating(item.event_id, 1)}
-                        disabled={ratingInFlight.current.has(item.event_id)}
-                        style={{
-                          paddingVertical: 4,
-                          paddingHorizontal: 8,
-                          borderRadius: 8,
-                          opacity: ratingInFlight.current.has(item.event_id) ? 0.6 : 1,
-                          backgroundColor:
-                            (myRatings?.[item.event_id] ?? 0) === 1 ? c.primary : c.background,
-                        }}
-                        accessibilityLabel={`Love it ${item.love_it ?? 0}`}
-                      >
-                        <Text style={{ color: c.text, fontSize: 12 }}>❤️ {item.love_it ?? 0}</Text>
-                      </Pressable>
-                      <Pressable
-                        onPress={() => handleRating(item.event_id, 0)}
-                        disabled={ratingInFlight.current.has(item.event_id)}
-                        style={{
-                          paddingVertical: 4,
-                          paddingHorizontal: 8,
-                          borderRadius: 8,
-                          opacity: ratingInFlight.current.has(item.event_id) ? 0.6 : 1,
-                          backgroundColor:
-                            (myRatings?.[item.event_id] ?? -99) === 0 ? c.primary : c.background,
-                        }}
-                        accessibilityLabel={`It's fine ${item.fine ?? 0}`}
-                      >
-                        <Text style={{ color: c.text, fontSize: 12 }}>🙂 {item.fine ?? 0}</Text>
-                      </Pressable>
-                      <Pressable
-                        onPress={() => handleRating(item.event_id, -1)}
-                        disabled={ratingInFlight.current.has(item.event_id)}
-                        style={{
-                          paddingVertical: 4,
-                          paddingHorizontal: 8,
-                          borderRadius: 8,
-                          opacity: ratingInFlight.current.has(item.event_id) ? 0.6 : 1,
-                          backgroundColor:
-                            (myRatings?.[item.event_id] ?? 0) === -1 ? c.primary : c.background,
-                        }}
-                        accessibilityLabel={`Not for me ${item.not_for_me ?? 0}`}
-                      >
-                        <Text style={{ color: c.text, fontSize: 12 }}>
-                          🙅 {item.not_for_me ?? 0}
-                        </Text>
-                      </Pressable>
-                    </View>
-                  ) : (
-                    <View
-                      style={{
-                        height: 6,
-                        backgroundColor: c.background,
-                        borderRadius: 6,
-                        marginTop: 6,
-                        overflow: 'hidden',
-                      }}
-                    >
-                      <View
-                        style={{
-                          width: `${pct}%`,
-                          backgroundColor: isMine ? c.primary : c.accent,
-                          flex: 1,
-                        }}
-                      />
-                    </View>
-                  )}
-                  {poll?.mode === 'rating' ? null : (
-                    <View
-                      style={{
-                        flexDirection: 'row',
-                        justifyContent: 'space-between',
-                        marginTop: 4,
-                      }}
-                    >
-                      <Text style={{ color: c.muted, fontSize: 12 }}>{count} votes</Text>
-                      <Text style={{ color: c.muted, fontSize: 12 }}>{pct}%</Text>
-                    </View>
-                  )}
-                </Pressable>
-              );
-            }}
-            ListEmptyComponent={
-              <View style={{ marginTop: 20 }}>
-                <Text style={{ color: c.muted, marginBottom: 12 }}>
-                  No options yet. Add some events to get started.
-                </Text>
-                {poll?.is_active ? (
-                  <View>
-                    {suggested === null ? (
-                      <Text style={{ color: c.muted }}>Loading suggestions…</Text>
-                    ) : suggested?.length ? (
-                      <View style={{ gap: 8 }}>
-                        {suggested.map((e) => (
-                          <Pressable
-                            key={e.id}
-                            disabled={adding}
-                            onPress={async () => {
-                              try {
-                                setAdding(true);
-                                await addPollOption(pollId, e.id);
-                                await load();
-                              } catch (err: any) {
-                                Alert.alert('Add failed', err.message ?? String(err));
-                              } finally {
-                                setAdding(false);
-                              }
-                            }}
-                            style={{
-                              backgroundColor: c.card,
-                              padding: 12,
-                              borderRadius: 12,
-                            }}
-                          >
-                            <Text style={{ color: c.text, fontWeight: '700' }}>{e.title}</Text>
-                            <Text style={{ color: c.muted, marginTop: 4 }}>
-                              {new Date(e.date_time).toLocaleString()} • {e.location}
-                            </Text>
-                            {e.match_percent != null ? (
-                              <Text style={{ color: c.muted, marginTop: 4 }}>
-                                {e.match_percent}% match
-                              </Text>
-                            ) : null}
-                            <Text style={{ color: c.primary, marginTop: 6 }}>Tap to add</Text>
-                          </Pressable>
-                        ))}
-                      </View>
-                    ) : (
-                      <Text style={{ color: c.muted }}>
-                        No suggestions. Use the Browse tab to save events.
-                      </Text>
-                    )}
-                    <Pressable
-                      onPress={() => router.push('/(tabs)/home')}
-                      style={{
-                        alignSelf: 'flex-start',
-                        backgroundColor: c.background,
-                        paddingVertical: 8,
-                        paddingHorizontal: 12,
-                        borderRadius: 10,
-                        marginTop: 16,
-                      }}
-                    >
-                      <Text style={{ color: c.text, fontWeight: '700' }}>Browse Events</Text>
-                    </Pressable>
-                  </View>
+                </View>
+              )}
+              onSwipeRight={async (item) => {
+                // Like
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+                if (poll?.mode === 'rating') {
+                  await handleRating(item.event_id, 1);
+                } else {
+                  await onVote(item.event_id);
+                }
+              }}
+              onSwipeLeft={async (item) => {
+                // Nope
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                if (poll?.mode === 'rating') {
+                  await handleRating(item.event_id, -1);
+                }
+              }}
+              onSwipeUp={async (item) => {
+                // Superlike
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+                if (poll?.mode === 'rating') {
+                  await handleRating(item.event_id, 1);
+                } else {
+                  await onVote(item.event_id);
+                }
+              }}
+              overlayLabels={{
+                like: { text: 'YES', color: '#22c55e' },
+                nope: { text: 'NOPE', color: '#ef4444' },
+                super: { text: 'SUPERLIKE', color: '#f59e0b' },
+              }}
+            />
+          </View>
+        ) : null}
+
+        {mode === 'list' ? (
+          options.length === 1 && poll?.mode !== 'rating' ? (
+            <View style={{ marginTop: 20 }}>
+              <Pressable
+                onPress={() => router.push(`/events/${options[0].event_id}`)}
+                style={{ backgroundColor: c.card, padding: 12, borderRadius: 12 }}
+              >
+                {options[0].event?.image_url ? (
+                  <Image
+                    source={{ uri: options[0].event.image_url }}
+                    style={{ width: '100%', height: 160, borderRadius: 10, marginBottom: 8 }}
+                  />
                 ) : null}
-              </View>
-            }
-            ListHeaderComponent={
-              leader ? (
-                <View
+                <Text style={{ color: c.text, fontWeight: '700' }}>
+                  {options[0].event?.title ?? `Event #${options[0].event_id}`}
+                </Text>
+                <Text style={{ color: c.muted, marginTop: 4 }}>
+                  {options[0].event?.date_time
+                    ? new Date(options[0].event.date_time).toLocaleString()
+                    : ''}
+                  {options[0].event?.location ? ` • ${options[0].event.location}` : ''}
+                </Text>
+                {options[0].match_percent != null ? (
+                  <Text style={{ color: c.muted, marginTop: 4 }}>
+                    {options[0].match_percent}% group match
+                  </Text>
+                ) : null}
+                {options[0].event?.rsvp_url ? (
+                  <Pressable
+                    onPress={() => {
+                      if (options[0].event?.rsvp_url) Linking.openURL(options[0].event.rsvp_url);
+                    }}
+                    style={{
+                      alignSelf: 'flex-start',
+                      backgroundColor: c.background,
+                      paddingVertical: 6,
+                      paddingHorizontal: 10,
+                      borderRadius: 8,
+                      marginTop: 8,
+                    }}
+                  >
+                    <Text style={{ color: c.text }}>Open RSVP</Text>
+                  </Pressable>
+                ) : null}
+              </Pressable>
+              <Text style={{ color: c.text, fontWeight: '700', marginBottom: 12, marginTop: 12 }}>
+                Do you want to attend?
+              </Text>
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                <Pressable
+                  onPress={() => onVote(options[0].event_id)}
+                  disabled={!poll?.is_active}
                   style={{
-                    backgroundColor: c.card,
-                    padding: 12,
+                    flex: 1,
+                    backgroundColor: myVote === options[0].event_id ? c.primary : c.card,
+                    padding: 14,
                     borderRadius: 12,
-                    marginBottom: 10,
-                    borderWidth: 2,
-                    borderColor: c.primary,
+                    alignItems: 'center',
                   }}
                 >
-                  <Text style={{ color: c.text, fontWeight: '800' }}>Suggested choice 👑</Text>
-                  <Text style={{ color: c.muted, marginTop: 4 }}>
-                    This event currently leads. It has a crown badge below.
-                  </Text>
-                  {poll?.is_active ? (
-                    <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
-                      <Pressable
-                        onPress={async () => {
-                          try {
-                            await commitPoll(pollId, leader.event_id);
-                            await load();
-                          } catch (e: any) {
-                            Alert.alert('Commit failed', e.message ?? String(e));
-                          }
-                        }}
+                  <Text style={{ color: c.text, fontWeight: '700' }}>Yes</Text>
+                </Pressable>
+                <Pressable
+                  onPress={async () => {
+                    if (!poll?.is_active) return;
+                    try {
+                      await recordNoVote(pollId);
+                      await load();
+                      Alert.alert('Recorded', 'You responded No');
+                    } catch (e: any) {
+                      Alert.alert('Update failed', e.message ?? String(e));
+                    }
+                  }}
+                  disabled={!poll?.is_active}
+                  style={{
+                    flex: 1,
+                    backgroundColor: myVote == null ? c.accent : c.background,
+                    padding: 14,
+                    borderRadius: 12,
+                    alignItems: 'center',
+                  }}
+                >
+                  <Text style={{ color: c.text, fontWeight: '700' }}>No</Text>
+                </Pressable>
+              </View>
+              <View
+                style={{ backgroundColor: c.card, padding: 12, borderRadius: 12, marginTop: 12 }}
+              >
+                <Text style={{ color: c.muted }}>Yes votes: {totalVotes}</Text>
+                <Text style={{ color: c.muted, marginTop: 4 }}>
+                  (No responses are counted as participation but not shown in the bar.)
+                </Text>
+                {myVote == null ? (
+                  <Pressable
+                    onPress={async () => {
+                      try {
+                        await clearMyVote(pollId);
+                        await load();
+                      } catch (e: any) {
+                        Alert.alert('Update failed', e.message ?? String(e));
+                      }
+                    }}
+                    style={{ marginTop: 8 }}
+                  >
+                    <Text style={{ color: c.muted, textDecorationLine: 'underline' }}>
+                      Clear my No response
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            </View>
+          ) : (
+            <FlatList
+              style={{ marginTop: 16 }}
+              data={options}
+              keyExtractor={(o) => String(o.event_id)}
+              renderItem={({ item }) => {
+                const count = item.votes ?? 0;
+                const pct = totalVotes === 0 ? 0 : Math.round((count * 100) / totalVotes);
+                const isMine = myVote === item.event_id;
+                const isLeader = leader && leader.event_id === item.event_id;
+                return (
+                  <Pressable
+                    onPress={() => {
+                      if (poll?.mode !== 'rating') onVote(item.event_id);
+                    }}
+                    disabled={poll?.mode !== 'rating' ? !poll?.is_active : true}
+                    style={{
+                      backgroundColor: c.card,
+                      borderRadius: 12,
+                      padding: 10, // reduced padding
+                      marginBottom: 8, // tighter spacing
+                      borderWidth: isLeader ? 2 : 1,
+                      borderColor: isLeader ? c.primary : c.background,
+                      shadowColor: isLeader ? c.primary : '#000',
+                      shadowOpacity: isLeader ? 0.4 : 0.15,
+                      shadowRadius: isLeader ? 8 : 4,
+                      shadowOffset: { width: 0, height: 2 },
+                      position: 'relative',
+                    }}
+                  >
+                    {isLeader ? (
+                      <View
                         style={{
-                          alignSelf: 'flex-start',
+                          position: 'absolute',
+                          top: -8,
+                          left: 10,
                           backgroundColor: c.primary,
-                          paddingVertical: 6,
-                          paddingHorizontal: 10,
+                          paddingHorizontal: 8,
+                          paddingVertical: 2,
                           borderRadius: 8,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 4,
                         }}
                       >
-                        <Text style={{ color: c.text, fontWeight: '700' }}>Commit to this</Text>
-                      </Pressable>
+                        <Text style={{ color: c.text, fontSize: 12, fontWeight: '800' }}>
+                          👑 Lead
+                        </Text>
+                      </View>
+                    ) : null}
+                    {item.event?.image_url ? (
+                      <Image
+                        source={{ uri: item.event.image_url }}
+                        style={{ width: '100%', height: 110, borderRadius: 10, marginBottom: 6 }}
+                      />
+                    ) : null}
+                    <Text style={{ color: c.text, fontWeight: '700', fontSize: 15 }}>
+                      {item.event?.title ?? `Event #${item.event_id}`}
+                    </Text>
+                    <Text style={{ color: c.muted, marginTop: 3, fontSize: 12 }}>
+                      {item.event?.date_time ? new Date(item.event.date_time).toLocaleString() : ''}
+                      {item.event?.location ? ` • ${item.event.location}` : ''}
+                    </Text>
+                    {item.match_percent != null ? (
+                      <Text style={{ color: c.muted, marginTop: 3, fontSize: 12 }}>
+                        {item.match_percent}% group match
+                      </Text>
+                    ) : null}
+                    {poll?.mode === 'rating' ? (
+                      <View style={{ flexDirection: 'row', gap: 6, marginTop: 8 }}>
+                        <Pressable
+                          onPress={() => handleRating(item.event_id, 1)}
+                          disabled={ratingInFlight.current.has(item.event_id)}
+                          style={{
+                            paddingVertical: 4,
+                            paddingHorizontal: 8,
+                            borderRadius: 8,
+                            opacity: ratingInFlight.current.has(item.event_id) ? 0.6 : 1,
+                            backgroundColor:
+                              (myRatings?.[item.event_id] ?? 0) === 1 ? c.primary : c.background,
+                          }}
+                          accessibilityLabel={`Love it ${item.love_it ?? 0}`}
+                        >
+                          <Text style={{ color: c.text, fontSize: 12 }}>
+                            ❤️ {item.love_it ?? 0}
+                          </Text>
+                        </Pressable>
+                        <Pressable
+                          onPress={() => handleRating(item.event_id, 0)}
+                          disabled={ratingInFlight.current.has(item.event_id)}
+                          style={{
+                            paddingVertical: 4,
+                            paddingHorizontal: 8,
+                            borderRadius: 8,
+                            opacity: ratingInFlight.current.has(item.event_id) ? 0.6 : 1,
+                            backgroundColor:
+                              (myRatings?.[item.event_id] ?? -99) === 0 ? c.primary : c.background,
+                          }}
+                          accessibilityLabel={`It's fine ${item.fine ?? 0}`}
+                        >
+                          <Text style={{ color: c.text, fontSize: 12 }}>🙂 {item.fine ?? 0}</Text>
+                        </Pressable>
+                        <Pressable
+                          onPress={() => handleRating(item.event_id, -1)}
+                          disabled={ratingInFlight.current.has(item.event_id)}
+                          style={{
+                            paddingVertical: 4,
+                            paddingHorizontal: 8,
+                            borderRadius: 8,
+                            opacity: ratingInFlight.current.has(item.event_id) ? 0.6 : 1,
+                            backgroundColor:
+                              (myRatings?.[item.event_id] ?? 0) === -1 ? c.primary : c.background,
+                          }}
+                          accessibilityLabel={`Not for me ${item.not_for_me ?? 0}`}
+                        >
+                          <Text style={{ color: c.text, fontSize: 12 }}>
+                            🙅 {item.not_for_me ?? 0}
+                          </Text>
+                        </Pressable>
+                      </View>
+                    ) : (
+                      <View
+                        style={{
+                          height: 6,
+                          backgroundColor: c.background,
+                          borderRadius: 6,
+                          marginTop: 6,
+                          overflow: 'hidden',
+                        }}
+                      >
+                        <View
+                          style={{
+                            width: `${pct}%`,
+                            backgroundColor: isMine ? c.primary : c.accent,
+                            flex: 1,
+                          }}
+                        />
+                      </View>
+                    )}
+                    {poll?.mode === 'rating' ? null : (
+                      <View
+                        style={{
+                          flexDirection: 'row',
+                          justifyContent: 'space-between',
+                          marginTop: 4,
+                        }}
+                      >
+                        <Text style={{ color: c.muted, fontSize: 12 }}>{count} votes</Text>
+                        <Text style={{ color: c.muted, fontSize: 12 }}>{pct}%</Text>
+                      </View>
+                    )}
+                  </Pressable>
+                );
+              }}
+              ListEmptyComponent={
+                <View style={{ marginTop: 20 }}>
+                  <Text style={{ color: c.muted, marginBottom: 12 }}>
+                    No options yet. Add some events to get started.
+                  </Text>
+                  {poll?.is_active ? (
+                    <View>
+                      {suggested === null ? (
+                        <Text style={{ color: c.muted }}>Loading suggestions…</Text>
+                      ) : suggested?.length ? (
+                        <View style={{ gap: 8 }}>
+                          {suggested.map((e) => (
+                            <Pressable
+                              key={e.id}
+                              disabled={adding}
+                              onPress={async () => {
+                                try {
+                                  setAdding(true);
+                                  await addPollOption(pollId, e.id);
+                                  await load();
+                                } catch (err: any) {
+                                  Alert.alert('Add failed', err.message ?? String(err));
+                                } finally {
+                                  setAdding(false);
+                                }
+                              }}
+                              style={{
+                                backgroundColor: c.card,
+                                padding: 12,
+                                borderRadius: 12,
+                              }}
+                            >
+                              <Text style={{ color: c.text, fontWeight: '700' }}>{e.title}</Text>
+                              <Text style={{ color: c.muted, marginTop: 4 }}>
+                                {new Date(e.date_time).toLocaleString()} • {e.location}
+                              </Text>
+                              {e.match_percent != null ? (
+                                <Text style={{ color: c.muted, marginTop: 4 }}>
+                                  {e.match_percent}% match
+                                </Text>
+                              ) : null}
+                              <Text style={{ color: c.primary, marginTop: 6 }}>Tap to add</Text>
+                            </Pressable>
+                          ))}
+                        </View>
+                      ) : (
+                        <Text style={{ color: c.muted }}>
+                          No suggestions. Use the Browse tab to save events.
+                        </Text>
+                      )}
                       <Pressable
-                        onPress={onClose}
+                        onPress={() => router.push('/(tabs)/home')}
                         style={{
                           alignSelf: 'flex-start',
                           backgroundColor: c.background,
-                          paddingVertical: 6,
-                          paddingHorizontal: 10,
-                          borderRadius: 8,
+                          paddingVertical: 8,
+                          paddingHorizontal: 12,
+                          borderRadius: 10,
+                          marginTop: 16,
                         }}
                       >
-                        <Text style={{ color: c.text, fontWeight: '700' }}>Close poll</Text>
+                        <Text style={{ color: c.text, fontWeight: '700' }}>Browse Events</Text>
                       </Pressable>
                     </View>
                   ) : null}
                 </View>
-              ) : null
-            }
-          />
-        )}
+              }
+              ListHeaderComponent={
+                leader ? (
+                  <View
+                    style={{
+                      backgroundColor: c.card,
+                      padding: 12,
+                      borderRadius: 12,
+                      marginBottom: 10,
+                      borderWidth: 2,
+                      borderColor: c.primary,
+                    }}
+                  >
+                    <Text style={{ color: c.text, fontWeight: '800' }}>Suggested choice 👑</Text>
+                    <Text style={{ color: c.muted, marginTop: 4 }}>
+                      This event currently leads. It has a crown badge below.
+                    </Text>
+                    {poll?.is_active ? (
+                      <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                        <Pressable
+                          onPress={async () => {
+                            try {
+                              await commitPoll(pollId, leader.event_id);
+                              await load();
+                            } catch (e: any) {
+                              Alert.alert('Commit failed', e.message ?? String(e));
+                            }
+                          }}
+                          style={{
+                            alignSelf: 'flex-start',
+                            backgroundColor: c.primary,
+                            paddingVertical: 6,
+                            paddingHorizontal: 10,
+                            borderRadius: 8,
+                          }}
+                        >
+                          <Text style={{ color: c.text, fontWeight: '700' }}>Commit to this</Text>
+                        </Pressable>
+                        <Pressable
+                          onPress={onClose}
+                          style={{
+                            alignSelf: 'flex-start',
+                            backgroundColor: c.background,
+                            paddingVertical: 6,
+                            paddingHorizontal: 10,
+                            borderRadius: 8,
+                          }}
+                        >
+                          <Text style={{ color: c.text, fontWeight: '700' }}>Close poll</Text>
+                        </Pressable>
+                      </View>
+                    ) : null}
+                  </View>
+                ) : null
+              }
+            />
+          )
+        ) : null}
 
         {/* Post-commit actions */}
         {isCommitted && finalEvent ? (
@@ -749,6 +867,24 @@ export default function PollDetails() {
 
         {/* Feedback UI moved to Group feed (below poll) after event; intentionally removed here */}
       </View>
+      {/* Simple confetti */}
+      {showConfetti ? (
+        <View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Text style={{ fontSize: 48, transform: [{ rotate: '-10deg' }] }}>🎉</Text>
+        </View>
+      ) : null}
+
       <Modal
         visible={deleteOpen}
         transparent
