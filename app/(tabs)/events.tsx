@@ -1375,7 +1375,7 @@ export default function Home() {
   );
 
   return (
-  <EventsContainer>
+    <EventsContainer>
       {adminHeader}
       {filtersTopBar}
       <FlatList
@@ -1619,6 +1619,6 @@ export default function Home() {
           </View>
         </View>
       </Modal>
-  </EventsContainer>
+    </EventsContainer>
   );
 }

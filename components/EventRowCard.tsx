@@ -77,16 +77,81 @@ export const EventRowCard: React.FC<EventRowCardProps> = memo(
             )}
           </View>
           <View style={{ flex: 1, minHeight: 72 }}>
+            {/* Title only in header to free space */}
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Text style={{ color: c.text, fontWeight: '800', fontSize: 15 }} numberOfLines={1}>
+                {event.title}
+              </Text>
+            </View>
+            <Text style={{ color: c.muted, fontSize: 12, marginTop: 2 }} numberOfLines={1}>
+              {dayjs(event.date_time).format('MMM D • h:mm A')}{' '}
+              {event.location ? '• ' + event.location : ''}
+            </Text>
+            <Text style={{ color: c.muted, fontSize: 11, marginTop: 2 }} numberOfLines={1}>
+              {(event.tags ?? []).join(', ')}
+            </Text>
+            {/* Actions row with score chip at bottom-right */}
             <View
               style={{
                 flexDirection: 'row',
                 alignItems: 'center',
                 justifyContent: 'space-between',
+                marginTop: 8,
               }}
             >
-              <Text style={{ color: c.text, fontWeight: '800', fontSize: 15 }} numberOfLines={1}>
-                {event.title}
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Pressable
+                  onPress={onOpenDetails}
+                  accessibilityLabel="View details"
+                  style={{ padding: 4 }}
+                >
+                  <Ionicons name="expand-outline" size={18} color={c.text} />
+                </Pressable>
+                <Pressable
+                  onPress={() => shareEvent(event)}
+                  accessibilityLabel="Share event"
+                  style={{ padding: 4 }}
+                >
+                  <Ionicons name="share-social-outline" size={18} color={c.text} />
+                </Pressable>
+                <Pressable
+                  onPress={() => onToggleSave(event.id)}
+                  accessibilityLabel={isSaved ? 'Unsave event' : 'Save event'}
+                  style={{ padding: 4 }}
+                >
+                  <Ionicons
+                    name={isSaved ? 'bookmark' : 'bookmark-outline'}
+                    size={18}
+                    color={isSaved ? c.primary : c.text}
+                  />
+                </Pressable>
+                {onPoll ? (
+                  <ThreeDButton
+                    title="Poll"
+                    onPress={onPoll}
+                    style={{ paddingHorizontal: 10, paddingVertical: 6 }}
+                    textStyle={{ fontSize: 12 }}
+                  />
+                ) : null}
+                {isAdmin ? (
+                  <>
+                    <Pressable
+                      onPress={onEdit}
+                      accessibilityLabel="Edit event"
+                      style={{ padding: 4 }}
+                    >
+                      <Ionicons name="pencil" size={18} color={c.text} />
+                    </Pressable>
+                    <Pressable
+                      onPress={onDelete}
+                      accessibilityLabel="Delete event"
+                      style={{ padding: 4 }}
+                    >
+                      <Ionicons name="trash" size={18} color={c.text} />
+                    </Pressable>
+                  </>
+                ) : null}
+              </View>
               {showScore ? (
                 <LinearGradient
                   colors={['#34d399', '#3b82f6']}
@@ -110,66 +175,6 @@ export const EventRowCard: React.FC<EventRowCardProps> = memo(
                     <Text style={{ color: c.text, fontSize: 11, fontWeight: '800' }}>{score}%</Text>
                   </View>
                 </LinearGradient>
-              ) : null}
-            </View>
-            <Text style={{ color: c.muted, fontSize: 12, marginTop: 2 }} numberOfLines={1}>
-              {dayjs(event.date_time).format('MMM D • h:mm A')}{' '}
-              {event.location ? '• ' + event.location : ''}
-            </Text>
-            <Text style={{ color: c.muted, fontSize: 11, marginTop: 2 }} numberOfLines={1}>
-              {(event.tags ?? []).join(', ')}
-            </Text>
-            <View style={{ flexDirection: 'row', gap: 8, marginTop: 8, alignItems: 'center' }}>
-              <Pressable
-                onPress={onOpenDetails}
-                accessibilityLabel="View details"
-                style={{ padding: 4 }}
-              >
-                <Ionicons name="expand-outline" size={18} color={c.text} />
-              </Pressable>
-              <Pressable
-                onPress={() => shareEvent(event)}
-                accessibilityLabel="Share event"
-                style={{ padding: 4 }}
-              >
-                <Ionicons name="share-social-outline" size={18} color={c.text} />
-              </Pressable>
-              <Pressable
-                onPress={() => onToggleSave(event.id)}
-                accessibilityLabel={isSaved ? 'Unsave event' : 'Save event'}
-                style={{ padding: 4 }}
-              >
-                <Ionicons
-                  name={isSaved ? 'bookmark' : 'bookmark-outline'}
-                  size={18}
-                  color={isSaved ? c.primary : c.text}
-                />
-              </Pressable>
-              {onPoll ? (
-                <ThreeDButton
-                  title="Poll"
-                  onPress={onPoll}
-                  style={{ paddingHorizontal: 10, paddingVertical: 6 }}
-                  textStyle={{ fontSize: 12 }}
-                />
-              ) : null}
-              {isAdmin ? (
-                <>
-                  <Pressable
-                    onPress={onEdit}
-                    accessibilityLabel="Edit event"
-                    style={{ padding: 4 }}
-                  >
-                    <Ionicons name="pencil" size={18} color={c.text} />
-                  </Pressable>
-                  <Pressable
-                    onPress={onDelete}
-                    accessibilityLabel="Delete event"
-                    style={{ padding: 4 }}
-                  >
-                    <Ionicons name="trash" size={18} color={c.text} />
-                  </Pressable>
-                </>
               ) : null}
             </View>
           </View>

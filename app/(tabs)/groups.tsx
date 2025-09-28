@@ -68,126 +68,126 @@ export default function Groups() {
     <GradientBackground>
       <AnimatedPage variant="fade-up" style={{ flex: 1 }}>
         <View style={{ flex: 1, padding: 16 }}>
-        <View style={{ flexDirection: 'row', gap: 12, marginBottom: 12 }}>
-          <Pressable
-            onPress={() => setShowCreate(true)}
-            style={{
-              backgroundColor: c.primary,
-              paddingVertical: 10,
-              paddingHorizontal: 14,
-              borderRadius: 12,
-            }}
-          >
-            <Text style={{ color: c.text, fontWeight: '700' }}>Create Group</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => setShowJoin(true)}
-            style={{
-              backgroundColor: c.card,
-              paddingVertical: 10,
-              paddingHorizontal: 14,
-              borderRadius: 12,
-            }}
-          >
-            <Text style={{ color: c.text, fontWeight: '700' }}>Join Group</Text>
-          </Pressable>
-        </View>
-
-        <FlatList
-          data={groups}
-          keyExtractor={(g) => String(g.id)}
-          renderItem={({ item }) => (
+          <View style={{ flexDirection: 'row', gap: 12, marginBottom: 12 }}>
             <Pressable
-              onPress={() => router.push(`/(tabs)/groups/${item.id}`)}
+              onPress={() => setShowCreate(true)}
               style={{
-                backgroundColor: c.card,
-                padding: 12,
+                backgroundColor: c.primary,
+                paddingVertical: 10,
+                paddingHorizontal: 14,
                 borderRadius: 12,
-                marginBottom: 8,
               }}
             >
-              <Text style={{ color: c.text, fontWeight: '800' }}>{item.name}</Text>
+              <Text style={{ color: c.text, fontWeight: '700' }}>Create Group</Text>
             </Pressable>
-          )}
-        />
+            <Pressable
+              onPress={() => setShowJoin(true)}
+              style={{
+                backgroundColor: c.card,
+                paddingVertical: 10,
+                paddingHorizontal: 14,
+                borderRadius: 12,
+              }}
+            >
+              <Text style={{ color: c.text, fontWeight: '700' }}>Join Group</Text>
+            </Pressable>
+          </View>
 
-        <Modal
-          visible={showCreate}
-          transparent
-          animationType="slide"
-          onRequestClose={() => setShowCreate(false)}
-        >
-          <View
-            style={{ flex: 1, backgroundColor: '#0008', justifyContent: 'center', padding: 20 }}
-          >
-            <View style={{ backgroundColor: c.card, borderRadius: 12, padding: 16 }}>
-              <Text style={{ color: c.text, marginBottom: 8, fontWeight: '700' }}>
-                Create a group
-              </Text>
-              <TextInput
-                placeholder="Group name"
-                placeholderTextColor={c.muted}
-                value={name}
-                onChangeText={setName}
+          <FlatList
+            data={groups}
+            keyExtractor={(g) => String(g.id)}
+            renderItem={({ item }) => (
+              <Pressable
+                onPress={() => router.push(`/(tabs)/groups/${item.id}`)}
                 style={{
-                  color: c.text,
-                  backgroundColor: c.background,
-                  padding: 10,
-                  borderRadius: 8,
-                  marginBottom: 12,
+                  backgroundColor: c.card,
+                  padding: 12,
+                  borderRadius: 12,
+                  marginBottom: 8,
                 }}
-              />
-              <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 12 }}>
-                <Pressable onPress={() => setShowCreate(false)}>
-                  <Text style={{ color: c.muted }}>Cancel</Text>
-                </Pressable>
-                <Pressable onPress={onCreate}>
-                  <Text style={{ color: c.text, fontWeight: '700' }}>Create</Text>
-                </Pressable>
+              >
+                <Text style={{ color: c.text, fontWeight: '800' }}>{item.name}</Text>
+              </Pressable>
+            )}
+          />
+
+          <Modal
+            visible={showCreate}
+            transparent
+            animationType="slide"
+            onRequestClose={() => setShowCreate(false)}
+          >
+            <View
+              style={{ flex: 1, backgroundColor: '#0008', justifyContent: 'center', padding: 20 }}
+            >
+              <View style={{ backgroundColor: c.card, borderRadius: 12, padding: 16 }}>
+                <Text style={{ color: c.text, marginBottom: 8, fontWeight: '700' }}>
+                  Create a group
+                </Text>
+                <TextInput
+                  placeholder="Group name"
+                  placeholderTextColor={c.muted}
+                  value={name}
+                  onChangeText={setName}
+                  style={{
+                    color: c.text,
+                    backgroundColor: c.background,
+                    padding: 10,
+                    borderRadius: 8,
+                    marginBottom: 12,
+                  }}
+                />
+                <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 12 }}>
+                  <Pressable onPress={() => setShowCreate(false)}>
+                    <Text style={{ color: c.muted }}>Cancel</Text>
+                  </Pressable>
+                  <Pressable onPress={onCreate}>
+                    <Text style={{ color: c.text, fontWeight: '700' }}>Create</Text>
+                  </Pressable>
+                </View>
               </View>
             </View>
-          </View>
-        </Modal>
+          </Modal>
 
-        <Modal
-          visible={showJoin}
-          transparent
-          animationType="slide"
-          onRequestClose={() => setShowJoin(false)}
-        >
-          <View
-            style={{ flex: 1, backgroundColor: '#0008', justifyContent: 'center', padding: 20 }}
+          <Modal
+            visible={showJoin}
+            transparent
+            animationType="slide"
+            onRequestClose={() => setShowJoin(false)}
           >
-            <View style={{ backgroundColor: c.card, borderRadius: 12, padding: 16 }}>
-              <Text style={{ color: c.text, marginBottom: 8, fontWeight: '700' }}>
-                Join a group
-              </Text>
-              <TextInput
-                placeholder="Invite code"
-                placeholderTextColor={c.muted}
-                autoCapitalize="characters"
-                value={code}
-                onChangeText={setCode}
-                style={{
-                  color: c.text,
-                  backgroundColor: c.background,
-                  padding: 10,
-                  borderRadius: 8,
-                  marginBottom: 12,
-                  letterSpacing: 2,
-                }}
-              />
-              <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 12 }}>
-                <Pressable onPress={() => setShowJoin(false)}>
-                  <Text style={{ color: c.muted }}>Cancel</Text>
-                </Pressable>
-                <Pressable onPress={onJoin}>
-                  <Text style={{ color: c.primary, fontWeight: '700' }}>Join</Text>
-                </Pressable>
+            <View
+              style={{ flex: 1, backgroundColor: '#0008', justifyContent: 'center', padding: 20 }}
+            >
+              <View style={{ backgroundColor: c.card, borderRadius: 12, padding: 16 }}>
+                <Text style={{ color: c.text, marginBottom: 8, fontWeight: '700' }}>
+                  Join a group
+                </Text>
+                <TextInput
+                  placeholder="Invite code"
+                  placeholderTextColor={c.muted}
+                  autoCapitalize="characters"
+                  value={code}
+                  onChangeText={setCode}
+                  style={{
+                    color: c.text,
+                    backgroundColor: c.background,
+                    padding: 10,
+                    borderRadius: 8,
+                    marginBottom: 12,
+                    letterSpacing: 2,
+                  }}
+                />
+                <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 12 }}>
+                  <Pressable onPress={() => setShowJoin(false)}>
+                    <Text style={{ color: c.muted }}>Cancel</Text>
+                  </Pressable>
+                  <Pressable onPress={onJoin}>
+                    <Text style={{ color: c.primary, fontWeight: '700' }}>Join</Text>
+                  </Pressable>
+                </View>
               </View>
             </View>
-          </View>
-        </Modal>
+          </Modal>
         </View>
       </AnimatedPage>
     </GradientBackground>

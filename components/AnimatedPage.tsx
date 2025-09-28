@@ -38,7 +38,12 @@ export default function AnimatedPage({
     const common = { delay, useNativeDriver: true } as const;
     if (variant === 'pop') {
       Animated.parallel([
-        Animated.timing(opacity, { toValue: 1, duration: 240, easing: Easing.out(Easing.cubic), ...common }),
+        Animated.timing(opacity, {
+          toValue: 1,
+          duration: 240,
+          easing: Easing.out(Easing.cubic),
+          ...common,
+        }),
         Animated.spring(scale, {
           toValue: 1,
           bounciness: 10,
@@ -50,14 +55,24 @@ export default function AnimatedPage({
     }
     if (variant === 'slide-right') {
       Animated.parallel([
-        Animated.timing(opacity, { toValue: 1, duration, easing: Easing.out(Easing.cubic), ...common }),
+        Animated.timing(opacity, {
+          toValue: 1,
+          duration,
+          easing: Easing.out(Easing.cubic),
+          ...common,
+        }),
         Animated.timing(tx, { toValue: 0, duration, easing: Easing.out(Easing.cubic), ...common }),
       ]).start();
       return;
     }
     // fade-up default
     Animated.parallel([
-      Animated.timing(opacity, { toValue: 1, duration, easing: Easing.out(Easing.cubic), ...common }),
+      Animated.timing(opacity, {
+        toValue: 1,
+        duration,
+        easing: Easing.out(Easing.cubic),
+        ...common,
+      }),
       Animated.timing(ty, { toValue: 0, duration, easing: Easing.out(Easing.cubic), ...common }),
     ]).start();
   };
@@ -68,11 +83,13 @@ export default function AnimatedPage({
       // short micro-delay avoids conflicting with navigation transition
       const id = setTimeout(play, 10);
       return () => clearTimeout(id);
-    }, [variant, delay, duration])
+    }, [variant, delay, duration]),
   );
 
   return (
-    <Animated.View style={[{ opacity, transform: [{ translateX: tx }, { translateY: ty }, { scale }] }, style]}>
+    <Animated.View
+      style={[{ opacity, transform: [{ translateX: tx }, { translateY: ty }, { scale }] }, style]}
+    >
       {children}
     </Animated.View>
   );
