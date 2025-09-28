@@ -38,7 +38,8 @@ export default function NewDecision() {
   }, []);
 
   const canNext = useMemo(() => {
-    if (step === 0) return !!decisionType;
+    // Only allow progressing past step 0 when Events is selected
+    if (step === 0) return decisionType === 'events';
     if (step === 1) return topic.trim().length > 0;
     if (step === 2) return !!groupId || !!inviteCode;
     return true;
@@ -135,37 +136,49 @@ export default function NewDecision() {
               <View style={{ gap: 12, marginTop: 12 }}>
                 {[
                   {
-                    key: 'events',
+                    key: 'events' as const,
                     label: 'Events',
-                    image: require('../../../assets/DiscoverEvents.png'),
+                    image: require('../../../assets/DecideEvents.png'),
+                    disabled: false,
+                    caption: undefined as string | undefined,
                   },
-                  { key: 'food', label: 'Food', image: require('../../../assets/GroupDecide.png') },
                   {
-                    key: 'activities',
+                    key: 'food' as const,
+                    label: 'Food',
+                    image: require('../../../assets/DecideFood.png'),
+                    disabled: true,
+                    caption: 'Coming Soon',
+                  },
+                  {
+                    key: 'activities' as const,
                     label: 'Activities',
-                    image: require('../../../assets/GroupDecide.png'),
+                    image: require('../../../assets/DecideActivities.png'),
+                    disabled: true,
+                    caption: 'Coming Soon',
                   },
-                  {
-                    key: 'combo',
-                    label: 'Combination',
-                    image: require('../../../assets/GroupDecide.png'),
-                  },
+                  // Additional types can be added here when ready
                 ].map((opt) => (
-                  <MediaCard
-                    key={opt.key}
-                    image={opt.image}
-                    selected={decisionType === (opt.key as any)}
-                    onPress={() => setDecisionType(opt.key as any)}
-                    accessibilityLabel={`Choose ${opt.label}`}
-                  />
+                  <View key={opt.key}>
+                    <MediaCard
+                      image={opt.image}
+                      // Use built-in label footer for Coming Soon captions on disabled cards
+                      label={opt.disabled ? opt.caption : undefined}
+                      selected={decisionType === (opt.key as any)}
+                      onPress={opt.disabled ? undefined : () => setDecisionType(opt.key as any)}
+                      style={opt.disabled ? { opacity: 0.6 } : undefined}
+                      accessibilityLabel={
+                        opt.disabled ? `${opt.label} (Coming Soon)` : `Choose ${opt.label}`
+                      }
+                    />
+                  </View>
                 ))}
               </View>
               <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 12 }}>
                 <Pressable
                   onPress={() => setStep(1)}
-                  disabled={!decisionType}
+                  disabled={!canNext}
                   style={{
-                    backgroundColor: decisionType ? c.primary : c.background,
+                    backgroundColor: canNext ? c.primary : c.background,
                     paddingHorizontal: 14,
                     paddingVertical: 10,
                     borderRadius: 10,

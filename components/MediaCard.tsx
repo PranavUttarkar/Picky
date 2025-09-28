@@ -79,7 +79,7 @@ const styles = StyleSheet.create({
   },
   media: {
     width: '100%',
-    aspectRatio: 20 / 9,
+    aspectRatio: 2 / 1,
   },
   mediaImage: {
     width: '100%',
