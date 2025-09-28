@@ -227,7 +227,10 @@ export default function PollDetails() {
             if (me?.id) {
               await supabase
                 .from('saved_events')
-                .upsert({ user_id: me.id, event_id: finalEvent.id }, { onConflict: 'user_id,event_id' });
+                .upsert(
+                  { user_id: me.id, event_id: finalEvent.id },
+                  { onConflict: 'user_id,event_id' },
+                );
             }
           } catch {}
         }
@@ -439,83 +442,87 @@ export default function PollDetails() {
             {!iAmDone ? (
               <SwipeDeck
                 data={options}
-              keyExtractor={(o) => String(o.event_id)}
-              renderCard={(item) => (
-                <View
-                  style={{
-                    backgroundColor: c.card,
-                    borderRadius: 16,
-                    padding: 12,
-                    width: '100%',
-                  }}
-                >
-                  {item.event?.image_url ? (
-                    <Image
-                      source={{ uri: item.event.image_url }}
-                      style={{ width: '100%', height: 240, borderRadius: 12, marginBottom: 8 }}
-                    />
-                  ) : null}
-                  {/* Crown for leader */}
-                  {leader && leader.event_id === item.event_id ? (
-                    <View
-                      style={{
-                        alignSelf: 'flex-start',
-                        backgroundColor: c.primary,
-                        paddingHorizontal: 8,
-                        paddingVertical: 2,
-                        borderRadius: 8,
-                        position: 'absolute',
-                        top: 12,
-                        left: 12,
-                      }}
-                    >
-                      <Text style={{ color: c.text, fontWeight: '800', fontSize: 12 }}>👑 Lead</Text>
-                    </View>
-                  ) : null}
-                  <Text style={{ color: c.text, fontWeight: '800', fontSize: 18 }}>
-                    {item.event?.title ?? `Event #${item.event_id}`}
-                  </Text>
-                  <Text style={{ color: c.muted, marginTop: 4 }}>
-                    {item.event?.date_time ? new Date(item.event.date_time).toLocaleString() : ''}
-                    {item.event?.location ? ` • ${item.event.location}` : ''}
-                  </Text>
-                  {item.match_percent != null ? (
-                    <Text style={{ color: c.muted, marginTop: 4 }}>
-                      {item.match_percent}% match for group
+                keyExtractor={(o) => String(o.event_id)}
+                renderCard={(item) => (
+                  <View
+                    style={{
+                      backgroundColor: c.card,
+                      borderRadius: 16,
+                      padding: 12,
+                      width: '100%',
+                    }}
+                  >
+                    {item.event?.image_url ? (
+                      <Image
+                        source={{ uri: item.event.image_url }}
+                        style={{ width: '100%', height: 240, borderRadius: 12, marginBottom: 8 }}
+                      />
+                    ) : null}
+                    {/* Crown for leader */}
+                    {leader && leader.event_id === item.event_id ? (
+                      <View
+                        style={{
+                          alignSelf: 'flex-start',
+                          backgroundColor: c.primary,
+                          paddingHorizontal: 8,
+                          paddingVertical: 2,
+                          borderRadius: 8,
+                          position: 'absolute',
+                          top: 12,
+                          left: 12,
+                        }}
+                      >
+                        <Text style={{ color: c.text, fontWeight: '800', fontSize: 12 }}>
+                          👑 Lead
+                        </Text>
+                      </View>
+                    ) : null}
+                    <Text style={{ color: c.text, fontWeight: '800', fontSize: 18 }}>
+                      {item.event?.title ?? `Event #${item.event_id}`}
                     </Text>
-                  ) : null}
-                </View>
-              )}
-              onSwipeRight={async (item) => {
-                // Like
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-                if (poll?.mode === 'rating') {
-                  await handleRating(item.event_id, 1);
-                } else {
-                  await onVote(item.event_id);
-                }
-              }}
-              onSwipeLeft={async (item) => {
-                // Nope
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-                if (poll?.mode === 'rating') {
-                  await handleRating(item.event_id, -1);
-                }
-              }}
-              onSwipeUp={async (item) => {
-                // Superlike
-                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-                if (poll?.mode === 'rating') {
-                  await handleRating(item.event_id, 1);
-                } else {
-                  await onVote(item.event_id);
-                }
-              }}
-              overlayLabels={{
-                like: { text: 'YES', color: '#22c55e' },
-                nope: { text: 'NOPE', color: '#ef4444' },
-                super: { text: 'SUPERLIKE', color: '#f59e0b' },
-              }}
+                    <Text style={{ color: c.muted, marginTop: 4 }}>
+                      {item.event?.date_time ? new Date(item.event.date_time).toLocaleString() : ''}
+                      {item.event?.location ? ` • ${item.event.location}` : ''}
+                    </Text>
+                    {item.match_percent != null ? (
+                      <Text style={{ color: c.muted, marginTop: 4 }}>
+                        {item.match_percent}% match for group
+                      </Text>
+                    ) : null}
+                  </View>
+                )}
+                onSwipeRight={async (item) => {
+                  // Like
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+                  if (poll?.mode === 'rating') {
+                    await handleRating(item.event_id, 1);
+                  } else {
+                    await onVote(item.event_id);
+                  }
+                }}
+                onSwipeLeft={async (item) => {
+                  // Nope
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                  if (poll?.mode === 'rating') {
+                    await handleRating(item.event_id, -1);
+                  }
+                }}
+                onSwipeUp={async (item) => {
+                  // Superlike
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
+                    () => {},
+                  );
+                  if (poll?.mode === 'rating') {
+                    await handleRating(item.event_id, 1);
+                  } else {
+                    await onVote(item.event_id);
+                  }
+                }}
+                overlayLabels={{
+                  like: { text: 'YES', color: '#22c55e' },
+                  nope: { text: 'NOPE', color: '#ef4444' },
+                  super: { text: 'SUPERLIKE', color: '#f59e0b' },
+                }}
               />
             ) : (
               <View

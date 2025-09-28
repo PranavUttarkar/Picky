@@ -12,11 +12,11 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 export const Colors = {
   light: {
-    background: '#cdffd2ff',
+    background: '#8fd5fdff',
     card: '#ffffff',
     text: '#111827',
     muted: '#6b7280',
-    primary: '#10b981',
+    primary: '#8eb4faff',
     accent: '#f59e0b',
   },
   dark: {

@@ -177,11 +177,18 @@ export default function GroupFeed() {
               </Text>
               {item.final_event_id ? (
                 <View style={{ marginTop: 8 }}>
-                  <Text style={{ color: c.text, fontWeight: '700' }}>Winner: Event #{item.final_event_id}</Text>
+                  <Text style={{ color: c.text, fontWeight: '700' }}>
+                    Winner: Event #{item.final_event_id}
+                  </Text>
                   <View style={{ flexDirection: 'row', gap: 8, marginTop: 6 }}>
                     <Pressable
                       onPress={() => router.push(`/(tabs)/polls/${item.id}`)}
-                      style={{ backgroundColor: c.primary, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}
+                      style={{
+                        backgroundColor: c.primary,
+                        paddingHorizontal: 10,
+                        paddingVertical: 6,
+                        borderRadius: 8,
+                      }}
                     >
                       <Text style={{ color: c.text, fontWeight: '700' }}>View</Text>
                     </Pressable>
@@ -196,19 +203,29 @@ export default function GroupFeed() {
                             .single();
                           if (!ev?.date_time) return;
                           const startIso = new Date(ev.date_time).toISOString();
-                          const endIso = new Date(new Date(ev.date_time).getTime() + 2 * 60 * 60 * 1000).toISOString();
-                          const fmt = (iso: string) => iso.replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+                          const endIso = new Date(
+                            new Date(ev.date_time).getTime() + 2 * 60 * 60 * 1000,
+                          ).toISOString();
+                          const fmt = (iso: string) =>
+                            iso.replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
                           const params = new URLSearchParams({
                             action: 'TEMPLATE',
                             text: ev.title ?? 'Event',
                             details: ev.description ?? '',
                             location: ev.location ?? '',
                           });
-                          const url = `https://calendar.google.com/calendar/render?${params.toString()}&dates=${fmt(startIso)}/${fmt(endIso)}`;
+                          const url = `https://calendar.google.com/calendar/render?${params.toString()}&dates=${fmt(
+                            startIso,
+                          )}/${fmt(endIso)}`;
                           Linking.openURL(url);
                         } catch {}
                       }}
-                      style={{ backgroundColor: c.background, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}
+                      style={{
+                        backgroundColor: c.background,
+                        paddingHorizontal: 10,
+                        paddingVertical: 6,
+                        borderRadius: 8,
+                      }}
                     >
                       <Text style={{ color: c.text, fontWeight: '700' }}>Add to Calendar</Text>
                     </Pressable>
