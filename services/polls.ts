@@ -88,9 +88,20 @@ export async function getPoll(pollId: number): Promise<{ poll: any; options: Pol
       totalMembers = memberIds.length;
       let responderIds: string[] = [];
       if ((poll as any)?.mode === 'rating') {
-        const { data: ratingsRows } = await supabase.from('poll_ratings').select('user_id').eq('poll_id', pollId);
-        const set = new Set<string>(((ratingsRows as any[]) ?? []).map((r: any) => r.user_id));
-        responderIds = Array.from(set);
+        // Count a user as responded only if they rated all options
+        const { data: ratingsRows } = await supabase.from('poll_ratings').select('user_id,event_id').eq('poll_id', pollId);
+        const byUser = new Map<string, Set<number>>();
+        for (const row of ((ratingsRows as any[]) ?? [])) {
+          const uid = String(row.user_id);
+          const eid = Number(row.event_id);
+          const set = byUser.get(uid) ?? new Set<number>();
+          set.add(eid);
+          byUser.set(uid, set);
+        }
+        const optionCount = ((options as any[]) ?? []).length;
+        responderIds = Array.from(byUser.entries())
+          .filter(([, set]) => set.size >= optionCount && optionCount > 0)
+          .map(([uid]) => uid);
       } else {
         // include NULL event_id rows (explicit No responses) as participation
         const { data: votesRows } = await supabase.from('poll_votes').select('user_id').eq('poll_id', pollId);

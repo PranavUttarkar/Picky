@@ -100,6 +100,8 @@ export default function TabsLayout() {
       {/** decisions under tabs to preserve header/tab bar */}
       <Tabs.Screen name="decisions/[id]" options={{ href: null }} />
       <Tabs.Screen name="decisions/new" options={{ href: null }} />
+  {/** hide Group Decide utility route from tab bar while keeping it navigable */}
+  <Tabs.Screen name="group-decide" options={{ href: null }} />
       <Tabs.Screen name="saved" options={{ href: null }} />
 
       <Tabs.Screen

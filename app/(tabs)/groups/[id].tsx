@@ -1,4 +1,5 @@
 import { View, Text, Pressable, FlatList, Alert, Platform } from 'react-native';
+import * as Linking from 'expo-linking';
 import * as Clipboard from 'expo-clipboard';
 import { useThemeColors } from '@/theme/ThemeProvider';
 import GradientBackground from '@/components/GradientBackground';
@@ -175,9 +176,44 @@ export default function GroupFeed() {
                   : `Created ${new Date(item.created_at).toLocaleString()}`}
               </Text>
               {item.final_event_id ? (
-                <Text style={{ color: c.muted, marginTop: 4 }}>
-                  Committed: Event #{item.final_event_id}
-                </Text>
+                <View style={{ marginTop: 8 }}>
+                  <Text style={{ color: c.text, fontWeight: '700' }}>Winner: Event #{item.final_event_id}</Text>
+                  <View style={{ flexDirection: 'row', gap: 8, marginTop: 6 }}>
+                    <Pressable
+                      onPress={() => router.push(`/(tabs)/polls/${item.id}`)}
+                      style={{ backgroundColor: c.primary, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}
+                    >
+                      <Text style={{ color: c.text, fontWeight: '700' }}>View</Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={async () => {
+                        try {
+                          // Fetch event to build calendar URL
+                          const { data: ev } = await supabase
+                            .from('events')
+                            .select('id,title,description,location,date_time')
+                            .eq('id', item.final_event_id)
+                            .single();
+                          if (!ev?.date_time) return;
+                          const startIso = new Date(ev.date_time).toISOString();
+                          const endIso = new Date(new Date(ev.date_time).getTime() + 2 * 60 * 60 * 1000).toISOString();
+                          const fmt = (iso: string) => iso.replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+                          const params = new URLSearchParams({
+                            action: 'TEMPLATE',
+                            text: ev.title ?? 'Event',
+                            details: ev.description ?? '',
+                            location: ev.location ?? '',
+                          });
+                          const url = `https://calendar.google.com/calendar/render?${params.toString()}&dates=${fmt(startIso)}/${fmt(endIso)}`;
+                          Linking.openURL(url);
+                        } catch {}
+                      }}
+                      style={{ backgroundColor: c.background, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}
+                    >
+                      <Text style={{ color: c.text, fontWeight: '700' }}>Add to Calendar</Text>
+                    </Pressable>
+                  </View>
+                </View>
               ) : null}
             </Pressable>
           )}

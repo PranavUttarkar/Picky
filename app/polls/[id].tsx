@@ -19,6 +19,8 @@ import {
   recordNoVote,
   deletePoll,
 } from '@/services/polls';
+import type { PollOptionView } from '@/services/polls';
+import type { Event } from '@/types/models';
 import { optimisticUpdate } from '@/utils/optimistic';
 import { getTopGroupMatches, getTopUserMatches } from '@/services/events';
 import SwipeDeck from '@/components/SwipeDeck';
@@ -50,6 +52,14 @@ export default function PollDetails() {
   const [mode, setMode] = useState<'list' | 'swipe'>('swipe');
   // Prevent concurrent rating mutations per event
   const ratingInFlight = useRef<Set<number>>(new Set());
+  // Debounced refresh to reduce backend chatter during swipes
+  const refreshTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleRefresh = (ms = 300) => {
+    if (refreshTimeout.current) clearTimeout(refreshTimeout.current);
+    refreshTimeout.current = setTimeout(() => {
+      load().catch(() => {});
+    }, ms);
+  };
 
   const handleRating = async (eventId: number, target: -1 | 0 | 1) => {
     if (poll?.mode !== 'rating' || ratingInFlight.current.has(eventId)) return;
@@ -94,7 +104,8 @@ export default function PollDetails() {
       },
       mutate: async () => {
         await castRating(pollId, eventId, nextRating);
-        load().catch(() => {});
+        // Throttle reloads; realtime will also trigger this
+        scheduleRefresh(300);
       },
     })
       .catch((e) => {
@@ -152,12 +163,16 @@ export default function PollDetails() {
       }
       await load();
       const unsub = onPollRealtime(pollId, () => {
-        if (mounted) load();
+        if (mounted) scheduleRefresh(250);
       });
       return () => unsub();
     })();
     return () => {
       mounted = false;
+      if (refreshTimeout.current) {
+        clearTimeout(refreshTimeout.current);
+        refreshTimeout.current = null;
+      }
     };
   }, [pollId]);
 
@@ -168,6 +183,59 @@ export default function PollDetails() {
     [responded, totalMembers],
   );
   const isCommitted = !!finalEvent;
+  const myRatedCount = useMemo(() => {
+    if (!poll || poll.mode !== 'rating' || !myRatings) return 0;
+    return Object.keys(myRatings).length;
+  }, [poll, myRatings]);
+  const totalOptionsCount = useMemo(() => options.length, [options]);
+  const iAmDone = useMemo(
+    () => poll?.mode === 'rating' && totalOptionsCount > 0 && myRatedCount >= totalOptionsCount,
+    [poll?.mode, myRatedCount, totalOptionsCount],
+  );
+
+  // When poll is committed (finalEvent set), ensure winner is saved for all members
+  useEffect(() => {
+    (async () => {
+      try {
+        if (!finalEvent || !poll?.group_id) return;
+        const gid = poll.group_id as number;
+        // Fetch members
+        const { data: members } = await supabase
+          .from('group_members')
+          .select('user_id')
+          .eq('group_id', gid);
+        const userIds: string[] = ((members as any[]) ?? []).map((m: any) => m.user_id);
+        if (!userIds.length) return;
+        // Insert saved_events for each member idempotently
+        // Note: Supabase upsert on composite PK requires onConflict
+        try {
+          await Promise.all(
+            userIds.map(async (uid) => {
+              const { error } = await supabase
+                .from('saved_events')
+                .upsert(
+                  { user_id: uid, event_id: finalEvent.id },
+                  { onConflict: 'user_id,event_id' },
+                );
+              if (error) throw error;
+            }),
+          );
+        } catch (e) {
+          // Likely RLS prevents writing for other users; ensure current user at least gets it
+          try {
+            const me = (await supabase.auth.getUser()).data.user;
+            if (me?.id) {
+              await supabase
+                .from('saved_events')
+                .upsert({ user_id: me.id, event_id: finalEvent.id }, { onConflict: 'user_id,event_id' });
+            }
+          } catch {}
+        }
+      } catch {
+        // best-effort; ignore failures
+      }
+    })();
+  }, [finalEvent, poll?.group_id]);
 
   const onVote = async (eventId: number) => {
     if (!poll?.is_active) return;
@@ -187,7 +255,7 @@ export default function PollDetails() {
       mutate: async () => {
         await castVote(pollId, eventId);
         // Refresh in background (do not block UI)
-        load().catch(() => {});
+        scheduleRefresh(250);
       },
     });
   };
@@ -200,6 +268,31 @@ export default function PollDetails() {
       Alert.alert('Close failed', e.message ?? String(e));
     }
   };
+
+  // Auto-commit for rating mode when all members have rated every option
+  useEffect(() => {
+    (async () => {
+      try {
+        if (!poll?.is_active) return;
+        if (poll?.mode !== 'rating') return;
+        if (totalMembers <= 0) return;
+        if (!options?.length) return;
+        // For each option, count total ratings received (sum of buckets)
+        const allRated = options.every((o) => {
+          const total = (o.love_it || 0) + (o.fine || 0) + (o.not_for_me || 0);
+          return total >= totalMembers; // allow >= to be safe if duplicates
+        });
+        if (!allRated) return;
+        const leader = suggestLeader(options as PollOptionView[]);
+        if (!leader) return;
+        // Commit silently if not already committed
+        try {
+          await commitPoll(pollId, leader.event_id);
+          await load();
+        } catch {}
+      } catch {}
+    })();
+  }, [poll?.is_active, poll?.mode, totalMembers, options]);
 
   const onDeletePoll = async () => {
     try {
@@ -337,8 +430,15 @@ export default function PollDetails() {
 
         {mode === 'swipe' && options.length > 0 ? (
           <View style={{ flex: 1, marginTop: 16 }}>
-            <SwipeDeck
-              data={options}
+            {/* Per-user progress indicator */}
+            {poll?.mode === 'rating' ? (
+              <Text style={{ color: c.muted, marginBottom: 8 }}>
+                You’ve rated {Math.min(myRatedCount, totalOptionsCount)}/{totalOptionsCount}
+              </Text>
+            ) : null}
+            {!iAmDone ? (
+              <SwipeDeck
+                data={options}
               keyExtractor={(o) => String(o.event_id)}
               renderCard={(item) => (
                 <View
@@ -354,6 +454,23 @@ export default function PollDetails() {
                       source={{ uri: item.event.image_url }}
                       style={{ width: '100%', height: 240, borderRadius: 12, marginBottom: 8 }}
                     />
+                  ) : null}
+                  {/* Crown for leader */}
+                  {leader && leader.event_id === item.event_id ? (
+                    <View
+                      style={{
+                        alignSelf: 'flex-start',
+                        backgroundColor: c.primary,
+                        paddingHorizontal: 8,
+                        paddingVertical: 2,
+                        borderRadius: 8,
+                        position: 'absolute',
+                        top: 12,
+                        left: 12,
+                      }}
+                    >
+                      <Text style={{ color: c.text, fontWeight: '800', fontSize: 12 }}>👑 Lead</Text>
+                    </View>
                   ) : null}
                   <Text style={{ color: c.text, fontWeight: '800', fontSize: 18 }}>
                     {item.event?.title ?? `Event #${item.event_id}`}
@@ -399,7 +516,62 @@ export default function PollDetails() {
                 nope: { text: 'NOPE', color: '#ef4444' },
                 super: { text: 'SUPERLIKE', color: '#f59e0b' },
               }}
-            />
+              />
+            ) : (
+              <View
+                style={{
+                  backgroundColor: c.card,
+                  padding: 12,
+                  borderRadius: 12,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Text style={{ color: c.text, fontWeight: '800' }}>You’re done 🎉</Text>
+                <Text style={{ color: c.muted, marginTop: 6 }}>Waiting on the group…</Text>
+                {leader ? (
+                  <View
+                    style={{
+                      marginTop: 10,
+                      width: '100%',
+                      backgroundColor: c.background,
+                      borderRadius: 10,
+                      padding: 10,
+                    }}
+                  >
+                    <Text style={{ color: c.text, fontWeight: '800' }}>Current leader 👑</Text>
+                    {(() => {
+                      const lo = options.find((o) => o.event_id === leader.event_id);
+                      const ev = lo?.event;
+                      return (
+                        <>
+                          <Text style={{ color: c.muted, marginTop: 4 }}>
+                            {ev?.title ?? `Event #${leader.event_id}`}
+                          </Text>
+                          <Text style={{ color: c.muted, marginTop: 2 }}>
+                            {ev?.date_time ? new Date(ev.date_time).toLocaleString() : ''}
+                            {ev?.location ? ` • ${ev.location}` : ''}
+                          </Text>
+                          <Pressable
+                            onPress={() => router.push(`/events/${leader.event_id}`)}
+                            style={{
+                              alignSelf: 'flex-start',
+                              backgroundColor: c.primary,
+                              paddingVertical: 6,
+                              paddingHorizontal: 10,
+                              borderRadius: 8,
+                              marginTop: 8,
+                            }}
+                          >
+                            <Text style={{ color: c.text, fontWeight: '700' }}>View</Text>
+                          </Pressable>
+                        </>
+                      );
+                    })()}
+                  </View>
+                ) : null}
+              </View>
+            )}
           </View>
         ) : null}
 

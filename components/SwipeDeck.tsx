@@ -37,12 +37,39 @@ export default function SwipeDeck<T = any>({
   const [index, setIndex] = useState(0);
   const position = useRef(new Animated.ValueXY()).current;
   const dragging = useRef(false);
+  // Track which items have been swiped (by stable key) so we don't re-show them if data updates
+  const swipedKeysRef = useRef<Set<string>>(new Set());
+  const prevKeysRef = useRef<string[] | null>(null);
 
+  // Reconcile current index with incoming data while preserving progress
   useEffect(() => {
-    // reset index if data changes drastically (e.g., new poll)
-    setIndex(0);
+    const keys = data.map((item, i) => keyExtractor(item, i));
+    const prev = prevKeysRef.current;
+    prevKeysRef.current = keys;
+    // First load
+    if (!prev) {
+      // Ensure index starts at first unswiped (typically 0)
+      const first = keys.findIndex((k) => !swipedKeysRef.current.has(k));
+      setIndex(first < 0 ? keys.length : first);
+      position.setValue({ x: 0, y: 0 });
+      return;
+    }
+    // Determine if this is a totally new dataset (e.g., navigating to a different poll)
+    const prevSet = new Set(prev);
+    let overlap = 0;
+    for (const k of keys) if (prevSet.has(k)) overlap += 1;
+    const isNewDataset = overlap === 0;
+    if (isNewDataset) {
+      swipedKeysRef.current.clear();
+      setIndex(0);
+      position.setValue({ x: 0, y: 0 });
+      return;
+    }
+    // Otherwise, keep progress: find first key not yet swiped
+    const first = keys.findIndex((k) => !swipedKeysRef.current.has(k));
+    setIndex(first < 0 ? keys.length : first);
     position.setValue({ x: 0, y: 0 });
-  }, [data]);
+  }, [data, keyExtractor, position]);
 
   const currentItem = data[index];
   const nextItems = useMemo(
@@ -85,6 +112,11 @@ export default function SwipeDeck<T = any>({
     cb?: (item: T, idx: number) => void | Promise<void>,
   ) => {
     if (!currentItem) return;
+    // Record swiped key immediately to preserve progress if parent updates data during callback
+    try {
+      const k = keyExtractor(currentItem, index);
+      swipedKeysRef.current.add(k);
+    } catch {}
     let toValue = { x: 0, y: 0 } as { x: number; y: number };
     if (dir === 'left') toValue = { x: -width * 1.3, y: 0 };
     if (dir === 'right') toValue = { x: width * 1.3, y: 0 };

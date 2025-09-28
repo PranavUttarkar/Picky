@@ -18,7 +18,7 @@ export default function HomeTab() {
         <View style={styles.cardsContainer}>
           <MediaCard
             image={require('../../assets/GroupDecide.png')}
-            onPress={() => router.push('/decisions/new')}
+            onPress={() => router.push('/(tabs)/group-decide')}
             accessibilityLabel="Start a new decision"
           />
 
