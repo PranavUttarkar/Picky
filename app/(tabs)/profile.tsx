@@ -1,6 +1,7 @@
 import { View, Text, Pressable, TextInput, ActivityIndicator } from 'react-native';
 import { useTheme, useThemeColors } from '@/theme/ThemeProvider';
 import GradientBackground from '@/components/GradientBackground';
+import AnimatedPage from '@/components/AnimatedPage';
 import GradientHeader from '@/components/GradientHeader';
 import { supabase } from '@/services/supabase';
 import { useEffect, useState, useCallback } from 'react';
@@ -68,7 +69,9 @@ export default function Profile() {
   }, []);
   const Container: React.FC<{ children: React.ReactNode }> = ({ children }) => (
     <GradientBackground contentContainerStyle={{ flex: 1, padding: 16 }}>
-      {children}
+      <AnimatedPage variant="pop" style={{ flex: 1 }}>
+        {children}
+      </AnimatedPage>
     </GradientBackground>
   );
 

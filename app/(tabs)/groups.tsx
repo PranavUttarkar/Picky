@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { View, Text, FlatList, Pressable, TextInput, Modal, Alert } from 'react-native';
 import { useTheme, useThemeColors } from '@/theme/ThemeProvider';
 import GradientBackground from '@/components/GradientBackground';
+import AnimatedPage from '@/components/AnimatedPage';
 import { supabase } from '@/services/supabase';
 import { router } from 'expo-router';
 import { createGroup, joinGroupByCode, getMyGroups } from '@/services/groups';
@@ -65,7 +66,8 @@ export default function Groups() {
 
   return (
     <GradientBackground>
-      <View style={{ flex: 1, padding: 16 }}>
+      <AnimatedPage variant="fade-up" style={{ flex: 1 }}>
+        <View style={{ flex: 1, padding: 16 }}>
         <View style={{ flexDirection: 'row', gap: 12, marginBottom: 12 }}>
           <Pressable
             onPress={() => setShowCreate(true)}
@@ -186,7 +188,8 @@ export default function Groups() {
             </View>
           </View>
         </Modal>
-      </View>
+        </View>
+      </AnimatedPage>
     </GradientBackground>
   );
 }

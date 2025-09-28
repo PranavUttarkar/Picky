@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, TextInput, Pressable, Alert, ScrollView, Platform } from 'react-native';
 import MediaCard from '@/components/MediaCard';
 import GradientBackground from '@/components/GradientBackground';
+import AnimatedPage from '@/components/AnimatedPage';
 import { useThemeColors } from '@/theme/ThemeProvider';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -109,8 +110,8 @@ export default function NewDecision() {
 
   return (
     <GradientBackground variant="dim">
-      <ScrollView contentContainerStyle={{ padding: 16 }}>
-        <Text style={{ color: c.text, fontSize: 24, fontWeight: '900' }}>New Decision</Text>
+      <AnimatedPage variant="slide-right" style={{ flex: 1 }}>
+        <ScrollView contentContainerStyle={{ padding: 16 }}>
         {/* progress dots */}
         <View style={{ flexDirection: 'row', gap: 6, marginTop: 8 }}>
           {[0, 1, 2, 3].map((i) => (
@@ -153,7 +154,6 @@ export default function NewDecision() {
                 <MediaCard
                   key={opt.key}
                   image={opt.image}
-                  label={opt.label}
                   selected={decisionType === (opt.key as any)}
                   onPress={() => setDecisionType(opt.key as any)}
                   accessibilityLabel={`Choose ${opt.label}`}
@@ -357,11 +357,8 @@ export default function NewDecision() {
             </View>
           </View>
         ) : null}
-
-        <Text style={{ color: c.muted, marginTop: 24 }}>
-          Tip: This flow is designed to feel like quick cards with dots—fast and friendly.
-        </Text>
-      </ScrollView>
+        </ScrollView>
+      </AnimatedPage>
     </GradientBackground>
   );
 }

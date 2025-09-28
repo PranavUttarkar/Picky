@@ -24,6 +24,7 @@ import LazyImage from '@/components/LazyImage';
 import EventImages from '@/components/EventImages';
 import { useTheme, useThemeColors } from '@/theme/ThemeProvider';
 import GradientBackground from '@/components/GradientBackground';
+import AnimatedPage from '@/components/AnimatedPage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import Chip from '@/components/Chip';
@@ -77,6 +78,15 @@ type AdminHeaderProps = {
   events: Event[];
   deleteEvent: (id: number) => void;
 };
+
+// Keep this container at module scope so it doesn't remount on list updates
+const EventsContainer: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <GradientBackground contentContainerStyle={{ flex: 1, padding: 12 }}>
+    <AnimatedPage variant="fade-up" style={{ flex: 1 }}>
+      {children}
+    </AnimatedPage>
+  </GradientBackground>
+);
 
 const AdminHeader = memo(function AdminHeader(props: AdminHeaderProps) {
   const {
@@ -500,7 +510,7 @@ const FiltersTopBar = memo(function FiltersTopBar({
         }}
       >
         {[
-          { key: 'all', label: 'View All' },
+          { key: 'all', label: 'Soonest' },
           { key: 'personalized', label: 'Personalized Feed' },
         ].map((opt) => {
           const active = mode === (opt.key as any);
@@ -558,13 +568,12 @@ const FiltersScrollable = memo(function FiltersScrollable({
   const [msg, setMsg] = useState<string | null>(null);
 
   // Sync when myTags changes externally (e.g., after profile edit)
-  if (!editing && editTags !== myTags) {
-    // simple reference inequality check; safe to update
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    useEffect(() => {
+  // Hooks must not be called conditionally; use a guarded effect instead.
+  useEffect(() => {
+    if (!editing && editTags !== myTags) {
       setEditTags(myTags);
-    }, [myTags]);
-  }
+    }
+  }, [editing, editTags, myTags]);
 
   const normalize = (arr: string[]) =>
     arr
@@ -821,7 +830,7 @@ export default function Home() {
   const [saved, setSaved] = useState<number[]>([]);
   const [query, setQuery] = useState('');
   const [activeTags, setActiveTags] = useState<string[]>([]);
-  const [mode, setMode] = useState<'all' | 'personalized'>('all');
+  const [mode, setMode] = useState<'all' | 'personalized'>('personalized');
   const [isAdmin, setIsAdmin] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [page, setPage] = useState(0);
@@ -1252,11 +1261,7 @@ export default function Home() {
     listRef.current?.scrollToOffset?.({ offset: 0, animated: true });
   };
 
-  const Container: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-    <GradientBackground contentContainerStyle={{ flex: 1, padding: 12 }}>
-      {children}
-    </GradientBackground>
-  );
+  // Container moved to module scope above (EventsContainer)
 
   // Admin header memo: only depends on admin form state, not search
   const adminHeader = useMemo(
@@ -1370,7 +1375,7 @@ export default function Home() {
   );
 
   return (
-    <Container>
+  <EventsContainer>
       {adminHeader}
       {filtersTopBar}
       <FlatList
@@ -1614,6 +1619,6 @@ export default function Home() {
           </View>
         </View>
       </Modal>
-    </Container>
+  </EventsContainer>
   );
 }
