@@ -110,9 +110,7 @@ export default function Interests() {
       style={{ flex: 1, backgroundColor: c.background }}
       contentContainerStyle={{ padding: 16 }}
     >
-      <Text style={{ color: c.text, fontSize: 24, fontWeight: '800' }}>
-        Let’s personalize in 30s
-      </Text>
+      <Text style={{ color: c.text, fontSize: 24, fontWeight: '800' }}>Let’s personalize!</Text>
       <Text style={{ color: c.muted, marginTop: 4, marginBottom: 12 }}>
         Quick picks below. Add your own anytime.
       </Text>
@@ -267,6 +265,17 @@ export default function Interests() {
       >
         <Text style={{ color: '#000', fontWeight: '800' }}>{saving ? 'Saving…' : 'Continue'}</Text>
       </Pressable>
+      <Text
+        style={{
+          color: c.muted,
+          marginTop: 20,
+          marginBottom: 12,
+          textAlign: 'center',
+          opacity: 0.6,
+        }}
+      >
+        {'(More interests = Better recs!)'}
+      </Text>
     </ScrollView>
   );
 }
