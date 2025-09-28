@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, TextInput, Pressable, Alert, ScrollView, Platform } from 'react-native';
+import MediaCard from '@/components/MediaCard';
 import GradientBackground from '@/components/GradientBackground';
 import { useThemeColors } from '@/theme/ThemeProvider';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,7 +12,10 @@ import { createPollWithOptions } from '@/services/polls';
 
 export default function NewDecision() {
   const c = useThemeColors();
-  const [step, setStep] = useState(0); // 0 topic, 1 participants, 2 deadline
+  const [step, setStep] = useState(0); // 0 type, 1 topic, 2 participants, 3 deadline
+  const [decisionType, setDecisionType] = useState<
+    'events' | 'food' | 'activities' | 'combo' | null
+  >(null);
   const [topic, setTopic] = useState('');
   const [groups, setGroups] = useState<any[]>([]);
   const [groupId, setGroupId] = useState<number | null>(null);
@@ -33,10 +37,11 @@ export default function NewDecision() {
   }, []);
 
   const canNext = useMemo(() => {
-    if (step === 0) return topic.trim().length > 0;
-    if (step === 1) return !!groupId || !!inviteCode;
+    if (step === 0) return !!decisionType;
+    if (step === 1) return topic.trim().length > 0;
+    if (step === 2) return !!groupId || !!inviteCode;
     return true;
-  }, [step, topic, groupId, inviteCode]);
+  }, [step, decisionType, topic, groupId, inviteCode]);
 
   const onCreateGroup = async () => {
     try {
@@ -108,7 +113,7 @@ export default function NewDecision() {
         <Text style={{ color: c.text, fontSize: 24, fontWeight: '900' }}>New Decision</Text>
         {/* progress dots */}
         <View style={{ flexDirection: 'row', gap: 6, marginTop: 8 }}>
-          {[0, 1, 2].map((i) => (
+          {[0, 1, 2, 3].map((i) => (
             <View
               key={i}
               style={{
@@ -124,10 +129,75 @@ export default function NewDecision() {
         {step === 0 ? (
           <View style={{ backgroundColor: c.card, padding: 16, borderRadius: 14, marginTop: 16 }}>
             <Text style={{ color: c.text, fontWeight: '800', fontSize: 16 }}>
-              What do you want to decide?
+              What are you deciding on?
+            </Text>
+            <View style={{ gap: 12, marginTop: 12 }}>
+              {[
+                {
+                  key: 'events',
+                  label: 'Events',
+                  image: require('../../../assets/DiscoverEvents.png'),
+                },
+                { key: 'food', label: 'Food', image: require('../../../assets/GroupDecide.png') },
+                {
+                  key: 'activities',
+                  label: 'Activities',
+                  image: require('../../../assets/GroupDecide.png'),
+                },
+                {
+                  key: 'combo',
+                  label: 'Combination',
+                  image: require('../../../assets/GroupDecide.png'),
+                },
+              ].map((opt) => (
+                <MediaCard
+                  key={opt.key}
+                  image={opt.image}
+                  label={opt.label}
+                  selected={decisionType === (opt.key as any)}
+                  onPress={() => setDecisionType(opt.key as any)}
+                  accessibilityLabel={`Choose ${opt.label}`}
+                />
+              ))}
+            </View>
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 12 }}>
+              <Pressable
+                onPress={() => setStep(1)}
+                disabled={!decisionType}
+                style={{
+                  backgroundColor: decisionType ? c.primary : c.background,
+                  paddingHorizontal: 14,
+                  paddingVertical: 10,
+                  borderRadius: 10,
+                }}
+              >
+                <Text style={{ color: c.text, fontWeight: '800' }}>Next</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
+
+        {step === 1 ? (
+          <View style={{ backgroundColor: c.card, padding: 16, borderRadius: 14, marginTop: 16 }}>
+            <Text style={{ color: c.text, fontWeight: '800', fontSize: 16 }}>
+              {decisionType === 'food'
+                ? 'What food are you deciding on?'
+                : decisionType === 'activities'
+                ? 'What activities are you deciding on?'
+                : decisionType === 'combo'
+                ? 'What mix are you deciding on?'
+                : 'What do you want to decide?'}
             </Text>
             <TextInput
-              placeholder="e.g., Saturday night plans"
+              placeholder={
+                decisionType === 'food'
+                  ? 'e.g., Sushi vs. Pizza night'
+                  : decisionType === 'activities'
+                  ? 'e.g., Hike or movie?'
+                  : decisionType === 'combo'
+                  ? 'e.g., Dinner + concert plan'
+                  : 'e.g., Saturday night plans'
+              }
               placeholderTextColor={c.muted}
               value={topic}
               onChangeText={setTopic}
@@ -140,9 +210,20 @@ export default function NewDecision() {
                 paddingVertical: Platform.OS === 'web' ? 10 : 8,
               }}
             />
-            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 12 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 12 }}>
               <Pressable
-                onPress={() => setStep(1)}
+                onPress={() => setStep(0)}
+                style={{
+                  backgroundColor: c.background,
+                  paddingHorizontal: 14,
+                  paddingVertical: 10,
+                  borderRadius: 10,
+                }}
+              >
+                <Text style={{ color: c.text, fontWeight: '700' }}>Back</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => setStep(2)}
                 disabled={topic.trim().length === 0}
                 style={{
                   backgroundColor: topic.trim().length > 0 ? c.primary : c.background,
@@ -157,7 +238,7 @@ export default function NewDecision() {
           </View>
         ) : null}
 
-        {step === 1 ? (
+        {step === 2 ? (
           <View style={{ backgroundColor: c.card, padding: 16, borderRadius: 14, marginTop: 16 }}>
             <Text style={{ color: c.text, fontWeight: '800', fontSize: 16 }}>Who’s involved?</Text>
             {/* Quick group selection */}
@@ -216,7 +297,7 @@ export default function NewDecision() {
             ) : null}
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 16 }}>
               <Pressable
-                onPress={() => setStep(0)}
+                onPress={() => setStep(1)}
                 style={{
                   backgroundColor: c.background,
                   paddingHorizontal: 14,
@@ -227,7 +308,7 @@ export default function NewDecision() {
                 <Text style={{ color: c.text, fontWeight: '700' }}>Back</Text>
               </Pressable>
               <Pressable
-                onPress={() => setStep(2)}
+                onPress={() => setStep(3)}
                 disabled={!groupId && !inviteCode}
                 style={{
                   backgroundColor: groupId || inviteCode ? c.primary : c.background,
@@ -242,7 +323,7 @@ export default function NewDecision() {
           </View>
         ) : null}
 
-        {step === 2 ? (
+        {step === 3 ? (
           <View style={{ backgroundColor: c.card, padding: 16, borderRadius: 14, marginTop: 16 }}>
             <Text style={{ color: c.text, fontWeight: '800', fontSize: 16 }}>
               Deadline to decide?
@@ -252,7 +333,7 @@ export default function NewDecision() {
             </View>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 16 }}>
               <Pressable
-                onPress={() => setStep(1)}
+                onPress={() => setStep(2)}
                 style={{
                   backgroundColor: c.background,
                   paddingHorizontal: 14,
