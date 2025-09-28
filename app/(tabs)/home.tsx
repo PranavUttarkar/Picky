@@ -10,9 +10,6 @@ export default function HomeTab() {
       <View style={{ flex: 1 }}>
         <View style={{ padding: 16 }}>
           <Text style={{ color: c.text, fontSize: 24, fontWeight: '900' }}>Dashboard</Text>
-          <Text style={{ color: c.muted, marginTop: 6 }}>
-            Kick off a decision and invite your crew.
-          </Text>
         </View>
 
         {/* Top Card: Group Decide (replaces + flow) */}
@@ -23,11 +20,13 @@ export default function HomeTab() {
             accessibilityLabel="Start a new decision"
             style={({ pressed }) => [styles.card, { opacity: pressed ? 0.9 : 1 }]}
           >
-            <Image
-              source={require('../../assets/GroupDecide.png')}
-              style={styles.cardImage}
-              resizeMode="cover"
-            />
+            <View style={styles.media}>
+              <Image
+                source={require('../../assets/GroupDecide.png')}
+                style={styles.mediaImage}
+                resizeMode={Platform.OS === 'web' ? 'cover' : 'contain'}
+              />
+            </View>
           </Pressable>
 
           {/* Bottom Card: Discover Events */}
@@ -37,11 +36,13 @@ export default function HomeTab() {
             accessibilityLabel="Discover events"
             style={({ pressed }) => [styles.card, { opacity: pressed ? 0.9 : 1 }]}
           >
-            <Image
-              source={require('../../assets/DiscoverEvents.png')}
-              style={styles.cardImage}
-              resizeMode="cover"
-            />
+            <View style={styles.media}>
+              <Image
+                source={require('../../assets/DiscoverEvents.png')}
+                style={styles.mediaImage}
+                resizeMode={Platform.OS === 'web' ? 'cover' : 'contain'}
+              />
+            </View>
           </Pressable>
         </View>
       </View>
@@ -62,10 +63,14 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: '#00000020',
-  },
-  cardImage: {
     width: '100%',
-    // Fixed height to avoid web stretching; tall on mobile per request
-    height: Platform.select({ web: 360, default: 360 }),
+  },
+  media: {
+    width: '100%',
+    aspectRatio: 20 / 9,
+  },
+  mediaImage: {
+    width: '100%',
+    height: '100%',
   },
 });

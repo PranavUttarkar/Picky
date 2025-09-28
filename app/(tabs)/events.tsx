@@ -795,47 +795,7 @@ const FiltersScrollable = memo(function FiltersScrollable({
         </View>
       ) : null}
 
-      {allTags.length ? (
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
-          {allTags.map((t, i) => {
-            const active = activeTags.includes(t);
-            return (
-              <Pressable
-                key={`${t}-${i}`}
-                onPress={() =>
-                  setActiveTags((prev) =>
-                    prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t],
-                  )
-                }
-                style={{
-                  backgroundColor: active ? c.primary : '#00000020',
-                  paddingHorizontal: 10,
-                  paddingVertical: 6,
-                  borderRadius: 999,
-                }}
-              >
-                <Text style={{ color: active ? '#000' : c.text, fontSize: 12 }}>{t}</Text>
-              </Pressable>
-            );
-          })}
-          {activeTags.length || query.length ? (
-            <Pressable
-              onPress={() => {
-                setActiveTags([]);
-                setQuery('');
-              }}
-              style={{
-                backgroundColor: '#00000030',
-                paddingHorizontal: 10,
-                paddingVertical: 6,
-                borderRadius: 999,
-              }}
-            >
-              <Text style={{ color: c.text, fontSize: 12 }}>Clear filters</Text>
-            </Pressable>
-          ) : null}
-        </View>
-      ) : null}
+      {/* Hide global/all tags chips below; only show 'Your interests' above */}
 
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
         <Text style={{ color: c.muted }}>
