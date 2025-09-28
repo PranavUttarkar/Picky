@@ -1,7 +1,6 @@
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Image, Platform } from 'react-native';
 import GradientBackground from '@/components/GradientBackground';
 import { useThemeColors } from '@/theme/ThemeProvider';
-import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 
 export default function HomeTab() {
@@ -16,32 +15,57 @@ export default function HomeTab() {
           </Text>
         </View>
 
-        {/* Floating Action Button */}
-        <Pressable
-          onPress={() => router.push('/decisions/new')}
-          style={[styles.fab, { backgroundColor: c.primary, shadowColor: c.primary }]}
-          accessibilityRole="button"
-          accessibilityLabel="Create a new decision"
-        >
-          <Ionicons name="add" size={28} color="#000" />
-        </Pressable>
+        {/* Top Card: Group Decide (replaces + flow) */}
+        <View style={styles.cardsContainer}>
+          <Pressable
+            onPress={() => router.push('/decisions/new')}
+            accessibilityRole="button"
+            accessibilityLabel="Start a new decision"
+            style={({ pressed }) => [styles.card, { opacity: pressed ? 0.9 : 1 }]}
+          >
+            <Image
+              source={require('../../assets/GroupDecide.png')}
+              style={styles.cardImage}
+              resizeMode="cover"
+            />
+          </Pressable>
+
+          {/* Bottom Card: Discover Events */}
+          <Pressable
+            onPress={() => router.push('/events')}
+            accessibilityRole="button"
+            accessibilityLabel="Discover events"
+            style={({ pressed }) => [styles.card, { opacity: pressed ? 0.9 : 1 }]}
+          >
+            <Image
+              source={require('../../assets/DiscoverEvents.png')}
+              style={styles.cardImage}
+              resizeMode="cover"
+            />
+          </Pressable>
+        </View>
       </View>
     </GradientBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  fab: {
-    position: 'absolute',
-    right: 20,
-    bottom: 28,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
+  cardsContainer: {
+    paddingHorizontal: 16,
+    gap: 12,
+    width: '100%',
+    maxWidth: 900,
+    alignSelf: 'center',
+  },
+  card: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#00000020',
+  },
+  cardImage: {
+    width: '100%',
+    // Fixed height to avoid web stretching; tall on mobile per request
+    height: Platform.select({ web: 360, default: 360 }),
   },
 });
