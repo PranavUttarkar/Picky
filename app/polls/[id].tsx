@@ -51,6 +51,10 @@ export default function PollDetails() {
   const [totalMembers, setTotalMembers] = useState(0);
   const [responded, setResponded] = useState(0);
   const [myRatings, setMyRatings] = useState<Record<number, number> | undefined>(undefined);
+  // Track optimistic ratings to prevent temporary drops due to eventual consistency
+  const optimisticRatingsRef = useRef<Map<number, { rating: -1 | 0 | 1 | null; ts: number }>>(
+    new Map(),
+  );
   const [waiting, setWaiting] = useState<Array<{ id: string; name?: string | null }> | undefined>(
     undefined,
   );
@@ -100,6 +104,8 @@ export default function PollDetails() {
           else clone[eventId] = nextRating;
           return clone;
         });
+        // Record optimistic rating with short TTL (e.g., 4s)
+        optimisticRatingsRef.current.set(eventId, { rating: nextRating, ts: Date.now() });
         // Adjust aggregate counts
         setOptions((opts) =>
           opts.map((o) => {
@@ -128,7 +134,7 @@ export default function PollDetails() {
       mutate: async () => {
         await castRating(pollId, eventId, nextRating);
         // Throttle reloads; realtime will also trigger this
-        scheduleRefresh(300);
+        scheduleRefresh(600);
       },
     })
       .catch((e) => {
@@ -161,7 +167,21 @@ export default function PollDetails() {
       return [...prev, ...appended];
     });
     setMyVote(myVote);
-    setMyRatings(myRatings);
+    // Merge server myRatings with recent optimistic entries to avoid temporary drops
+    const merged: Record<number, number> = {};
+    for (const k of Object.keys(myRatings || {})) merged[Number(k)] = (myRatings as any)[k];
+    const now = Date.now();
+    for (const [eid, entry] of optimisticRatingsRef.current.entries()) {
+      const { rating, ts } = entry;
+      if (now - ts > 4000) continue; // expired
+      if (rating === null) delete merged[eid];
+      else merged[eid] = rating;
+      // If server already reflects the same rating, drop the optimistic entry
+      if ((myRatings as any)?.[eid] === rating) {
+        optimisticRatingsRef.current.delete(eid);
+      }
+    }
+    setMyRatings(merged);
     setTotalMembers(totalMembers);
     setResponded(respondedCount);
     setWaiting(waiting);
@@ -193,7 +213,7 @@ export default function PollDetails() {
       }
       await load();
       const unsub = onPollRealtime(pollId, () => {
-        if (mounted) scheduleRefresh(250);
+        if (mounted) scheduleRefresh(700);
       });
       return () => unsub();
     })();
@@ -203,6 +223,7 @@ export default function PollDetails() {
         clearTimeout(refreshTimeout.current);
         refreshTimeout.current = null;
       }
+      optimisticRatingsRef.current.clear();
     };
   }, [pollId]);
 
