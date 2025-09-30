@@ -37,12 +37,15 @@ export default function SwipeDeck<T = any>({
   const [index, setIndex] = useState(0);
   const position = useRef(new Animated.ValueXY()).current;
   const dragging = useRef(false);
+  // While we are advancing to the next card (animation + awaiting callback), suppress reconciliation
+  const advancingRef = useRef(false);
   // Track which items have been swiped (by stable key) so we don't re-show them if data updates
   const swipedKeysRef = useRef<Set<string>>(new Set());
   const prevKeysRef = useRef<string[] | null>(null);
 
   // Reconcile current index with incoming data while preserving progress
   useEffect(() => {
+    if (advancingRef.current) return; // don't reconcile mid-advance
     const keys = data.map((item, i) => keyExtractor(item, i));
     const prev = prevKeysRef.current;
     prevKeysRef.current = keys;
@@ -122,11 +125,23 @@ export default function SwipeDeck<T = any>({
     if (dir === 'right') toValue = { x: width * 1.3, y: 0 };
     if (dir === 'up') toValue = { x: 0, y: -height * 1.2 };
     Animated.timing(position, { toValue, duration: 220, useNativeDriver: true }).start(async () => {
+      // Snapshot before advancing
+      const itemSnapshot = currentItem;
+      const indexSnapshot = index;
+      advancingRef.current = true;
+      // Immediately advance UI to next card
+      position.setValue({ x: 0, y: 0 });
+      setIndex((i) => i + 1);
       try {
-        cb && (await cb(currentItem, index));
+        cb && (await cb(itemSnapshot, indexSnapshot));
       } finally {
-        position.setValue({ x: 0, y: 0 });
-        setIndex((i) => i + 1);
+        advancingRef.current = false;
+        // Trigger a microtask reconciliation if parent updated data during advance
+        requestAnimationFrame(() => {
+          const keys = data.map((item, i) => keyExtractor(item, i));
+          const first = keys.findIndex((k) => !swipedKeysRef.current.has(k));
+          setIndex(first < 0 ? keys.length : Math.max(first, indexSnapshot + 1));
+        });
       }
     });
   };

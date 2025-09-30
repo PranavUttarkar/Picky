@@ -45,6 +45,8 @@ export default function PollDetails() {
   const pollId = Number(id);
   const [poll, setPoll] = useState<any>(null);
   const [options, setOptions] = useState<any[]>([]);
+  // Keep a stable snapshot for swipe mode to avoid flicker on quick refreshes/reordering
+  const [stableOptions, setStableOptions] = useState<any[] | null>(null);
   const [myVote, setMyVote] = useState<number | null | undefined>(undefined);
   const [totalMembers, setTotalMembers] = useState(0);
   const [responded, setResponded] = useState(0);
@@ -62,11 +64,20 @@ export default function PollDetails() {
   const [deleting, setDeleting] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
   const [mode, setMode] = useState<'list' | 'swipe'>('swipe');
+  // When mode switches to swipe or poll id changes, set stableOptions from current options
+  useEffect(() => {
+    if (mode === 'swipe') {
+      setStableOptions(options);
+    } else {
+      setStableOptions(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, pollId]);
   // Prevent concurrent rating mutations per event
   const ratingInFlight = useRef<Set<number>>(new Set());
   // Debounced refresh to reduce backend chatter during swipes
   const refreshTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const scheduleRefresh = (ms = 300) => {
+  const scheduleRefresh = (ms = 500) => {
     if (refreshTimeout.current) clearTimeout(refreshTimeout.current);
     refreshTimeout.current = setTimeout(() => {
       load().catch(() => {});
@@ -142,6 +153,13 @@ export default function PollDetails() {
     } = await getPoll(pollId);
     setPoll(poll);
     setOptions(options);
+    // If in swipe mode, avoid reordering the stack; keep existing order and append any new ones at the end
+    setStableOptions((prev) => {
+      if (!prev || mode !== 'swipe') return null;
+      const seen = new Set(prev.map((o: any) => o.event_id));
+      const appended = options.filter((o: any) => !seen.has(o.event_id));
+      return [...prev, ...appended];
+    });
     setMyVote(myVote);
     setMyRatings(myRatings);
     setTotalMembers(totalMembers);
@@ -468,7 +486,7 @@ export default function PollDetails() {
             </View>
             {!iAmDone ? (
               <SwipeDeck
-                data={options}
+                data={stableOptions ?? options}
                 keyExtractor={(o) => String(o.event_id)}
                 renderCard={(item) => (
                   <View

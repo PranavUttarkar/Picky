@@ -74,21 +74,6 @@ export default function GroupDecideStart() {
           <Text style={{ color: c.muted, marginTop: 6 }}>
             We’ll spin up a quick swipe vote with your top recommendations.
           </Text>
-          <View
-            style={{
-              backgroundColor: c.card,
-              borderRadius: 12,
-              padding: 10,
-              borderWidth: 1,
-              borderColor: '#00000020',
-              marginTop: 10,
-            }}
-          >
-            <Text style={{ color: c.text, fontWeight: '800' }}>Tip</Text>
-            <Text style={{ color: c.muted, marginTop: 4 }}>
-              Swipe right to like, left for no, and up for a super like.
-            </Text>
-          </View>
         </View>
         {loading ? (
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
