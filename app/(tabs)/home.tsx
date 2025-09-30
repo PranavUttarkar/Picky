@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, Platform } from 'react-native';
+import { View, Text, StyleSheet, Platform, useWindowDimensions } from 'react-native';
 import GradientBackground from '@/components/GradientBackground';
 import AnimatedPage from '@/components/AnimatedPage';
 import { useThemeColors } from '@/theme/ThemeProvider';
@@ -10,7 +10,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 export default function HomeTab() {
   const c = useThemeColors();
   const insets = useSafeAreaInsets();
-  const containerMaxWidth = Platform.OS === 'web' ? 640 : 900;
+  const { width } = useWindowDimensions();
+  // Consider "larger width" as tablet/desktop breakpoints
+  const isWide = width >= 768;
+  // On web, allow wider container when there is room
+  const containerMaxWidth = Platform.OS === 'web' ? (isWide ? 900 : 640) : 900;
   return (
     <GradientBackground variant="dim">
       <AnimatedPage variant="pop" style={{ flex: 1 }}>
@@ -19,19 +23,28 @@ export default function HomeTab() {
         </View>
 
         {/* Top Card: Discover Events */}
-        <View style={[styles.cardsContainer, { maxWidth: containerMaxWidth }]}>
-          <MediaCard
-            image={require('../../assets/DiscoverEvents.png')}
-            onPress={() => router.push('/events')}
-            accessibilityLabel="Discover events"
-          />
+        <View
+          style={[
+            styles.cardsContainer,
+            { maxWidth: containerMaxWidth, flexDirection: isWide ? 'row' : 'column' },
+          ]}
+        >
+          <View style={isWide ? { flex: 1 } : undefined}>
+            <MediaCard
+              image={require('../../assets/DiscoverEvents.png')}
+              onPress={() => router.push('/events')}
+              accessibilityLabel="Discover events"
+            />
+          </View>
 
           {/* Second Card: Group Decide */}
-          <MediaCard
-            image={require('../../assets/GroupDecide.png')}
-            onPress={() => router.push('/(tabs)/group-decide')}
-            accessibilityLabel="Start a new decision"
-          />
+          <View style={isWide ? { flex: 1 } : undefined}>
+            <MediaCard
+              image={require('../../assets/GroupDecide.png')}
+              onPress={() => router.push('/(tabs)/group-decide')}
+              accessibilityLabel="Start a new decision"
+            />
+          </View>
         </View>
 
         {/* Cartoon-style persuasive blurb */}

@@ -14,11 +14,13 @@ import {
   Platform,
   LayoutAnimation,
   UIManager,
+  useWindowDimensions,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
 import { ThreeDButton, ThreeDCard } from '@/components/ThreeD';
 import EventRowCard from '@/components/EventRowCard';
+import EventGridCard from '@/components/EventGridCard';
 import dayjs from 'dayjs';
 import LazyImage from '@/components/LazyImage';
 import EventImages from '@/components/EventImages';
@@ -823,6 +825,9 @@ const FiltersScrollable = memo(function FiltersScrollable({
 export default function Home() {
   const c = useThemeColors();
   const { scheme } = useTheme();
+  const { width } = useWindowDimensions();
+  const isWide = width >= 900; // switch to grid on larger screens
+  const columns = width >= 1280 ? 3 : isWide ? 2 : 1;
   const listRef = useRef<FlatList<Event>>(null);
   const [events, setEvents] = useState<Event[]>([]);
   const [myTags, setMyTags] = useState<string[]>([]);
@@ -1381,7 +1386,10 @@ export default function Home() {
       <FlatList
         ref={listRef}
         data={filtered}
+        key={`layout-${columns}`}
         keyExtractor={(e: any) => String(e.id)}
+        numColumns={columns}
+        columnWrapperStyle={columns > 1 ? { gap: 12 } : undefined}
         contentContainerStyle={{ gap: 12, paddingBottom: 32 }}
         ListHeaderComponent={filtersScrollable}
         refreshing={refreshing}
@@ -1404,27 +1412,34 @@ export default function Home() {
             />
           </View>
         }
-        renderItem={({ item }) => (
-          <EventRowCard
-            event={item}
-            isSaved={savedSet.has(item.id)}
-            onToggleSave={toggleSave}
-            onOpenDetails={() => onOpenDetails(item)}
-            onPoll={
+        renderItem={({ item }) => {
+          const cardProps = {
+            event: item,
+            isSaved: savedSet.has(item.id),
+            onToggleSave: toggleSave,
+            onOpenDetails: () => onOpenDetails(item),
+            onPoll:
               item.id > 0
                 ? async () => {
                     const authed = await requireAuth();
                     if (!authed) return;
                     router.push({ pathname: '/polls/new', params: { fromEvent: item.id } });
                   }
-                : undefined
-            }
-            onEdit={isAdmin && item.id > 0 ? () => prefillForEdit(item) : undefined}
-            onDelete={isAdmin && item.id > 0 ? () => deleteEvent(item.id) : undefined}
-            isAdmin={isAdmin}
-            matchPercent={match(item.id, item.tags)}
-          />
-        )}
+                : undefined,
+            onEdit: isAdmin && item.id > 0 ? () => prefillForEdit(item) : undefined,
+            onDelete: isAdmin && item.id > 0 ? () => deleteEvent(item.id) : undefined,
+            isAdmin,
+            matchPercent: match(item.id, item.tags),
+          } as const;
+          if (columns > 1) {
+            return (
+              <View style={{ flex: 1 }}>
+                <EventGridCard {...cardProps} />
+              </View>
+            );
+          }
+          return <EventRowCard {...cardProps} />;
+        }}
       />
 
       {/* Event Details Modal */}

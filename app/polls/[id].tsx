@@ -1,4 +1,14 @@
-import { View, Text, Pressable, FlatList, Alert, Image, Linking, Modal } from 'react-native';
+import {
+  View,
+  Text,
+  Pressable,
+  FlatList,
+  Alert,
+  Image,
+  Linking,
+  Modal,
+  useWindowDimensions,
+} from 'react-native';
 import { useThemeColors } from '@/theme/ThemeProvider';
 import GradientBackground from '@/components/GradientBackground';
 import GradientHeader from '@/components/GradientHeader';
@@ -29,6 +39,8 @@ import EventRowCard from '@/components/EventRowCard';
 
 export default function PollDetails() {
   const c = useThemeColors();
+  const { width } = useWindowDimensions();
+  const isWide = width >= 900;
   const { id } = useLocalSearchParams<{ id: string }>();
   const pollId = Number(id);
   const [poll, setPoll] = useState<any>(null);
@@ -439,6 +451,21 @@ export default function PollDetails() {
                 You’ve rated {Math.min(myRatedCount, totalOptionsCount)}/{totalOptionsCount}
               </Text>
             ) : null}
+            {/* Swipe tips */}
+            <View
+              style={{
+                backgroundColor: c.card,
+                borderRadius: 10,
+                padding: 8,
+                borderWidth: 1,
+                borderColor: '#00000020',
+                marginBottom: 8,
+              }}
+            >
+              <Text style={{ color: c.muted, fontSize: 12 }}>
+                Tip: Swipe right to like, left for no, and up for a super like.
+              </Text>
+            </View>
             {!iAmDone ? (
               <SwipeDeck
                 data={options}
@@ -669,13 +696,17 @@ export default function PollDetails() {
               style={{ marginTop: 16 }}
               data={options}
               keyExtractor={(o) => String(o.event_id)}
+              key={`poll-list-${isWide ? 'grid' : 'list'}`}
+              numColumns={isWide ? 2 : 1}
+              columnWrapperStyle={isWide ? { gap: 12 } : undefined}
+              contentContainerStyle={{ gap: 12 }}
               renderItem={({ item }) => {
                 const count = item.votes ?? 0;
                 const pct = totalVotes === 0 ? 0 : Math.round((count * 100) / totalVotes);
                 const isMine = myVote === item.event_id;
                 const isLeader = leader && leader.event_id === item.event_id;
                 return (
-                  <View style={{ marginBottom: 10 }}>
+                  <View style={{ marginBottom: isWide ? 0 : 10, flex: isWide ? 1 : undefined }}>
                     {/* Leader badge */}
                     {isLeader ? (
                       <View
