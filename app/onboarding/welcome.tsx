@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { View, Text, TextInput, Pressable } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { supabase } from '@/services/supabase';
 import { ensureProfile } from '@/services/profile';
 import { useThemeColors } from '@/theme/ThemeProvider';
@@ -9,7 +9,9 @@ type Mode = 'signIn' | 'signUp';
 
 export default function Welcome() {
   const c = useThemeColors();
-  const [mode, setMode] = useState<Mode>('signUp');
+  const params = useLocalSearchParams<{ mode?: string }>();
+  const initialMode: Mode = params.mode === 'signIn' ? 'signIn' : 'signUp';
+  const [mode, setMode] = useState<Mode>(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -112,6 +114,15 @@ export default function Welcome() {
         padding: 24,
       }}
     >
+      {/* Back button to return to Home */}
+      <Pressable
+        onPress={() => router.replace('/home')}
+        style={{ position: 'absolute', top: 48, left: 24, padding: 8 }}
+        accessibilityRole="button"
+        accessibilityLabel="Go back to Home"
+      >
+        <Text style={{ color: c.primary, fontWeight: '700' }}>Back</Text>
+      </Pressable>
       <Text
         style={{
           color: c.text,

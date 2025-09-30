@@ -4,8 +4,63 @@ import GradientBackground from '@/components/GradientBackground';
 import AnimatedPage from '@/components/AnimatedPage';
 import GradientHeader from '@/components/GradientHeader';
 import { supabase } from '@/services/supabase';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, memo } from 'react';
 import { router } from 'expo-router';
+
+// Hoisted components to avoid remounting on each keystroke
+function Container({ children }: { children: React.ReactNode }) {
+  return (
+    <GradientBackground contentContainerStyle={{ flex: 1, padding: 16 }}>
+      <AnimatedPage variant="pop" style={{ flex: 1 }}>
+        {children}
+      </AnimatedPage>
+    </GradientBackground>
+  );
+}
+
+const TagList = memo(function TagList({
+  tags,
+  onRemove,
+}: {
+  tags: string[];
+  onRemove: (t: string) => void;
+}) {
+  const c = useThemeColors();
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 6,
+        marginBottom: 10,
+      }}
+    >
+      {tags.map((tag) => (
+        <View
+          key={tag}
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            paddingHorizontal: 10,
+            paddingVertical: 4,
+            backgroundColor: c.primary,
+            borderRadius: 999,
+            gap: 4,
+          }}
+        >
+          <Text style={{ color: '#000', fontSize: 12, fontWeight: '700' }}>{tag}</Text>
+          <Pressable
+            onPress={() => onRemove(tag)}
+            accessibilityLabel={`Remove ${tag}`}
+            style={{ paddingHorizontal: 4, paddingVertical: 2 }}
+          >
+            <Text style={{ color: '#000', fontWeight: '700' }}>×</Text>
+          </Pressable>
+        </View>
+      ))}
+    </View>
+  );
+});
 
 export default function Profile() {
   const c = useThemeColors();
@@ -67,13 +122,7 @@ export default function Profile() {
       sub.subscription.unsubscribe();
     };
   }, []);
-  const Container: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-    <GradientBackground contentContainerStyle={{ flex: 1, padding: 16 }}>
-      <AnimatedPage variant="pop" style={{ flex: 1 }}>
-        {children}
-      </AnimatedPage>
-    </GradientBackground>
-  );
+  // (Container hoisted to top-level to avoid remount on local state changes)
 
   // Ensure tag list uniqueness & cap
   const normalized = useCallback(
@@ -126,6 +175,32 @@ export default function Profile() {
     }
     setSaving(false);
   }, [normalized, tags]);
+
+  // Memoized handlers to keep TextInput from causing broad re-renders
+  const handleChangeText = useCallback(
+    (val: string) => {
+      if (/\[\n,\]/.test(val)) {
+        addTagsFromInput(val);
+        setNewTagInput('');
+      } else {
+        setNewTagInput(val);
+      }
+    },
+    [addTagsFromInput],
+  );
+
+  const handleSubmitEditing = useCallback(
+    (e: any) => {
+      const text = e?.nativeEvent?.text ?? newTagInput;
+      if (text) {
+        addTagsFromInput(text);
+        setNewTagInput('');
+      }
+    },
+    [addTagsFromInput, newTagInput],
+  );
+
+  // (TagList hoisted to top-level to avoid remount on local state changes)
 
   return (
     <Container>
@@ -207,53 +282,11 @@ export default function Profile() {
               </View>
             ) : (
               <View>
-                <View
-                  style={{
-                    flexDirection: 'row',
-                    flexWrap: 'wrap',
-                    gap: 6,
-                    marginBottom: 10,
-                  }}
-                >
-                  {tags.map((tag) => (
-                    <View
-                      key={tag}
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        paddingHorizontal: 10,
-                        paddingVertical: 4,
-                        backgroundColor: c.primary,
-                        borderRadius: 999,
-                        gap: 4,
-                      }}
-                    >
-                      <Text style={{ color: '#000', fontSize: 12, fontWeight: '700' }}>{tag}</Text>
-                      <Pressable
-                        onPress={() => removeTag(tag)}
-                        accessibilityLabel={`Remove ${tag}`}
-                        style={{ paddingHorizontal: 4, paddingVertical: 2 }}
-                      >
-                        <Text style={{ color: '#000', fontWeight: '700' }}>×</Text>
-                      </Pressable>
-                    </View>
-                  ))}
-                </View>
+                <TagList tags={tags} onRemove={removeTag} />
                 <TextInput
                   value={newTagInput}
-                  onChangeText={(val) => {
-                    // If user typed a comma or newline, commit accumulated input
-                    if (/[\n,]/.test(val)) {
-                      addTagsFromInput(val);
-                      setNewTagInput('');
-                    } else {
-                      setNewTagInput(val);
-                    }
-                  }}
-                  onSubmitEditing={() => {
-                    addTagsFromInput(newTagInput);
-                    setNewTagInput('');
-                  }}
+                  onChangeText={handleChangeText}
+                  onSubmitEditing={handleSubmitEditing}
                   placeholder={tags.length ? 'Add another interest' : 'Add an interest'}
                   placeholderTextColor={c.muted}
                   style={{

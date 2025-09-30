@@ -1,5 +1,5 @@
 import React, { useCallback, useRef } from 'react';
-import { Animated, Easing, ViewStyle } from 'react-native';
+import { Animated, Easing, ViewStyle, Platform } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 
 type Variant = 'fade-up' | 'slide-right' | 'pop';
@@ -35,7 +35,8 @@ export default function AnimatedPage({
   };
 
   const play = () => {
-    const common = { delay, useNativeDriver: true } as const;
+    const canNative = Platform.OS !== 'web';
+    const common = { delay, useNativeDriver: canNative } as const;
     if (variant === 'pop') {
       Animated.parallel([
         Animated.timing(opacity, {
@@ -48,7 +49,7 @@ export default function AnimatedPage({
           toValue: 1,
           bounciness: 10,
           speed: 12,
-          useNativeDriver: true,
+          useNativeDriver: canNative,
         }),
       ]).start();
       return;

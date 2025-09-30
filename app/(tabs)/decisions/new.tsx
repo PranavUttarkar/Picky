@@ -5,7 +5,7 @@ import GradientBackground from '@/components/GradientBackground';
 import AnimatedPage from '@/components/AnimatedPage';
 import { useThemeColors } from '@/theme/ThemeProvider';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useRootNavigationState } from 'expo-router';
 import { supabase } from '@/services/supabase';
 import { getMyGroups, createGroup, regenerateInviteCode } from '@/services/groups';
 import PollDeadlinePicker from '@/components/PollDeadlinePicker';
@@ -13,6 +13,9 @@ import { createPollWithOptions } from '@/services/polls';
 
 export default function NewDecision() {
   const c = useThemeColors();
+  const mountedRef = useRef(true);
+  const rootState = useRootNavigationState();
+  const navReady = !!rootState?.key;
   const [step, setStep] = useState(0); // 0 type, 1 topic, 2 participants, 3 deadline
   const [decisionType, setDecisionType] = useState<
     'events' | 'food' | 'activities' | 'combo' | null
@@ -25,17 +28,22 @@ export default function NewDecision() {
   const [deadlineAt, setDeadlineAt] = useState<string | null>(null);
 
   useEffect(() => {
+    mountedRef.current = true;
     (async () => {
       const user = (await supabase.auth.getUser()).data.user;
       if (!user) {
-        router.replace('/onboarding/welcome');
+        if (mountedRef.current && navReady) router.replace('/onboarding/welcome');
         return;
       }
       const gs = await getMyGroups();
+      if (!mountedRef.current) return;
       setGroups(gs);
       if (gs.length) setGroupId(gs[0].id);
     })();
-  }, []);
+    return () => {
+      mountedRef.current = false;
+    };
+  }, [navReady]);
 
   const canNext = useMemo(() => {
     // Only allow progressing past step 0 when Events is selected
@@ -103,7 +111,9 @@ export default function NewDecision() {
       }
       if (!pollId) throw new Error('Could not create decision room');
       // Navigate to decision room for preference collection (under tabs)
-      router.replace(`/(tabs)/decisions/${pollId}`);
+      if (mountedRef.current && navReady) {
+        router.replace(`/(tabs)/decisions/${pollId}`);
+      }
     } catch (e: any) {
       Alert.alert('Could not create decision', e.message ?? String(e));
     }

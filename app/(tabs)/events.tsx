@@ -492,7 +492,7 @@ const FiltersTopBar = memo(function FiltersTopBar({
         }}
       >
         <TextInput
-          placeholder="Search events or use #tags"
+          placeholder="Search anything from 'free food' to 'tech'"
           placeholderTextColor={c.muted}
           value={query}
           onChangeText={setQuery}
@@ -549,6 +549,7 @@ type FiltersScrollableProps = {
   setQuery: (v: string) => void;
   filteredCount: number;
   mode: 'all' | 'personalized';
+  isAuthed: boolean;
 };
 
 const FiltersScrollable = memo(function FiltersScrollable({
@@ -562,6 +563,7 @@ const FiltersScrollable = memo(function FiltersScrollable({
   setQuery,
   filteredCount,
   mode,
+  isAuthed,
 }: FiltersScrollableProps) {
   const [editing, setEditing] = useState(false);
   const [editTags, setEditTags] = useState<string[]>(myTags);
@@ -804,6 +806,43 @@ const FiltersScrollable = memo(function FiltersScrollable({
             </View>
           )}
         </View>
+      ) : !isAuthed ? (
+        <View
+          style={{
+            backgroundColor: c.card,
+            borderRadius: 12,
+            padding: 12,
+            marginBottom: 12,
+            borderWidth: 1,
+            borderColor: '#00000020',
+          }}
+        >
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: 6,
+            }}
+          >
+            <Text style={{ color: c.text, fontWeight: '800' }}>Your interests</Text>
+          </View>
+          <Text style={{ color: c.muted }}>
+            Personalize your event feed by adding interests.
+          </Text>
+          <Pressable
+            onPress={() => router.push('/onboarding/welcome')}
+            style={{ marginTop: 8 }}
+            accessibilityRole="link"
+            accessibilityLabel="Create account to add interests"
+          >
+            <Text
+              style={{ color: c.primary, fontWeight: '700', textDecorationLine: 'underline' }}
+            >
+              Create account to add interests
+            </Text>
+          </Pressable>
+        </View>
       ) : null}
 
       {/* Hide global/all tags chips below; only show 'Your interests' above */}
@@ -841,6 +880,7 @@ export default function Home() {
   const [page, setPage] = useState(0);
   const [isFetching, setIsFetching] = useState(false);
   const [hasMore, setHasMore] = useState(true);
+  const [isAuthed, setIsAuthed] = useState(false);
 
   // Modal state for event details
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
@@ -965,7 +1005,11 @@ export default function Home() {
     // Load user-specific info
     (async () => {
       const user = (await supabase.auth.getUser()).data.user;
-      if (!user) return; // guests can still see events; just skip personalized data
+      if (!user) {
+        setIsAuthed(false);
+        return; // guests can still see events; just skip personalized data
+      }
+      setIsAuthed(true);
       // Admin detection
       const { data: urow } = await supabase
         .from('users')
@@ -1351,9 +1395,10 @@ export default function Home() {
         setQuery={setQuery}
         filteredCount={filtered.length}
         mode={mode}
+        isAuthed={isAuthed}
       />
     ),
-    [c, myTags, activeTags, allTags, query, filtered.length, mode],
+    [c, myTags, activeTags, allTags, query, filtered.length, mode, isAuthed],
   );
 
   // Gradient bordered match badge

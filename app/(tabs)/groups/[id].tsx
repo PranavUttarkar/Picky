@@ -4,10 +4,12 @@ import * as Clipboard from 'expo-clipboard';
 import { useThemeColors } from '@/theme/ThemeProvider';
 import GradientBackground from '@/components/GradientBackground';
 import GradientHeader from '@/components/GradientHeader';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/services/supabase';
 import { useLocalSearchParams, router } from 'expo-router';
 import { regenerateInviteCode } from '@/services/groups';
+import EventRowCard from '@/components/EventRowCard';
+import type { Event } from '@/types/models';
 
 export default function GroupFeed() {
   const c = useThemeColors();
@@ -15,6 +17,7 @@ export default function GroupFeed() {
   const groupId = Number(id);
   const [group, setGroup] = useState<any>(null);
   const [polls, setPolls] = useState<any[]>([]);
+  const [winnersById, setWinnersById] = useState<Record<number, Event>>({});
 
   useEffect(() => {
     let mounted = true;
@@ -72,6 +75,26 @@ export default function GroupFeed() {
       mounted = false;
     };
   }, [groupId]);
+
+  // Fetch winner events for any polls that have final_event_id
+  useEffect(() => {
+    (async () => {
+      const ids = Array.from(new Set(polls.map((p) => p.final_event_id).filter(Boolean)));
+      const missing = ids.filter((id) => !winnersById[id!]);
+      if (!missing.length) return;
+      const { data } = await supabase
+        .from('events')
+        .select('id,title,description,location,date_time,image_url,image_urls,tags,rsvp_url')
+        .in('id', missing as number[]);
+      if (data && data.length) {
+        setWinnersById((prev) => {
+          const next = { ...prev };
+          for (const ev of data as Event[]) next[ev.id] = ev;
+          return next;
+        });
+      }
+    })();
+  }, [polls]);
 
   const onRegenerate = async () => {
     try {
@@ -177,10 +200,40 @@ export default function GroupFeed() {
               </Text>
               {item.final_event_id ? (
                 <View style={{ marginTop: 8 }}>
-                  <Text style={{ color: c.text, fontWeight: '700' }}>
-                    Winner: Event #{item.final_event_id}
-                  </Text>
-                  <View style={{ flexDirection: 'row', gap: 8, marginTop: 6 }}>
+                  <Text style={{ color: c.text, fontWeight: '700', marginBottom: 6 }}>Winner</Text>
+                  {/* Winner event card with crown overlay */}
+                  <View style={{ position: 'relative' }}>
+                    {winnersById[item.final_event_id] ? (
+                      <EventRowCard
+                        event={winnersById[item.final_event_id]}
+                        isSaved={false}
+                        onToggleSave={() => {}}
+                        onOpenDetails={() => router.push(`/events/${item.final_event_id}`)}
+                      />
+                    ) : (
+                      <View style={{ backgroundColor: c.card, padding: 12, borderRadius: 12 }}>
+                        <Text style={{ color: c.muted }}>Loading event…</Text>
+                      </View>
+                    )}
+                    <View
+                      style={{
+                        position: 'absolute',
+                        top: -30,
+                        right: -26,
+                        transform: [{ rotate: '45deg' }],
+                        backgroundColor: 'transparent',
+                        paddingHorizontal: 8,
+                        paddingVertical: 4,
+                        borderRadius: 999,
+                      }}
+                      pointerEvents="none"
+                      accessibilityElementsHidden
+                      importantForAccessibility="no-hide-descendants"
+                    >
+                      <Text style={{ fontSize: 34 }}>👑</Text>
+                    </View>
+                  </View>
+                  <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
                     <Pressable
                       onPress={() => router.push(`/(tabs)/polls/${item.id}`)}
                       style={{

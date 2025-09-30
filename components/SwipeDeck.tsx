@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, StyleSheet, Animated, Dimensions, Text } from 'react-native';
+import { View, StyleSheet, Animated, Dimensions, Text, Platform } from 'react-native';
 import { PanGestureHandler, PanGestureHandlerStateChangeEvent } from 'react-native-gesture-handler';
 
 type OverlayLabels = {
@@ -104,7 +104,7 @@ export default function SwipeDeck<T = any>({
   const resetCard = () => {
     Animated.spring(position, {
       toValue: { x: 0, y: 0 },
-      useNativeDriver: true,
+      useNativeDriver: Platform.OS !== 'web',
       friction: 6,
       tension: 80,
     }).start();
@@ -124,7 +124,11 @@ export default function SwipeDeck<T = any>({
     if (dir === 'left') toValue = { x: -width * 1.3, y: 0 };
     if (dir === 'right') toValue = { x: width * 1.3, y: 0 };
     if (dir === 'up') toValue = { x: 0, y: -height * 1.2 };
-    Animated.timing(position, { toValue, duration: 220, useNativeDriver: true }).start(async () => {
+    Animated.timing(position, {
+      toValue,
+      duration: 220,
+      useNativeDriver: Platform.OS !== 'web',
+    }).start(async () => {
       // Snapshot before advancing
       const itemSnapshot = currentItem;
       const indexSnapshot = index;
@@ -148,7 +152,7 @@ export default function SwipeDeck<T = any>({
 
   const onGestureEvent = Animated.event(
     [{ nativeEvent: { translationX: position.x, translationY: position.y } }],
-    { useNativeDriver: true },
+    { useNativeDriver: Platform.OS !== 'web' },
   );
 
   const onHandlerStateChange = (e: PanGestureHandlerStateChangeEvent) => {

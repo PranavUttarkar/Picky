@@ -68,8 +68,13 @@ export default function BlurbBubble({ title, children, style, footerTag, illustr
         <View style={{ gap: 8 }}>{children}</View>
 
         {footerTag ? (
-          <View style={[styles.tag, { backgroundColor: accentColor }]}>
-            <Text style={styles.tagText}>{footerTag}</Text>
+          <View
+            style={[
+              styles.tag,
+              { backgroundColor: 'transparent', borderColor: accentColor, borderWidth: 1 },
+            ]}
+          >
+            <Text style={[styles.tagText, { color: accentColor }]}>{footerTag}</Text>
           </View>
         ) : null}
       </View>
@@ -88,7 +93,7 @@ const styles = StyleSheet.create({
     // playful shadow
     shadowOpacity: 0.15,
     shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
+    shadowOffset: { width: 0, height: 16 },
     elevation: 6,
   },
   headerRow: {
@@ -119,7 +124,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 999,
+    borderRadius: 9,
     marginTop: 12,
   },
   tagText: {

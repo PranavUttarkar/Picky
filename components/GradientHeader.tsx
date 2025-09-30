@@ -43,11 +43,17 @@ export default function GradientHeader({
   const showCopiedToast = () => {
     setCopied(true);
     fade.setValue(0);
-    Animated.timing(fade, { toValue: 1, duration: 180, useNativeDriver: true }).start(() => {
+    Animated.timing(fade, {
+      toValue: 1,
+      duration: 180,
+      useNativeDriver: Platform.OS !== 'web',
+    }).start(() => {
       setTimeout(() => {
-        Animated.timing(fade, { toValue: 0, duration: 250, useNativeDriver: true }).start(() =>
-          setCopied(false),
-        );
+        Animated.timing(fade, {
+          toValue: 0,
+          duration: 250,
+          useNativeDriver: Platform.OS !== 'web',
+        }).start(() => setCopied(false));
       }, 1200);
     });
   };

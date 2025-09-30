@@ -501,8 +501,8 @@ export default function PollDetails() {
                 marginBottom: 8,
               }}
             >
-              <Text style={{ color: c.muted, fontSize: 12 }}>
-                Tip: Swipe right to like, left for no, and up for a super like.
+              <Text style={{ color: c.text, fontSize: 12 }}>
+                Swipe right to like, left for no, up for love.
               </Text>
             </View>
             {!iAmDone ? (
@@ -516,6 +516,7 @@ export default function PollDetails() {
                       borderRadius: 16,
                       padding: 12,
                       width: '100%',
+                      position: 'relative',
                     }}
                   >
                     {item.event?.image_url ? (
@@ -524,23 +525,24 @@ export default function PollDetails() {
                         style={{ width: '100%', height: 240, borderRadius: 12, marginBottom: 8 }}
                       />
                     ) : null}
-                    {/* Crown for leader */}
+                    {/* Crown for leader: tilted top-right overlay */}
                     {leader && leader.event_id === item.event_id ? (
                       <View
                         style={{
-                          alignSelf: 'flex-start',
-                          backgroundColor: c.primary,
-                          paddingHorizontal: 8,
-                          paddingVertical: 2,
-                          borderRadius: 8,
                           position: 'absolute',
-                          top: 12,
-                          left: 12,
+                          top: 8,
+                          right: 8,
+                          transform: [{ rotate: '45deg' }],
+                          backgroundColor: 'transparent',
+                          paddingHorizontal: 8,
+                          paddingVertical: 4,
+                          borderRadius: 999,
                         }}
+                        pointerEvents="none"
+                        accessibilityElementsHidden
+                        importantForAccessibility="no-hide-descendants"
                       >
-                        <Text style={{ color: c.text, fontWeight: '800', fontSize: 12 }}>
-                          👑 Lead
-                        </Text>
+                        <Text style={{ fontSize: 34 }}>👑</Text>
                       </View>
                     ) : null}
                     <Text style={{ color: c.text, fontWeight: '800', fontSize: 18 }}>
@@ -587,7 +589,7 @@ export default function PollDetails() {
                 overlayLabels={{
                   like: { text: 'YES', color: '#22c55e' },
                   nope: { text: 'NOPE', color: '#ef4444' },
-                  super: { text: 'SUPERLIKE', color: '#f59e0b' },
+                  super: { text: 'LOVE', color: '#f59e0b' },
                 }}
               />
             ) : (
@@ -612,33 +614,46 @@ export default function PollDetails() {
                       padding: 10,
                     }}
                   >
-                    <Text style={{ color: c.text, fontWeight: '800' }}>Current leader 👑</Text>
+                    <Text style={{ color: c.text, fontWeight: '800', marginBottom: 6 }}>
+                      Current leader
+                    </Text>
                     {(() => {
                       const lo = options.find((o) => o.event_id === leader.event_id);
                       const ev = lo?.event;
                       return (
-                        <>
-                          <Text style={{ color: c.muted, marginTop: 4 }}>
-                            {ev?.title ?? `Event #${leader.event_id}`}
-                          </Text>
-                          <Text style={{ color: c.muted, marginTop: 2 }}>
-                            {ev?.date_time ? new Date(ev.date_time).toLocaleString() : ''}
-                            {ev?.location ? ` • ${ev.location}` : ''}
-                          </Text>
-                          <Pressable
-                            onPress={() => router.push(`/events/${leader.event_id}`)}
+                        <View style={{ position: 'relative' }}>
+                          <View
                             style={{
-                              alignSelf: 'flex-start',
-                              backgroundColor: c.primary,
-                              paddingVertical: 6,
-                              paddingHorizontal: 10,
-                              borderRadius: 8,
-                              marginTop: 8,
+                              position: 'absolute',
+                              top: -36,
+                              right: -36,
+                              transform: [{ rotate: '45deg' }],
+                              backgroundColor: 'transparent',
+                              paddingHorizontal: 8,
+                              paddingVertical: 4,
+                              borderRadius: 999,
+                              zIndex: 2,
                             }}
+                            pointerEvents="none"
+                            accessibilityElementsHidden
+                            importantForAccessibility="no-hide-descendants"
                           >
-                            <Text style={{ color: c.text, fontWeight: '700' }}>View</Text>
-                          </Pressable>
-                        </>
+                            <Text style={{ fontSize: 34 }}>👑</Text>
+                          </View>
+                          <EventRowCard
+                            event={
+                              (ev ?? {
+                                id: leader.event_id,
+                                title: `Event #${leader.event_id}`,
+                                date_time: new Date().toISOString(),
+                              }) as any
+                            }
+                            isSaved={false}
+                            onToggleSave={() => {}}
+                            onOpenDetails={() => router.push(`/events/${leader.event_id}`)}
+                            matchPercent={lo?.match_percent}
+                          />
+                        </View>
                       );
                     })()}
                   </View>
@@ -746,39 +761,41 @@ export default function PollDetails() {
                 const isLeader = leader && leader.event_id === item.event_id;
                 return (
                   <View style={{ marginBottom: isWide ? 0 : 10, flex: isWide ? 1 : undefined }}>
-                    {/* Leader badge */}
-                    {isLeader ? (
-                      <View
-                        style={{
-                          alignSelf: 'flex-start',
-                          backgroundColor: c.primary,
-                          paddingHorizontal: 8,
-                          paddingVertical: 2,
-                          borderRadius: 8,
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          gap: 4,
-                          marginBottom: 6,
-                        }}
-                      >
-                        <Text style={{ color: c.text, fontSize: 12, fontWeight: '800' }}>
-                          👑 Lead
-                        </Text>
-                      </View>
-                    ) : null}
-                    <EventRowCard
-                      event={
-                        (item.event ?? {
-                          id: item.event_id,
-                          title: `Event #${item.event_id}`,
-                          date_time: new Date().toISOString(),
-                        }) as any
-                      }
-                      isSaved={false}
-                      onToggleSave={() => {}}
-                      onOpenDetails={() => router.push(`/events/${item.event_id}`)}
-                      matchPercent={item.match_percent}
-                    />
+                    <View style={{ position: 'relative' }}>
+                      {isLeader ? (
+                        <View
+                          style={{
+                            position: 'absolute',
+                            top: -16,
+                            right: -16,
+                            transform: [{ rotate: '45deg' }],
+                            backgroundColor: 'transparent',
+                            paddingHorizontal: 8,
+                            paddingVertical: 4,
+                            borderRadius: 999,
+                            zIndex: 2,
+                          }}
+                          pointerEvents="none"
+                          accessibilityElementsHidden
+                          importantForAccessibility="no-hide-descendants"
+                        >
+                          <Text style={{ fontSize: 24 }}>👑</Text>
+                        </View>
+                      ) : null}
+                      <EventRowCard
+                        event={
+                          (item.event ?? {
+                            id: item.event_id,
+                            title: `Event #${item.event_id}`,
+                            date_time: new Date().toISOString(),
+                          }) as any
+                        }
+                        isSaved={false}
+                        onToggleSave={() => {}}
+                        onOpenDetails={() => router.push(`/events/${item.event_id}`)}
+                        matchPercent={item.match_percent}
+                      />
+                    </View>
                     {poll?.mode === 'rating' ? (
                       <View style={{ flexDirection: 'row', gap: 6, marginTop: 8 }}>
                         <Pressable
@@ -811,7 +828,7 @@ export default function PollDetails() {
                           }}
                           accessibilityLabel={`It's fine ${item.fine ?? 0}`}
                         >
-                          <Text style={{ color: c.text, fontSize: 12 }}>🙂 {item.fine ?? 0}</Text>
+                          <Text style={{ color: c.text, fontSize: 12 }}>👍 {item.fine ?? 0}</Text>
                         </Pressable>
                         <Pressable
                           onPress={() => handleRating(item.event_id, -1)}
@@ -827,7 +844,7 @@ export default function PollDetails() {
                           accessibilityLabel={`Not for me ${item.not_for_me ?? 0}`}
                         >
                           <Text style={{ color: c.text, fontSize: 12 }}>
-                            🙅 {item.not_for_me ?? 0}
+                            👎 {item.not_for_me ?? 0}
                           </Text>
                         </Pressable>
                       </View>

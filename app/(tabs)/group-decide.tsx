@@ -1,42 +1,50 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { View, Text, Pressable, FlatList, Alert, ActivityIndicator } from 'react-native';
 import GradientBackground from '@/components/GradientBackground';
 import AnimatedPage from '@/components/AnimatedPage';
 import { useThemeColors } from '@/theme/ThemeProvider';
-import { router } from 'expo-router';
+import { router, useRootNavigationState } from 'expo-router';
 import { supabase } from '@/services/supabase';
 import { getMyGroups } from '@/services/groups';
 import { getTopGroupMatches } from '@/services/events';
 import { createPollWithOptions } from '@/services/polls';
+import MediaCard from '@/components/MediaCard';
 
 export default function GroupDecideStart() {
   const c = useThemeColors();
+  const mountedRef = useRef(true);
+  const rootState = useRootNavigationState();
+  const navReady = !!rootState?.key;
   const [groups, setGroups] = useState<Array<{ id: number; name: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState<number | null>(null);
+  const [step, setStep] = useState<0 | 1>(0);
+  const [decisionType, setDecisionType] = useState<'events' | 'food' | 'activities'>('events');
 
   useEffect(() => {
-    let mounted = true;
+    mountedRef.current = true;
     (async () => {
       const user = (await supabase.auth.getUser()).data.user;
       if (!user) {
-        router.replace('/onboarding/welcome');
+        if (mountedRef.current && navReady) {
+          router.replace('/onboarding/welcome');
+        }
         return;
       }
       try {
         const gs = await getMyGroups();
-        if (!mounted) return;
+        if (!mountedRef.current) return;
         setGroups(gs as any);
       } catch (e: any) {
         Alert.alert('Error', e.message ?? String(e));
       } finally {
-        if (mounted) setLoading(false);
+        if (mountedRef.current) setLoading(false);
       }
     })();
     return () => {
-      mounted = false;
+      mountedRef.current = false;
     };
-  }, []);
+  }, [navReady]);
 
   const onPickGroup = async (groupId: number) => {
     if (creating != null) return;
@@ -59,7 +67,9 @@ export default function GroupDecideStart() {
         deadlineAt: null,
         mode: 'rating',
       });
-      router.replace(`/polls/${pollId}`);
+      if (mountedRef.current && navReady) {
+        router.replace(`/polls/${pollId}`);
+      }
     } catch (e: any) {
       Alert.alert('Failed to start', e.message ?? String(e));
       setCreating(null);
@@ -69,13 +79,63 @@ export default function GroupDecideStart() {
   return (
     <GradientBackground variant="dim">
       <AnimatedPage variant="pop" style={{ flex: 1 }}>
-        <View style={{ padding: 16 }}>
-          <Text style={{ color: c.text, fontSize: 24, fontWeight: '900' }}>Choose a group</Text>
-          <Text style={{ color: c.muted, marginTop: 6 }}>
-            We’ll spin up a quick swipe vote with your top recommendations.
-          </Text>
-        </View>
-        {loading ? (
+        {step === 0 ? (
+          <View style={{ padding: 16 }}>
+            <Text style={{ color: c.text, fontSize: 24, fontWeight: '900' }}>
+              What are you deciding on?
+            </Text>
+            <View style={{ gap: 12, marginTop: 12 }}>
+              {[
+                {
+                  key: 'events' as const,
+                  label: 'Events',
+                  image: require('../../assets/DecideEvents.png'),
+                  disabled: false,
+                  caption: undefined as string | undefined,
+                },
+                {
+                  key: 'food' as const,
+                  label: 'Food',
+                  image: require('../../assets/DecideFood.png'),
+                  disabled: true,
+                  caption: 'Coming Soon',
+                },
+                {
+                  key: 'activities' as const,
+                  label: 'Activities',
+                  image: require('../../assets/DecideActivities.png'),
+                  disabled: true,
+                  caption: 'Coming Soon',
+                },
+              ].map((opt) => (
+                <View key={opt.key}>
+                  <MediaCard
+                    image={opt.image}
+                    label={opt.disabled ? opt.caption : undefined}
+                    selected={decisionType === (opt.key as any)}
+                    onPress={opt.disabled ? undefined : () => {
+                      setDecisionType(opt.key as any);
+                      setStep(1);
+                    }}
+                    style={opt.disabled ? { opacity: 0.6 } : undefined}
+                    accessibilityLabel={
+                      opt.disabled ? `${opt.label} (Coming Soon)` : `Choose ${opt.label}`
+                    }
+                  />
+                </View>
+              ))}
+            </View>
+          </View>
+        ) : null}
+        {step === 1 ? (
+          <View style={{ padding: 16 }}>
+            <Text style={{ color: c.text, fontSize: 24, fontWeight: '900' }}>Choose a group</Text>
+            <Text style={{ color: c.muted, marginTop: 6 }}>
+              We’ll spin up a quick swipe vote with your top recommendations.
+            </Text>
+          </View>
+        ) : null}
+        {step === 1 && (loading ? (
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
             <ActivityIndicator color={c.text} />
           </View>
@@ -123,7 +183,7 @@ export default function GroupDecideStart() {
               </Pressable>
             )}
           />
-        )}
+        ))}
       </AnimatedPage>
     </GradientBackground>
   );
