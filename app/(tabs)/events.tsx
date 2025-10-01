@@ -522,7 +522,7 @@ const FiltersTopBar = memo(function FiltersTopBar({
         >
           {[
             { key: 'all', label: 'Soonest' },
-            { key: 'personalized', label: 'Personalized Feed' },
+            { key: 'personalized', label: 'Personalized' },
           ].map((opt) => {
             const active = mode === (opt.key as any);
             return (
@@ -552,7 +552,7 @@ const FiltersTopBar = memo(function FiltersTopBar({
             borderRadius: 10,
           }}
           accessibilityRole="link"
-          accessibilityLabel="Add your own event"
+          accessibilityLabel="Add your own"
         >
           <Text style={{ color: '#000' }}>Add your own event</Text>
         </Pressable>
