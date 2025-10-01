@@ -1,5 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import { View, Text, Pressable, FlatList, Alert, ActivityIndicator, useWindowDimensions } from 'react-native';
+import {
+  View,
+  Text,
+  Pressable,
+  FlatList,
+  Alert,
+  ActivityIndicator,
+  useWindowDimensions,
+} from 'react-native';
 import GradientBackground from '@/components/GradientBackground';
 import AnimatedPage from '@/components/AnimatedPage';
 import { useThemeColors } from '@/theme/ThemeProvider';
