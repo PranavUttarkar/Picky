@@ -40,3 +40,25 @@ begin
       with check (auth.uid() = user_id);
   end if;
 end $$;
+
+-- Add RLS policies for saved_events table
+alter table public.saved_events enable row level security;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies where schemaname = 'public' and tablename = 'saved_events' and policyname = 'saved_events_insert_own'
+  ) then
+    create policy saved_events_insert_own on public.saved_events
+      for insert
+      with check (auth.uid() = user_id);
+  end if;
+
+  if not exists (
+    select 1 from pg_policies where schemaname = 'public' and tablename = 'saved_events' and policyname = 'saved_events_select_own'
+  ) then
+    create policy saved_events_select_own on public.saved_events
+      for select
+      using (auth.uid() = user_id);
+  end if;
+end $$;

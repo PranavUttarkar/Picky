@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { View, Text, Pressable, FlatList, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, Pressable, FlatList, Alert, ActivityIndicator, useWindowDimensions } from 'react-native';
 import GradientBackground from '@/components/GradientBackground';
 import AnimatedPage from '@/components/AnimatedPage';
 import { useThemeColors } from '@/theme/ThemeProvider';
@@ -12,6 +12,9 @@ import MediaCard from '@/components/MediaCard';
 
 export default function GroupDecideStart() {
   const c = useThemeColors();
+  const { width } = useWindowDimensions();
+  const isWide = width >= 768;
+  const containerMaxWidth = isWide ? 900 : 640;
   const mountedRef = useRef(true);
   const rootState = useRootNavigationState();
   const navReady = !!rootState?.key;
@@ -84,7 +87,14 @@ export default function GroupDecideStart() {
             <Text style={{ color: c.text, fontSize: 24, fontWeight: '900' }}>
               What are you deciding on?
             </Text>
-            <View style={{ gap: 12, marginTop: 12 }}>
+            <View
+              style={{
+                gap: 12,
+                marginTop: 12,
+                maxWidth: containerMaxWidth,
+                alignSelf: 'center',
+              }}
+            >
               {[
                 {
                   key: 'events' as const,
@@ -108,7 +118,7 @@ export default function GroupDecideStart() {
                   caption: 'Coming Soon',
                 },
               ].map((opt) => (
-                <View key={opt.key}>
+                <View key={opt.key} style={isWide ? { flex: 1 } : undefined}>
                   <MediaCard
                     image={opt.image}
                     label={opt.disabled ? opt.caption : undefined}
@@ -131,6 +141,7 @@ export default function GroupDecideStart() {
             </View>
           </View>
         ) : null}
+
         {step === 1 ? (
           <View style={{ padding: 16 }}>
             <Text style={{ color: c.text, fontSize: 24, fontWeight: '900' }}>Choose a group</Text>
@@ -139,6 +150,7 @@ export default function GroupDecideStart() {
             </Text>
           </View>
         ) : null}
+
         {step === 1 &&
           (loading ? (
             <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
@@ -165,7 +177,12 @@ export default function GroupDecideStart() {
             </View>
           ) : (
             <FlatList
-              contentContainerStyle={{ padding: 16, gap: 10 }}
+              contentContainerStyle={{
+                padding: 16,
+                gap: 10,
+                maxWidth: containerMaxWidth,
+                alignSelf: 'center',
+              }}
               data={groups}
               keyExtractor={(g) => String(g.id)}
               renderItem={({ item }) => (

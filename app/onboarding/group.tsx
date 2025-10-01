@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import { View, Text, TextInput, Pressable } from 'react-native';
 import { router } from 'expo-router';
-import { useThemeColors } from '@/theme/ThemeProvider';
 import { supabase } from '@/services/supabase';
-import { ensureProfile } from '@/services/profile';
+import { useThemeColors } from '@/theme/ThemeProvider';
 
 export default function OnboardingGroup() {
   const c = useThemeColors();
@@ -24,12 +23,11 @@ export default function OnboardingGroup() {
       const user = (await supabase.auth.getUser()).data.user;
       if (!user) return;
       const { data } = await supabase
-        .from('user_interests_temp')
-        .select('names')
-        .eq('user_id', user.id)
-        .maybeSingle();
-      const names = (data?.names as string[] | null) ?? [];
-      if (Array.isArray(names) && names.length >= 2) {
+        .from('user_interests')
+        .select('interest')
+        .eq('user_id', user.id);
+      const hasInterests = Array.isArray(data) && data.length > 0;
+      if (hasInterests) {
         // If they come here after finishing interests, allow them to proceed or skip.
         // We don't force redirect, but ensure Skip goes home (already implemented).
       }
@@ -45,7 +43,10 @@ export default function OnboardingGroup() {
       const user = (await supabase.auth.getUser()).data.user;
       if (!user) return;
       // Ensure a users row exists to satisfy groups.created_by FK
-      await ensureProfile();
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .upsert({ id: user.id });
+      if (profileError) throw profileError;
       const invite_code = Math.random().toString(36).slice(2, 8).toUpperCase();
       const { data: grp, error: e1 } = await supabase
         .from('groups')
