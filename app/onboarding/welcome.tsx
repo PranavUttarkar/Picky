@@ -50,10 +50,11 @@ export default function Welcome() {
           let needsOnboarding = true;
           if (user) {
             const { data: uit } = await supabase
-              .from('user_interests')
-              .select('interest')
-              .eq('user_id', user.id);
-            const names = uit?.map((row) => row.interest) ?? [];
+              .from('user_interests_temp')
+              .select('names')
+              .eq('user_id', user.id)
+              .maybeSingle();
+            const names = (uit?.names as string[] | null) ?? [];
             needsOnboarding = !Array.isArray(names) || names.length < 2;
           }
           router.replace(needsOnboarding ? '/onboarding/interests' : '/(tabs)/home');

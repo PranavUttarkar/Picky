@@ -3,18 +3,8 @@ import { supabase } from './supabase';
 export async function ensureProfile() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', user.id)
-    .single();
-
-  if (!profile) {
-    await supabase.from('profiles').insert({
-      id: user.id,
-      email: user.email,
-    });
-  }
+  const email = user.email ?? '';
+  await supabase.from('users').upsert({ id: user.id, email }, { onConflict: 'id' });
 }
 
 export type OnboardingPayload = {
@@ -55,30 +45,14 @@ export async function saveOnboarding(payload: OnboardingPayload) {
   const { error: onboardingError } = await supabase.from('user_onboarding').upsert(row, { onConflict: 'user_id' });
   if (onboardingError) throw onboardingError;
 
-  // Insert interests into user_interests table
-  const interestRows = payload.interests.map((interest) => ({
-    user_id: user.id,
-    interest,
-  }));
-
-  const { error: interestsError } = await supabase.from('user_interests').upsert(interestRows, {
-    onConflict: 'user_id',
-  });
-
-  if (interestsError) throw interestsError;
-}
-
-export async function saveUserInterests(interests: string[]) {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('User not signed in');
-
-  // Clear existing interests
-  await supabase.from('user_interests').delete().eq('user_id', user.id);
-
-  // Insert new interests
-  const { error } = await supabase.from('user_interests').insert(
-    interests.map((interest) => ({ user_id: user.id, interest })),
+  // Write interests to temp table only (source of truth for scoring)
+  const { error: tempError } = await supabase.from('user_interests_temp').upsert(
+    {
+      user_id: user.id,
+      names: payload.interests ?? [],
+    },
+    { onConflict: 'user_id' }
   );
-  if (error) throw error;
+  if (tempError) throw tempError;
 }
 
