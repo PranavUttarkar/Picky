@@ -43,9 +43,7 @@ export default function OnboardingGroup() {
       const user = (await supabase.auth.getUser()).data.user;
       if (!user) return;
       // Ensure a users row exists to satisfy groups.created_by FK
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .upsert({ id: user.id });
+      const { error: profileError } = await supabase.from('profiles').upsert({ id: user.id });
       if (profileError) throw profileError;
       const invite_code = Math.random().toString(36).slice(2, 8).toUpperCase();
       const { data: grp, error: e1 } = await supabase
