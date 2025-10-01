@@ -22,7 +22,10 @@ export default function GroupDecideRedirect() {
   }, [navReady]);
   return (
     <GradientBackground variant="dim">
-      <AnimatedPage variant="pop" style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+      <AnimatedPage
+        variant="pop"
+        style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}
+      >
         <View>
           <ActivityIndicator color={c.text} />
         </View>

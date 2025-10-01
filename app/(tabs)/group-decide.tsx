@@ -113,10 +113,14 @@ export default function GroupDecideStart() {
                     image={opt.image}
                     label={opt.disabled ? opt.caption : undefined}
                     selected={decisionType === (opt.key as any)}
-                    onPress={opt.disabled ? undefined : () => {
-                      setDecisionType(opt.key as any);
-                      setStep(1);
-                    }}
+                    onPress={
+                      opt.disabled
+                        ? undefined
+                        : () => {
+                            setDecisionType(opt.key as any);
+                            setStep(1);
+                          }
+                    }
                     style={opt.disabled ? { opacity: 0.6 } : undefined}
                     accessibilityLabel={
                       opt.disabled ? `${opt.label} (Coming Soon)` : `Choose ${opt.label}`
@@ -135,55 +139,56 @@ export default function GroupDecideStart() {
             </Text>
           </View>
         ) : null}
-        {step === 1 && (loading ? (
-          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-            <ActivityIndicator color={c.text} />
-          </View>
-        ) : groups.length === 0 ? (
-          <View style={{ padding: 16 }}>
-            <Text style={{ color: c.muted }}>
-              You’re not in any groups yet. Create or join one from the Groups tab.
-            </Text>
-            <Pressable
-              onPress={() => router.replace('/(tabs)/groups')}
-              style={{
-                alignSelf: 'flex-start',
-                backgroundColor: c.primary,
-                paddingHorizontal: 12,
-                paddingVertical: 10,
-                borderRadius: 10,
-                marginTop: 12,
-              }}
-            >
-              <Text style={{ color: '#000', fontWeight: '800' }}>Go to Groups</Text>
-            </Pressable>
-          </View>
-        ) : (
-          <FlatList
-            contentContainerStyle={{ padding: 16, gap: 10 }}
-            data={groups}
-            keyExtractor={(g) => String(g.id)}
-            renderItem={({ item }) => (
+        {step === 1 &&
+          (loading ? (
+            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+              <ActivityIndicator color={c.text} />
+            </View>
+          ) : groups.length === 0 ? (
+            <View style={{ padding: 16 }}>
+              <Text style={{ color: c.muted }}>
+                You’re not in any groups yet. Create or join one from the Groups tab.
+              </Text>
               <Pressable
-                onPress={() => onPickGroup(item.id)}
-                disabled={creating != null}
+                onPress={() => router.replace('/(tabs)/groups')}
                 style={{
-                  backgroundColor: c.card,
-                  padding: 14,
-                  borderRadius: 12,
-                  borderWidth: 1,
-                  borderColor: creating === item.id ? c.primary : '#00000030',
-                  opacity: creating && creating !== item.id ? 0.6 : 1,
+                  alignSelf: 'flex-start',
+                  backgroundColor: c.primary,
+                  paddingHorizontal: 12,
+                  paddingVertical: 10,
+                  borderRadius: 10,
+                  marginTop: 12,
                 }}
               >
-                <Text style={{ color: c.text, fontWeight: '800' }}>{item.name}</Text>
-                <Text style={{ color: c.muted, marginTop: 4 }}>
-                  {creating === item.id ? 'Creating swipe vote…' : 'Tap to start Group Decide'}
-                </Text>
+                <Text style={{ color: '#000', fontWeight: '800' }}>Go to Groups</Text>
               </Pressable>
-            )}
-          />
-        ))}
+            </View>
+          ) : (
+            <FlatList
+              contentContainerStyle={{ padding: 16, gap: 10 }}
+              data={groups}
+              keyExtractor={(g) => String(g.id)}
+              renderItem={({ item }) => (
+                <Pressable
+                  onPress={() => onPickGroup(item.id)}
+                  disabled={creating != null}
+                  style={{
+                    backgroundColor: c.card,
+                    padding: 14,
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: creating === item.id ? c.primary : '#00000030',
+                    opacity: creating && creating !== item.id ? 0.6 : 1,
+                  }}
+                >
+                  <Text style={{ color: c.text, fontWeight: '800' }}>{item.name}</Text>
+                  <Text style={{ color: c.muted, marginTop: 4 }}>
+                    {creating === item.id ? 'Creating swipe vote…' : 'Tap to start Group Decide'}
+                  </Text>
+                </Pressable>
+              )}
+            />
+          ))}
       </AnimatedPage>
     </GradientBackground>
   );

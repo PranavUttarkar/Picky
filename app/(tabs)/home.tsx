@@ -6,6 +6,7 @@ import {
   useWindowDimensions,
   Pressable,
   ScrollView,
+  Linking,
 } from 'react-native';
 import GradientBackground from '@/components/GradientBackground';
 import AnimatedPage from '@/components/AnimatedPage';
@@ -104,7 +105,7 @@ export default function HomeTab() {
           <View style={{ paddingHorizontal: 16, marginTop: 12 }}>
             <Text style={{ color: c.muted, fontSize: 12 }}>Have suggestions? found bugs?</Text>
             <Pressable
-              onPress={() => router.push('https://forms.gle/your-google-form-id')}
+              onPress={() => Linking.openURL('https://forms.gle/sQDyLdm5yP4rQG3d8')}
               accessibilityRole="link"
               accessibilityLabel="Open feedback form"
               style={{ marginTop: 4 }}

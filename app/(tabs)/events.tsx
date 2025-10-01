@@ -504,35 +504,58 @@ const FiltersTopBar = memo(function FiltersTopBar({
       <View
         style={{
           flexDirection: 'row',
-          gap: 6,
+          alignItems: 'center',
+          justifyContent: 'space-between',
           marginBottom: 12,
-          backgroundColor: c.card,
-          padding: 6,
-          borderRadius: 12,
+          gap: 6,
         }}
       >
-        {[
-          { key: 'all', label: 'Soonest' },
-          { key: 'personalized', label: 'Personalized Feed' },
-        ].map((opt) => {
-          const active = mode === (opt.key as any);
-          return (
-            <Pressable
-              key={opt.key}
-              onPress={() => setMode(opt.key as any)}
-              style={{
-                backgroundColor: active ? c.primary : 'transparent',
-                paddingHorizontal: 12,
-                paddingVertical: 8,
-                borderRadius: 10,
-              }}
-            >
-              <Text style={{ color: active ? '#000' : c.text, fontWeight: '700' }}>
-                {opt.label}
-              </Text>
-            </Pressable>
-          );
-        })}
+        <View
+          style={{
+            flexDirection: 'row',
+            gap: 6,
+            flexShrink: 1,
+            backgroundColor: c.card,
+            padding: 6,
+            borderRadius: 12,
+          }}
+        >
+          {[
+            { key: 'all', label: 'Soonest' },
+            { key: 'personalized', label: 'Personalized Feed' },
+          ].map((opt) => {
+            const active = mode === (opt.key as any);
+            return (
+              <Pressable
+                key={opt.key}
+                onPress={() => setMode(opt.key as any)}
+                style={{
+                  backgroundColor: active ? c.primary : 'transparent',
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  borderRadius: 10,
+                }}
+              >
+                <Text style={{ color: active ? '#000' : c.text, fontWeight: '700' }}>
+                  {opt.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        <Pressable
+          onPress={() => Linking.openURL('https://forms.gle/BA5SNSKJGWcrZYqt8')}
+          style={{
+            backgroundColor: c.primary,
+            paddingHorizontal: 12,
+            paddingVertical: 8,
+            borderRadius: 10,
+          }}
+          accessibilityRole="link"
+          accessibilityLabel="Add your own event"
+        >
+          <Text style={{ color: '#000' }}>Add your own event</Text>
+        </Pressable>
       </View>
     </View>
   );
@@ -827,18 +850,14 @@ const FiltersScrollable = memo(function FiltersScrollable({
           >
             <Text style={{ color: c.text, fontWeight: '800' }}>Your interests</Text>
           </View>
-          <Text style={{ color: c.muted }}>
-            Personalize your event feed by adding interests.
-          </Text>
+          <Text style={{ color: c.muted }}>Personalize your event feed by adding interests.</Text>
           <Pressable
             onPress={() => router.push('/onboarding/welcome')}
             style={{ marginTop: 8 }}
             accessibilityRole="link"
             accessibilityLabel="Create account to add interests"
           >
-            <Text
-              style={{ color: c.primary, fontWeight: '700', textDecorationLine: 'underline' }}
-            >
+            <Text style={{ color: c.primary, fontWeight: '700', textDecorationLine: 'underline' }}>
               Create account to add interests
             </Text>
           </Pressable>
