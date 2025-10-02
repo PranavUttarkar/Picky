@@ -21,7 +21,7 @@ import MediaCard from '@/components/MediaCard';
 export default function GroupDecideStart() {
   const c = useThemeColors();
   const { width } = useWindowDimensions();
-  const isWide = width >= 768;
+  const isWide = width >= 668;
   const containerMaxWidth = isWide ? 900 : 640;
   const mountedRef = useRef(true);
   const rootState = useRootNavigationState();
@@ -101,6 +101,8 @@ export default function GroupDecideStart() {
                 marginTop: 12,
                 maxWidth: containerMaxWidth,
                 alignSelf: 'center',
+                width: width <= 680 || width > 1100 ? '90%' : '50%',
+                flexDirection: width >= 1100 ? 'row' : 'column',
               }}
             >
               {[

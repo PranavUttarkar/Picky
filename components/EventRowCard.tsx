@@ -101,13 +101,6 @@ export const EventRowCard: React.FC<EventRowCardProps> = memo(
             >
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 <Pressable
-                  onPress={onOpenDetails}
-                  accessibilityLabel="View details"
-                  style={{ padding: 4 }}
-                >
-                  <Ionicons name="expand-outline" size={18} color={c.text} />
-                </Pressable>
-                <Pressable
                   onPress={() => shareEvent(event)}
                   accessibilityLabel="Share event"
                   style={{ padding: 4 }}

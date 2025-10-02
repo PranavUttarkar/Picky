@@ -68,13 +68,10 @@ export default function BlurbBubble({ title, children, style, footerTag, illustr
         <View style={{ gap: 8 }}>{children}</View>
 
         {footerTag ? (
-          <View
-            style={[
-              styles.tag,
-              { backgroundColor: 'transparent', borderColor: accentColor, borderWidth: 1 },
-            ]}
-          >
-            <Text style={[styles.tagText, { color: accentColor }]}>{footerTag}</Text>
+          <View style={[styles.tag, { backgroundColor: 'transparent' }]}>
+            <Text style={[styles.tagText, { color: accentColor, fontWeight: 700 }]}>
+              {footerTag}
+            </Text>
           </View>
         ) : null}
       </View>

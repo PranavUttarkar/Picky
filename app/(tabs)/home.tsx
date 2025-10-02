@@ -71,12 +71,12 @@ export default function HomeTab() {
             }}
           >
             <BlurbBubble
-              title="What's Picky?"
+              title="Welcome to Picky!"
               footerTag="Food 😋, Activities 🏈 & more soon!!"
               illustration={require('../../assets/PickyMascot.png')}
             >
               <Text style={{ color: c.text, fontSize: 14, lineHeight: 20 }}>
-                Explore everything happening around campus with a personalized feed.
+                Explore everything happening around campus with a personalized feed!
               </Text>
               <Text style={{ color: c.text, fontSize: 14, lineHeight: 20 }}>
                 Make decisions with friends in seconds not hours.

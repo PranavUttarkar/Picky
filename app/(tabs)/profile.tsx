@@ -4,7 +4,8 @@ import GradientBackground from '@/components/GradientBackground';
 import AnimatedPage from '@/components/AnimatedPage';
 import GradientHeader from '@/components/GradientHeader';
 import { supabase } from '@/services/supabase';
-import { useEffect, useState, useCallback, memo } from 'react';
+import { Ionicons } from '@expo/vector-icons';
+import { useEffect, useState, useCallback, memo, useRef } from 'react';
 import { router } from 'expo-router';
 
 // Hoisted components to avoid remounting on each keystroke
@@ -75,6 +76,8 @@ export default function Profile() {
   const [loadingInterests, setLoadingInterests] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
+  const lastSavedRef = useRef<string[]>([]);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -94,6 +97,7 @@ export default function Profile() {
         const names: string[] = ((data?.names as any) ?? []).map((n: string) => n.toLowerCase());
         setInterestsCsv(names.join(', '));
         setTags(names);
+        lastSavedRef.current = names;
         setLoadingInterests(false);
       }
     })();
@@ -111,6 +115,7 @@ export default function Profile() {
           const names: string[] = ((data?.names as any) ?? []).map((n: string) => n.toLowerCase());
           setInterestsCsv(names.join(', '));
           setTags(names);
+          lastSavedRef.current = names;
           setLoadingInterests(false);
         })();
       } else {
@@ -159,10 +164,6 @@ export default function Profile() {
       return;
     }
     const arr = normalized(tags);
-    if (arr.length < 1) {
-      setSaveMsg('Add at least 1 interest (comma separated).');
-      return;
-    }
     setSaving(true);
     setSaveMsg(null);
     const { error } = await supabase
@@ -172,9 +173,29 @@ export default function Profile() {
       setSaveMsg(error.message);
     } else {
       setSaveMsg(`Saved ${arr.length} interest${arr.length === 1 ? '' : 's'}.`);
+      lastSavedRef.current = arr;
     }
     setSaving(false);
   }, [normalized, tags]);
+
+  // Debounced autosave when tags change, avoiding initial hydration saves
+  useEffect(() => {
+    // Skip while loading initial interests
+    if (loadingInterests) return;
+
+    const current = normalized(tags);
+    const prev = lastSavedRef.current;
+    const equal = current.length === prev.length && current.every((v, i) => v === prev[i]);
+    if (equal) return;
+
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      void saveInterests();
+    }, 700);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [tags, loadingInterests, normalized, saveInterests]);
 
   // Memoized handlers to keep TextInput from causing broad re-renders
   const handleChangeText = useCallback(
@@ -229,21 +250,7 @@ export default function Profile() {
           {email ? (
             <Text style={{ color: c.muted, marginBottom: 12 }}>Signed in as {email}</Text>
           ) : null}
-          {/* Link to Saved events now lives here */}
-          <Pressable
-            onPress={() => router.push('/(tabs)/saved')}
-            style={{
-              backgroundColor: c.card,
-              padding: 12,
-              borderRadius: 12,
-              alignItems: 'center',
-              marginBottom: 12,
-            }}
-            accessibilityRole="button"
-            accessibilityLabel="Open saved events"
-          >
-            <Text style={{ color: c.text, fontWeight: '700' }}>Saved events</Text>
-          </Pressable>
+          {/* Saved events button moved below interests section */}
           <Pressable
             onPress={() => supabase.auth.signOut()}
             style={{
@@ -320,22 +327,39 @@ export default function Profile() {
                 {saveMsg}
               </Text>
             ) : null}
+            {saving ? (
+              <View
+                style={{
+                  marginTop: 10,
+                  backgroundColor: '#00000015',
+                  paddingVertical: 8,
+                  paddingHorizontal: 12,
+                  borderRadius: 10,
+                  alignSelf: 'flex-start',
+                }}
+              >
+                <Text style={{ color: c.muted }}>Saving…</Text>
+              </View>
+            ) : null}
+
+            {/* Saved events button moved here (swap with deprecated Save Interests) */}
             <Pressable
-              onPress={saveInterests}
-              disabled={saving || loadingInterests}
+              onPress={() => router.push('/(tabs)/saved')}
               style={{
                 marginTop: 14,
-                backgroundColor: saving || loadingInterests ? c.muted : c.primary,
+                backgroundColor: c.accent,
+
                 padding: 12,
                 borderRadius: 12,
                 alignItems: 'center',
               }}
               accessibilityRole="button"
-              accessibilityLabel="Save interests"
+              accessibilityLabel="Open saved events"
             >
-              <Text style={{ color: '#000', fontWeight: '700' }}>
-                {saving ? 'Saving…' : 'Save interests'}
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Ionicons name="bookmark" size={18} color={c.text} />
+                <Text style={{ color: c.text, fontWeight: '700' }}>View Saved</Text>
+              </View>
             </Pressable>
           </View>
         </>

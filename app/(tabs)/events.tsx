@@ -554,7 +554,7 @@ const FiltersTopBar = memo(function FiltersTopBar({
           accessibilityRole="link"
           accessibilityLabel="Add your own"
         >
-          <Text style={{ color: '#000' }}>Add your own event</Text>
+          <Text style={{ color: '#000' }}>Add your event!</Text>
         </Pressable>
       </View>
     </View>
@@ -866,7 +866,7 @@ const FiltersScrollable = memo(function FiltersScrollable({
 
       {/* Hide global/all tags chips below; only show 'Your interests' above */}
 
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+      {/* <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
         <Text style={{ color: c.muted }}>
           Showing {filteredCount} {filteredCount === 1 ? 'event' : 'events'}
         </Text>
@@ -875,7 +875,7 @@ const FiltersScrollable = memo(function FiltersScrollable({
         ) : (
           <Text style={{ color: c.muted }}>Soonest first</Text>
         )}
-      </View>
+      </View> */}
     </View>
   );
 });

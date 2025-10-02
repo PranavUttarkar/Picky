@@ -173,13 +173,6 @@ export const EventGridCard: React.FC<EventGridCardProps> = memo(
               >
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                   <Pressable
-                    onPress={onOpenDetails}
-                    accessibilityLabel="View details"
-                    style={{ padding: 6 }}
-                  >
-                    <Ionicons name="expand-outline" size={18} color={c.text} />
-                  </Pressable>
-                  <Pressable
                     onPress={() => shareEvent(event)}
                     accessibilityLabel="Share event"
                     style={{ padding: 6 }}

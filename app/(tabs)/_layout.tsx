@@ -50,9 +50,6 @@ export default function TabsLayout() {
         <Pressable onPress={toggleScheme} hitSlop={8}>
           <Ionicons name={scheme === 'dark' ? 'moon' : 'sunny'} size={22} color={c.text} />
         </Pressable>
-        <Pressable onPress={onShare} hitSlop={8}>
-          <Ionicons name="share-social-outline" size={22} color={c.text} />
-        </Pressable>
       </View>
     ),
     [c.text, onShare, scheme, toggleScheme],

@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { View, Text, FlatList, Pressable, TextInput, ScrollView } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { View, Text, FlatList, Pressable, TextInput, ScrollView, Animated } from 'react-native';
 import { router } from 'expo-router';
 import { useThemeColors } from '@/theme/ThemeProvider';
 import { getOnboarding, saveOnboarding } from '@/services/profile';
@@ -84,6 +84,19 @@ export default function Interests() {
   };
 
   const minOk = useMemo(() => interests.length >= 2, [interests.length]);
+  const remaining = useMemo(() => Math.max(0, 2 - interests.length), [interests.length]);
+  const shake = useRef(new Animated.Value(0)).current;
+
+  const triggerShake = () => {
+    shake.setValue(0);
+    Animated.sequence([
+      Animated.timing(shake, { toValue: 1, duration: 40, useNativeDriver: true }),
+      Animated.timing(shake, { toValue: -1, duration: 40, useNativeDriver: true }),
+      Animated.timing(shake, { toValue: 1, duration: 40, useNativeDriver: true }),
+      Animated.timing(shake, { toValue: -1, duration: 40, useNativeDriver: true }),
+      Animated.timing(shake, { toValue: 0, duration: 40, useNativeDriver: true }),
+    ]).start();
+  };
 
   const onContinue = async () => {
     if (!minOk || saving) return;
@@ -252,19 +265,48 @@ export default function Interests() {
       </View>
 
       {/* Continue */}
-      <Pressable
-        onPress={onContinue}
-        disabled={!minOk || saving}
+      <Animated.View
         style={{
-          marginTop: 20,
-          backgroundColor: !minOk ? c.muted : c.primary,
-          padding: 14,
-          borderRadius: 12,
-          alignItems: 'center',
+          transform: [
+            {
+              translateX: shake.interpolate({ inputRange: [-1, 1], outputRange: [-8, 8] }),
+            },
+          ],
         }}
       >
-        <Text style={{ color: '#000', fontWeight: '800' }}>{saving ? 'Saving…' : 'Continue'}</Text>
-      </Pressable>
+        <Pressable
+          onPress={() => {
+            if (saving) return;
+            if (!minOk) {
+              triggerShake();
+              return;
+            }
+            onContinue();
+          }}
+          accessibilityRole="button"
+          accessibilityLabel={minOk ? 'Continue' : 'Select at least two interests to continue'}
+          accessibilityHint={minOk ? undefined : 'Add more interests to enable this button'}
+          accessibilityState={{ disabled: !minOk || saving }}
+          style={{
+            marginTop: 20,
+            backgroundColor: !minOk ? c.muted : c.primary,
+            padding: 14,
+            borderRadius: 12,
+            alignItems: 'center',
+            opacity: saving ? 0.7 : 1,
+          }}
+        >
+          <Text style={{ color: '#000', fontWeight: '800' }}>
+            {saving
+              ? 'Saving…'
+              : minOk
+              ? 'Continue'
+              : remaining === 1
+              ? 'Choose 1 more interest'
+              : 'Choose 2+ interests'}
+          </Text>
+        </Pressable>
+      </Animated.View>
       <Text
         style={{
           color: c.muted,

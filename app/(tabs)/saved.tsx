@@ -75,7 +75,7 @@ export default function Saved() {
         keyExtractor={(e) => String(e.id)}
         numColumns={columns}
         columnWrapperStyle={columns > 1 ? { gap: 12 } : undefined}
-        contentContainerStyle={{ gap: 12, paddingBottom: 32 }}
+        contentContainerStyle={{ gap: 12, paddingBottom: 32, flexGrow: 1 }}
         renderItem={({ item }) => {
           const cardProps = {
             event: item,
@@ -93,6 +93,25 @@ export default function Saved() {
           }
           return <EventRowCard {...cardProps} />;
         }}
+        ListEmptyComponent={
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+            <Text style={{ color: c.muted, fontSize: 16, marginBottom: 8 }}>
+              Nothing saved yet!
+            </Text>
+            <Text style={{ color: c.muted, marginBottom: 12 }}>Explore events:</Text>
+            <Pressable
+              onPress={() => router.replace('/(tabs)/events')}
+              style={{
+                backgroundColor: c.primary,
+                paddingHorizontal: 14,
+                paddingVertical: 10,
+                borderRadius: 12,
+              }}
+            >
+              <Text style={{ color: '#000', fontWeight: '800' }}>Go to Events</Text>
+            </Pressable>
+          </View>
+        }
       />
     </Container>
   );

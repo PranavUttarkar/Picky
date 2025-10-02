@@ -61,8 +61,11 @@ export default function MediaCard({
         onPress={onPress}
         accessibilityRole="button"
         accessibilityLabel={accessibilityLabel}
+        style={{ width: '100%' }}
       >
-        {({ pressed }) => <View style={{ opacity: pressed ? 0.9 : 1 }}>{card}</View>}
+        {({ pressed }) => (
+          <View style={{ opacity: pressed ? 0.9 : 1, width: '100%' }}>{card}</View>
+        )}
       </Pressable>
     );
   }

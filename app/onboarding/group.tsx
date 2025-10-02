@@ -178,7 +178,7 @@ export default function OnboardingGroup() {
             disabled={loading}
             style={{
               marginTop: 12,
-              backgroundColor: '#00000030',
+              backgroundColor: '#0a039630',
               padding: 14,
               borderRadius: 12,
               alignItems: 'center',

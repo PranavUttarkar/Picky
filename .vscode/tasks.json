@@ -11,6 +11,17 @@
 			],
 			"isBackground": false,
 			"group": "build"
+		},
+		{
+			"label": "Typecheck",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"run",
+				"typecheck"
+			],
+			"isBackground": false,
+			"group": "build"
 		}
 	]
 }

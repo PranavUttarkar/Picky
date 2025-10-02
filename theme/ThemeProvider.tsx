@@ -17,7 +17,7 @@ export const Colors = {
     text: '#111827',
     muted: '#6b7280',
     primary: '#8eb4faff',
-    accent: '#f59e0b',
+    accent: '#0348c051',
   },
   dark: {
     background: '#0b1220',
@@ -25,7 +25,7 @@ export const Colors = {
     text: '#f9fafb',
     muted: '#9ca3af',
     primary: '#22d3ee',
-    accent: '#f59e0b',
+    accent: '#031d4bc0',
   },
 };
 
