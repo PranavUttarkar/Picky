@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { View, Text, TextInput, Pressable } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { supabase } from '@/services/supabase';
@@ -12,12 +12,26 @@ export default function Welcome() {
   const params = useLocalSearchParams<{ mode?: string }>();
   const initialMode: Mode = params.mode === 'signIn' ? 'signIn' : 'signUp';
   const [mode, setMode] = useState<Mode>(initialMode);
+  const [isAuthed, setIsAuthed] = useState<boolean>(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+
+  // Check auth state to decide whether to allow sign-up UI
+  useEffect(() => {
+    (async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      const authed = !!user;
+      setIsAuthed(authed);
+      // If already signed in, ensure we are not in sign-up mode
+      if (authed && mode === 'signUp') setMode('signIn');
+    })();
+  }, []);
 
   const onSubmit = async () => {
     setError(null);
@@ -30,6 +44,12 @@ export default function Welcome() {
     }
     if (mode === 'signUp' && password !== confirm) {
       setError('Passwords do not match');
+      return;
+    }
+    // Prevent creating accounts if already signed in
+    if (isAuthed && mode === 'signUp') {
+      setInfo('You are already signed in.');
+      setMode('signIn');
       return;
     }
     setLoading(true);
@@ -94,7 +114,12 @@ export default function Welcome() {
   };
 
   const startSignUp = () => {
-    setMode('signUp');
+    if (isAuthed) {
+      setInfo('You are already signed in.');
+      setMode('signIn');
+    } else {
+      setMode('signUp');
+    }
     setError(null);
     setInfo(null);
   };
@@ -192,7 +217,7 @@ export default function Welcome() {
         value={password}
         onChangeText={setPassword}
         secureTextEntry
-        placeholder={mode === 'signUp' ? 'Create a password' : 'Password'}
+        placeholder={mode === 'signUp' && !isAuthed ? 'Create a password' : 'Password'}
         placeholderTextColor={c.muted}
         style={{
           width: '100%',
@@ -203,7 +228,7 @@ export default function Welcome() {
           marginBottom: 12,
         }}
       />
-      {mode === 'signUp' && (
+      {mode === 'signUp' && !isAuthed && (
         <TextInput
           value={confirm}
           onChangeText={setConfirm}
@@ -235,25 +260,35 @@ export default function Welcome() {
           alignItems: 'center',
         }}
       >
-        <Text style={{ color: '#000', fontWeight: '700' }}>
-          {loading
-            ? mode === 'signIn'
-              ? 'Signing in…'
-              : 'Signing up…'
-            : mode === 'signIn'
-            ? 'Sign In'
-            : 'Create account'}
-        </Text>
+        {(() => {
+          const label = (() => {
+            if (loading) {
+              if (mode === 'signIn') return 'Signing in…';
+              return isAuthed ? 'Continuing…' : 'Signing up…';
+            }
+            if (mode === 'signIn') return 'Sign In';
+            return isAuthed ? 'Sign In' : 'Create account';
+          })();
+          return <Text style={{ color: '#000', fontWeight: '700' }}>{label}</Text>;
+        })()}
       </Pressable>
 
-      {/* Helper link to switch if needed */}
-      <Pressable onPress={mode === 'signIn' ? startSignUp : startSignIn} style={{ marginTop: 16 }}>
-        <Text style={{ color: c.muted }}>
-          {mode === 'signIn'
-            ? "Don't have an account? Create one"
-            : 'Already have an account? Sign in'}
-        </Text>
-      </Pressable>
+      {/* Helper link to switch if needed; hide Create link for signed-in users */}
+      {mode === 'signIn' ? (
+        !isAuthed ? (
+          <Pressable onPress={startSignUp} style={{ marginTop: 16 }}>
+            <Text style={{ color: c.muted }}>{"Don't have an account? Create one"}</Text>
+          </Pressable>
+        ) : (
+          <Pressable onPress={() => router.replace('/(tabs)/home')} style={{ marginTop: 16 }}>
+            <Text style={{ color: c.muted }}>You are signed in. Continue to Home</Text>
+          </Pressable>
+        )
+      ) : (
+        <Pressable onPress={startSignIn} style={{ marginTop: 16 }}>
+          <Text style={{ color: c.muted }}>Already have an account? Sign in</Text>
+        </Pressable>
+      )}
     </View>
   );
 }

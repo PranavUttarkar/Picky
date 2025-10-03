@@ -43,12 +43,17 @@ Trade-offs:
 - Consider UI copy like "50%+" baseline or hidden for near-baseline matches
 
 ## Local fallback
-When RPC data is unavailable (first load or guest), the app still computes the simple overlap score:
+When RPC data is unavailable (first load or guest), the app still computes the simple overlap score. Note: both event tags and user interest tags are normalized to lowercase before comparison to ensure case-insensitive matching.
 
 - `overlap = count(tags ∩ myTags)`
 - `match = round( overlap / max(len(tags), len(myTags)) * 100 )`
 
 (This does NOT currently apply the 50% floor; you may optionally align it.)
+
+## Case-insensitive tags
+- All scoring paths (server-side views/functions and client fallback) lower-case tags during matching.
+- Event creation UI also lower-cases tags upon insert/update.
+- This prevents mismatches like "Tech" vs "tech" and keeps counts consistent.
 
 ## Display
 - Match badge shows `Match {value}%` with a gradient border.

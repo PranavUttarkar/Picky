@@ -478,6 +478,7 @@ const FiltersTopBar = memo(function FiltersTopBar({
   mode,
   setMode,
 }: FiltersTopBarProps) {
+  const inputRef = useRef<TextInput>(null);
   return (
     <View style={{ paddingBottom: 12 }}>
       <View
@@ -491,15 +492,29 @@ const FiltersTopBar = memo(function FiltersTopBar({
           borderColor: '#00000020',
         }}
       >
-        <TextInput
-          placeholder="Search anything from 'free food' to 'tech'"
-          placeholderTextColor={c.muted}
-          value={query}
-          onChangeText={setQuery}
-          style={{ color: c.text, fontSize: 16 }}
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Focus search"
+            // Keep simple tap area and let input hold focus
+            style={{ padding: 4 }}
+            onPress={() => {
+              inputRef.current?.focus?.();
+            }}
+          >
+            <Ionicons name="search" size={18} color={c.muted} />
+          </Pressable>
+          <TextInput
+            ref={inputRef}
+            placeholder="Search anything from 'free food' to 'tech'"
+            placeholderTextColor={c.muted}
+            value={query}
+            onChangeText={setQuery}
+            style={{ color: c.text, fontSize: 16, flex: 1 }}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+        </View>
       </View>
       <View
         style={{
@@ -1105,8 +1120,9 @@ export default function Home() {
     if (typeof fromServer === 'number') return fromServer;
     // Optimistic local fallback
     if (!tags || tags.length === 0 || myTags.length === 0) return 0;
-    const uniqueEvent = Array.from(new Set(tags));
-    const uniqueUser = Array.from(new Set(myTags));
+    // Normalize case to ensure case-insensitive comparisons
+    const uniqueEvent = Array.from(new Set(tags.map((t) => t.toLowerCase())));
+    const uniqueUser = Array.from(new Set(myTags.map((t) => t.toLowerCase())));
     const e = uniqueEvent.length;
     const u = uniqueUser.length;
     if (e === 0 || u === 0) return 0;
