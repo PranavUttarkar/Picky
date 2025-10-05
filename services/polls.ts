@@ -1,5 +1,6 @@
 import { supabase } from '@/services/supabase';
 import type { Event } from '@/types/models';
+import { triggerGroupDecisionNotification } from '@/utils/notifications';
 
 export interface PollOptionView {
   poll_id: number;
@@ -24,6 +25,10 @@ export async function createPollWithOptions(groupId: number, eventIds: number[],
       p_mode: opts?.mode ?? 'single',
     });
     if (error) throw error;
+    
+    // Trigger notification for new group decision
+    await triggerGroupDecisionNotification();
+    
     return data as number;
   } catch (e: any) {
     const code = e?.code as string | undefined;
@@ -41,6 +46,10 @@ export async function createPollWithOptions(groupId: number, eventIds: number[],
       p_event_ids: eventIds,
     });
     if (error) throw error;
+    
+    // Trigger notification for new group decision
+    await triggerGroupDecisionNotification();
+    
     return data as number;
   }
 }

@@ -10,6 +10,7 @@ import { supabase } from '@/services/supabase';
 import { getMyGroups, createGroup, regenerateInviteCode } from '@/services/groups';
 import PollDeadlinePicker from '@/components/PollDeadlinePicker';
 import { createPollWithOptions } from '@/services/polls';
+import { triggerGroupDecisionNotification } from '@/utils/notifications';
 
 export default function NewDecision() {
   const c = useThemeColors();
@@ -108,6 +109,9 @@ export default function NewDecision() {
           .single();
         if (error) throw error;
         pollId = (data as any)?.id ?? null;
+
+        // Trigger notification for new group decision
+        await triggerGroupDecisionNotification();
       }
       if (!pollId) throw new Error('Could not create decision room');
       // Navigate to decision room for preference collection (under tabs)

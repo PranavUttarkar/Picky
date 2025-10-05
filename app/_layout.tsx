@@ -3,6 +3,7 @@ import { useColorScheme } from 'react-native';
 import { ThemeProvider } from '@/theme/ThemeProvider';
 import { useFonts, Pacifico_400Regular } from '@expo-google-fonts/pacifico';
 import { SavedNotificationProvider } from '@/utils/SavedNotificationContext';
+import { GroupDecisionNotificationProvider } from '@/utils/GroupDecisionNotificationContext';
 
 export default function RootLayout() {
   const scheme = useColorScheme();
@@ -11,14 +12,16 @@ export default function RootLayout() {
   return (
     <ThemeProvider>
       <SavedNotificationProvider>
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="index" />
-          <Stack.Screen name="onboarding" />
-          <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="events/[id]" />
-          {/** decisions routed via (tabs) to keep header/tab visible */}
-          {/** Poll routes are under (tabs)/polls now to keep header/tab visible */}
-        </Stack>
+        <GroupDecisionNotificationProvider>
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="index" />
+            <Stack.Screen name="onboarding" />
+            <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="events/[id]" />
+            {/** decisions routed via (tabs) to keep header/tab visible */}
+            {/** Poll routes are under (tabs)/polls now to keep header/tab visible */}
+          </Stack>
+        </GroupDecisionNotificationProvider>
       </SavedNotificationProvider>
     </ThemeProvider>
   );

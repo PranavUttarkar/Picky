@@ -7,12 +7,15 @@ import * as Clipboard from 'expo-clipboard';
 import { Share } from 'react-native';
 import { useCallback, useMemo, useEffect } from 'react';
 import { useSavedNotification } from '@/utils/SavedNotificationContext';
+import { useGroupDecisionNotification } from '@/utils/GroupDecisionNotificationContext';
 
 export default function TabsLayout() {
   const c = useThemeColors();
   const { toggleScheme, scheme } = useTheme();
   const pathname = usePathname();
   const { hasNewSavedItems, clearNotification } = useSavedNotification();
+  const { hasNewGroupDecisions, clearNotification: clearGroupDecisionNotification } =
+    useGroupDecisionNotification();
 
   // Clear notification when saved tab is accessed
   useEffect(() => {
@@ -20,6 +23,13 @@ export default function TabsLayout() {
       clearNotification();
     }
   }, [pathname, hasNewSavedItems, clearNotification]);
+
+  // Clear notification when groups tab is accessed
+  useEffect(() => {
+    if (pathname === '/groups' && hasNewGroupDecisions) {
+      clearGroupDecisionNotification();
+    }
+  }, [pathname, hasNewGroupDecisions, clearGroupDecisionNotification]);
 
   // Custom saved tab icon with notification dot
   const SavedTabIcon = useCallback(
@@ -45,6 +55,32 @@ export default function TabsLayout() {
       );
     },
     [hasNewSavedItems],
+  );
+
+  // Custom groups tab icon with notification dot
+  const GroupsTabIcon = useCallback(
+    ({ color, size }: { color: string; size: number }) => {
+      return (
+        <View style={{ position: 'relative' }}>
+          <Ionicons name="people" size={size} color={color} />
+          {hasNewGroupDecisions && (
+            <View
+              style={{
+                position: 'absolute',
+                top: -2,
+                right: -2,
+                width: 8,
+                height: 8,
+                borderRadius: 4,
+                backgroundColor: '#ef4444',
+                zIndex: 1,
+              }}
+            />
+          )}
+        </View>
+      );
+    },
+    [hasNewGroupDecisions],
   );
 
   const HeaderTitle = useCallback(
@@ -123,7 +159,7 @@ export default function TabsLayout() {
         name="groups"
         options={{
           title: '',
-          tabBarIcon: ({ color, size }) => <Ionicons name="people" size={size} color={color} />,
+          tabBarIcon: GroupsTabIcon,
         }}
       />
       <Tabs.Screen name="groups/[id]" options={{ href: null }} />

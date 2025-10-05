@@ -19,9 +19,11 @@ import { GroupsBenefitsEmptyState } from '@/components/GroupsBenefitsEmptyState'
 import { supabase } from '@/services/supabase';
 import { router } from 'expo-router';
 import { getMyGroups, createGroup, joinGroupByCode } from '@/services/groups';
+import { useGroupDecisionNotification } from '@/utils/GroupDecisionNotificationContext';
 
 export default function Groups() {
   const c = useThemeColors();
+  const { hasNewGroupDecisions } = useGroupDecisionNotification();
   const [groups, setGroups] = useState<any[]>([]);
   const [showCreate, setShowCreate] = useState(false);
   const [showJoin, setShowJoin] = useState(false);
@@ -193,7 +195,20 @@ export default function Groups() {
                   marginBottom: 8,
                 }}
               >
-                <Text style={{ color: c.text, fontWeight: '800' }}>{item.name}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Text style={{ color: c.text, fontWeight: '800', flex: 1 }}>{item.name}</Text>
+                  {hasNewGroupDecisions && (
+                    <View
+                      style={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: 4,
+                        backgroundColor: '#ef4444',
+                        marginLeft: 8,
+                      }}
+                    />
+                  )}
+                </View>
               </Pressable>
             )}
             ListEmptyComponent={
