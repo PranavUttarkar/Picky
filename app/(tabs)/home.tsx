@@ -98,20 +98,22 @@ export default function HomeTab() {
                 <Text style={{ color: '#40ade8ff', fontWeight: '700' }}>Create Account</Text>
               </Pressable>
             </BlurbBubble>
-          </View>
-          {/* Additional padding */}
-          <View style={{ padding: 21 }} />
-          {/* Feedback link */}
-          <View style={{ paddingHorizontal: 16, marginTop: 12 }}>
-            <Text style={{ color: c.muted, fontSize: 12 }}>Have suggestions? found bugs?</Text>
-            <Pressable
-              onPress={() => Linking.openURL('https://forms.gle/sQDyLdm5yP4rQG3d8')}
-              accessibilityRole="link"
-              accessibilityLabel="Open feedback form"
-              style={{ marginTop: 4 }}
-            >
-              <Text style={{ color: c.primary, textDecorationLine: 'underline' }}>Click me!</Text>
-            </Pressable>
+
+            {/* Additional padding */}
+            <View style={{ padding: 21 }} />
+
+            {/* Feedback link */}
+            <View style={{ marginTop: 12 }}>
+              <Text style={{ color: c.muted, fontSize: 12 }}>Have suggestions? found bugs?</Text>
+              <Pressable
+                onPress={() => Linking.openURL('https://forms.gle/sQDyLdm5yP4rQG3d8')}
+                accessibilityRole="link"
+                accessibilityLabel="Open feedback form"
+                style={{ marginTop: 4 }}
+              >
+                <Text style={{ color: c.primary, textDecorationLine: 'underline' }}>Click me!</Text>
+              </Pressable>
+            </View>
           </View>
 
           {/* Bottom spacer so content isn't cut off by tab bar */}

@@ -120,14 +120,11 @@ export const EventGridCard: React.FC<EventGridCardProps> = memo(
                         paddingHorizontal: 8,
                         paddingVertical: 3,
                         borderRadius: 999,
-                        flexDirection: 'row',
                         alignItems: 'center',
-                        gap: 4,
                       }}
                     >
-                      <Ionicons name="sparkles-outline" size={12} color={c.text} />
                       <Text style={{ color: c.text, fontSize: 11, fontWeight: '800' }}>
-                        {score}%
+                        {score}% Match{score > 65 ? '!' : ''}
                       </Text>
                     </View>
                   </LinearGradient>

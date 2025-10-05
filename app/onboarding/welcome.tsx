@@ -277,7 +277,9 @@ export default function Welcome() {
       {mode === 'signIn' ? (
         !isAuthed ? (
           <Pressable onPress={startSignUp} style={{ marginTop: 16 }}>
-            <Text style={{ color: c.muted }}>{"Don't have an account? Create one"}</Text>
+            <Text style={{ textDecorationLine: 'underline' }}>
+              {"Don't have an account? Create one"}
+            </Text>
           </Pressable>
         ) : (
           <Pressable onPress={() => router.replace('/(tabs)/home')} style={{ marginTop: 16 }}>
@@ -286,7 +288,9 @@ export default function Welcome() {
         )
       ) : (
         <Pressable onPress={startSignIn} style={{ marginTop: 16 }}>
-          <Text style={{ color: c.muted }}>Already have an account? Sign in</Text>
+          <Text style={{ textDecorationLine: 'underline', color: c.muted }}>
+            Already have an account? Sign in
+          </Text>
         </Pressable>
       )}
     </View>

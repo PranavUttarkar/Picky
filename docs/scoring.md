@@ -5,7 +5,7 @@ Picky supports a personalized feed using server-side RPCs and a local fallback.
 ## Server-side RPCs
 - `get_user_event_scores()`
   - Returns rows `{ event_id, match_percent }` for the authenticated user
-  - Implemented with improved scoring (migration `0018_improved_scoring.sql` + 50% floor in `0019_min_score_floor.sql`)
+  - Implemented with 50% baseline + additive bonuses (migration `0026_baseline_50_percent_scoring.sql`)
 
 - `get_group_event_scores(p_group_id bigint)`
   - Returns scores for a specific group the caller is a member of
@@ -16,7 +16,17 @@ const { data: personalScores, error } = await supabase.rpc('get_user_event_score
 const { data: groupScores } = await supabase.rpc('get_group_event_scores', { p_group_id: groupId });
 ```
 
-## Improved Scoring (v2)
+## Baseline + Additive Scoring (v3)
+**NEW APPROACH:** All events now start at 50% baseline, with bonuses added on top:
+
+- **Baseline:** 50% for all events (positive user experience)
+- **Interest Bonus:** 0-30% added when event tags match user interests
+- **Recency Bonus:** 0-15% added for events happening soon (within 14 days)
+- **Final Score:** 50% + interest_bonus + recency_bonus (capped at 100%)
+
+This replaces the previous v2 approach and ensures all events feel relevant while still rewarding good matches.
+
+## Previous Improved Scoring (v2) - Deprecated
 The original overlap formula `|A ∩ B| / max(|A|, |B|)` was pessimistic when interest sets were large or uneven. The new model blends multiple factors:
 
 Components (all 0..1):

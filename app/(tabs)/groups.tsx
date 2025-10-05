@@ -15,6 +15,7 @@ import {
 import { useThemeColors } from '@/theme/ThemeProvider';
 import GradientBackground from '@/components/GradientBackground';
 import AnimatedPage from '@/components/AnimatedPage';
+import { GroupsBenefitsEmptyState } from '@/components/GroupsBenefitsEmptyState';
 import { supabase } from '@/services/supabase';
 import { router } from 'expo-router';
 import { getMyGroups, createGroup, joinGroupByCode } from '@/services/groups';
@@ -196,10 +197,9 @@ export default function Groups() {
               </Pressable>
             )}
             ListEmptyComponent={
+              // Show the benefits empty state component when the user has no groups
               <View style={{ paddingTop: 12 }}>
-                <Text style={{ color: c.muted }}>
-                  You’re not in any groups yet. Create one or join with an invite code.
-                </Text>
+                <GroupsBenefitsEmptyState />
               </View>
             }
           />

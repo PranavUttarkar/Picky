@@ -5,12 +5,47 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Linking from 'expo-linking';
 import * as Clipboard from 'expo-clipboard';
 import { Share } from 'react-native';
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useEffect } from 'react';
+import { useSavedNotification } from '@/utils/SavedNotificationContext';
 
 export default function TabsLayout() {
   const c = useThemeColors();
   const { toggleScheme, scheme } = useTheme();
   const pathname = usePathname();
+  const { hasNewSavedItems, clearNotification } = useSavedNotification();
+
+  // Clear notification when saved tab is accessed
+  useEffect(() => {
+    if (pathname === '/saved' && hasNewSavedItems) {
+      clearNotification();
+    }
+  }, [pathname, hasNewSavedItems, clearNotification]);
+
+  // Custom saved tab icon with notification dot
+  const SavedTabIcon = useCallback(
+    ({ color, size }: { color: string; size: number }) => {
+      return (
+        <View style={{ position: 'relative' }}>
+          <Ionicons name="bookmark" size={size} color={color} />
+          {hasNewSavedItems && (
+            <View
+              style={{
+                position: 'absolute',
+                top: -2,
+                right: -2,
+                width: 8,
+                height: 8,
+                borderRadius: 4,
+                backgroundColor: '#ef4444',
+                zIndex: 1,
+              }}
+            />
+          )}
+        </View>
+      );
+    },
+    [hasNewSavedItems],
+  );
 
   const HeaderTitle = useCallback(
     () => (
@@ -99,7 +134,14 @@ export default function TabsLayout() {
       <Tabs.Screen name="decisions/new" options={{ href: null }} />
       {/** hide Group Decide utility route from tab bar while keeping it navigable */}
       <Tabs.Screen name="group-decide" options={{ href: null }} />
-      <Tabs.Screen name="saved" options={{ href: null }} />
+
+      <Tabs.Screen
+        name="saved"
+        options={{
+          title: '',
+          tabBarIcon: SavedTabIcon,
+        }}
+      />
 
       <Tabs.Screen
         name="profile"

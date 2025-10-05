@@ -37,6 +37,8 @@ import { router } from 'expo-router';
 import type { Event } from '@/types/models';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { useSavedNotification } from '@/utils/SavedNotificationContext';
+import { getMyGroups } from '@/services/groups';
 
 type AdminHeaderProps = {
   c: ReturnType<typeof useThemeColors>;
@@ -567,9 +569,9 @@ const FiltersTopBar = memo(function FiltersTopBar({
             borderRadius: 10,
           }}
           accessibilityRole="link"
-          accessibilityLabel="Add your own"
+          accessibilityLabel="Add Event!"
         >
-          <Text style={{ color: '#000' }}>Add your event!</Text>
+          <Text style={{ color: '#000' }}>Add Event!</Text>
         </Pressable>
       </View>
     </View>
@@ -879,6 +881,53 @@ const FiltersScrollable = memo(function FiltersScrollable({
         </View>
       ) : null}
 
+      {/* Predefined filter tags */}
+      <View
+        style={{
+          backgroundColor: c.card,
+          borderRadius: 12,
+          padding: 12,
+          marginBottom: 12,
+          borderWidth: 1,
+          borderColor: '#00000020',
+        }}
+      >
+        <Text style={{ color: c.text, fontWeight: '800', marginBottom: 8 }}>Filter by tags</Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+          {['culture', 'engineering', 'business', 'live music'].map((tag) => {
+            const active = activeTags.includes(tag);
+            const predefinedTags = ['culture', 'engineering', 'business', 'live music'];
+            return (
+              <Pressable
+                key={tag}
+                onPress={() =>
+                  setActiveTags((prev) => {
+                    if (prev.includes(tag)) {
+                      // If this tag is already active, remove it
+                      return prev.filter((x) => x !== tag);
+                    } else {
+                      // Remove any other predefined tags and add this one
+                      const withoutPredefined = prev.filter((x) => !predefinedTags.includes(x));
+                      return [...withoutPredefined, tag];
+                    }
+                  })
+                }
+                style={{
+                  backgroundColor: active ? c.primary : '#00000020',
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  borderRadius: 999,
+                }}
+              >
+                <Text style={{ color: active ? '#000' : c.text, fontSize: 14, fontWeight: '600' }}>
+                  {tag.charAt(0).toUpperCase() + tag.slice(1)}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
+
       {/* Hide global/all tags chips below; only show 'Your interests' above */}
 
       {/* <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
@@ -899,6 +948,7 @@ export default function Home() {
   const c = useThemeColors();
   const { scheme } = useTheme();
   const { width } = useWindowDimensions();
+  const { triggerNotification } = useSavedNotification();
   const isWide = width >= 900; // switch to grid on larger screens
   const columns = width >= 1280 ? 3 : isWide ? 2 : 1;
   const listRef = useRef<FlatList<Event>>(null);
@@ -948,7 +998,7 @@ export default function Home() {
   const [showTimePicker, setShowTimePicker] = useState(false);
 
   // Pagination + caching
-  const PAGE_SIZE = 10;
+  const PAGE_SIZE = 15;
   const CACHE_KEY = 'events_cache_v1';
   // Removed dummy/placeholder events: feed now reflects only real upcoming events
 
@@ -1083,6 +1133,38 @@ export default function Home() {
     return true;
   };
 
+  const handlePollCreation = async (eventId: number) => {
+    const authed = await requireAuth();
+    if (!authed) return;
+
+    try {
+      const groups = await getMyGroups();
+
+      if (groups.length === 0) {
+        Alert.alert(
+          'Join a Group First!',
+          'Polls are more fun with friends! Join or create a group to start polling about events with your crew.',
+          [
+            { text: 'Maybe Later', style: 'cancel' },
+            {
+              text: 'Find Groups',
+              onPress: () => {
+                router.push('/groups');
+              },
+              style: 'default',
+            },
+          ],
+        );
+        return;
+      }
+
+      // User has groups, proceed with poll creation
+      router.push({ pathname: '/polls/new', params: { fromEvent: eventId } });
+    } catch (error) {
+      Alert.alert('Error', 'Failed to check group membership. Please try again.');
+    }
+  };
+
   const toggleSave = async (id: number) => {
     const authed = await requireAuth();
     if (!authed) return;
@@ -1108,6 +1190,8 @@ export default function Home() {
             .from('saved_events')
             .insert({ user_id: user.id, event_id: id });
           if (error) throw error;
+          // Trigger notification for new saved item
+          await triggerNotification();
         }
       },
     });
@@ -1118,38 +1202,50 @@ export default function Home() {
     // Prefer server-computed score when available
     const fromServer = scores[eventId];
     if (typeof fromServer === 'number') return fromServer;
-    // Optimistic local fallback
-    if (!tags || tags.length === 0 || myTags.length === 0) return 0;
-    // Normalize case to ensure case-insensitive comparisons
-    const uniqueEvent = Array.from(new Set(tags.map((t) => t.toLowerCase())));
-    const uniqueUser = Array.from(new Set(myTags.map((t) => t.toLowerCase())));
-    const e = uniqueEvent.length;
-    const u = uniqueUser.length;
-    if (e === 0 || u === 0) return 0;
-    let inter = 0;
-    for (const t of uniqueEvent) if (uniqueUser.includes(t)) inter++;
-    if (inter === 0) return 0;
-    const coverage = inter / e; // how much of event is covered
-    const affinity = inter / Math.sqrt(e * u); // cosine-like
-    const dice = (2 * inter) / (e + u);
-    const anyMatch = 1; // since inter>0
-    let raw = 0.55 * coverage + 0.25 * affinity + 0.15 * dice + 0.05 * anyMatch; // 0..1 base
-    if (raw < 0.15) raw = 0.15; // optimistic floor for any overlap
-    // Recency boost (client approximation): up to +10% relative if within 14 days
+
+    // Local fallback with 50% baseline + additive bonuses
+    const baseline = 50; // All events start at 50%
+    let finalScore = baseline;
+
+    // Add interest bonus (0-35%) if there are tags to compare
+    if (tags && tags.length > 0 && myTags.length > 0) {
+      // Normalize case to ensure case-insensitive comparisons
+      const uniqueEvent = Array.from(new Set(tags.map((t) => t.toLowerCase())));
+      const uniqueUser = Array.from(new Set(myTags.map((t) => t.toLowerCase())));
+      const e = uniqueEvent.length;
+      const u = uniqueUser.length;
+
+      if (e > 0 && u > 0) {
+        let inter = 0;
+        for (const t of uniqueEvent) if (uniqueUser.includes(t)) inter++;
+
+        if (inter > 0) {
+          const coverage = inter / e; // how much of event is covered
+          const affinity = inter / Math.sqrt(e * u); // cosine-like
+          const dice = (2 * inter) / (e + u);
+
+          // Interest bonus: blend components and scale to 0-35%
+          const interestBonus = (0.4 * coverage + 0.35 * affinity + 0.25 * dice) * 35;
+          finalScore += Math.max(0, Math.min(35, interestBonus));
+        }
+      }
+    }
+
+    // Add recency bonus (0-15%) for events happening soon
     const eventObj = events.find((ev: any) => ev.id === eventId);
     if (eventObj?.date_time) {
       const dt = dayjs(eventObj.date_time);
       if (dt.isAfter(dayjs())) {
         const horizon = 14;
         const daysAhead = Math.min(horizon, Math.max(0, dt.diff(dayjs(), 'day')));
-        const recency = (horizon - daysAhead) / horizon; // 1 today -> 0 at horizon
-        raw = raw * (0.9 + 0.1 * recency);
+        const recencyFactor = (horizon - daysAhead) / horizon; // 1 today -> 0 at horizon
+        const recencyBonus = recencyFactor * 15; // 0-15% bonus
+        finalScore += Math.max(0, Math.min(15, recencyBonus));
       }
     }
-    // Square root easing curve to lift low scores and compress very high scores slightly
-    raw = Math.sqrt(Math.max(0, Math.min(1, raw)));
-    const pct = Math.round(raw * 100);
-    return pct;
+
+    // Cap at 100% and return as integer
+    return Math.max(50, Math.min(100, Math.round(finalScore)));
   };
 
   // Parse query to extract hashtags as tag filters and plain text terms
@@ -1454,7 +1550,9 @@ export default function Home() {
           justifyContent: 'center',
         }}
       >
-        <Text style={{ color: c.text, fontWeight: '800' }}>Match {value}%</Text>
+        <Text style={{ color: c.text, fontWeight: '800' }}>
+          {value}% Match{value > 65 ? '!' : ''}
+        </Text>
       </View>
     </LinearGradient>
   );
@@ -1498,14 +1596,7 @@ export default function Home() {
             isSaved: savedSet.has(item.id),
             onToggleSave: toggleSave,
             onOpenDetails: () => onOpenDetails(item),
-            onPoll:
-              item.id > 0
-                ? async () => {
-                    const authed = await requireAuth();
-                    if (!authed) return;
-                    router.push({ pathname: '/polls/new', params: { fromEvent: item.id } });
-                  }
-                : undefined,
+            onPoll: item.id > 0 ? () => handlePollCreation(item.id) : undefined,
             onEdit: isAdmin && item.id > 0 ? () => prefillForEdit(item) : undefined,
             onDelete: isAdmin && item.id > 0 ? () => deleteEvent(item.id) : undefined,
             isAdmin,
@@ -1551,7 +1642,7 @@ export default function Home() {
                   borderRadius: 10,
                 }}
               >
-                <Text style={{ color: c.text }}>Close</Text>
+                <Ionicons name="close" size={24} color={c.text} />
               </Pressable>
             </View>
           </BlurView>
@@ -1626,6 +1717,28 @@ export default function Home() {
                     }}
                   >
                     <Text style={{ color: '#000', fontWeight: '700' }}>Add to calendar</Text>
+                  </Pressable>
+                ) : null}
+                {selectedEvent?.id && selectedEvent.id > 0 ? (
+                  <Pressable
+                    onPress={() => toggleSave(selectedEvent.id)}
+                    style={{
+                      backgroundColor: '#00000030',
+                      padding: 12,
+                      borderRadius: 12,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 8,
+                    }}
+                  >
+                    <Ionicons
+                      name={savedSet.has(selectedEvent.id) ? 'bookmark' : 'bookmark-outline'}
+                      size={18}
+                      color={savedSet.has(selectedEvent.id) ? c.primary : c.text}
+                    />
+                    <Text style={{ color: c.text, fontWeight: '700' }}>
+                      {savedSet.has(selectedEvent.id) ? 'Saved' : 'Save'}
+                    </Text>
                   </Pressable>
                 ) : null}
                 {selectedEvent?.rsvp_url ? (
