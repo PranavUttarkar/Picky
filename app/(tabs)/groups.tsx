@@ -176,7 +176,7 @@ export default function Groups() {
                 borderRadius: 12,
               }}
             >
-              <Text style={{ color: c.text, fontWeight: '700' }}>New Group Decide</Text>
+              <Text style={{ color: '#000', fontWeight: '700' }}>New Group Decide</Text>
             </Pressable>
           </View>
 
@@ -228,8 +228,7 @@ export default function Groups() {
         animationType="fade"
         onRequestClose={() => !creating && setShowCreate(false)}
       >
-        <Pressable
-          onPress={() => !creating && setShowCreate(false)}
+        <View
           style={{
             flex: 1,
             backgroundColor: 'rgba(0,0,0,0.4)',
@@ -238,18 +237,28 @@ export default function Groups() {
             padding: 16,
           }}
         >
+          <Pressable
+            onPress={() => !creating && setShowCreate(false)}
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+            }}
+          />
           <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            style={{ width: '100%' }}
+            style={{ width: '100%', zIndex: 1 }}
           >
             <Animated.View
-              onStartShouldSetResponder={() => true}
               style={{
                 backgroundColor: c.card,
                 borderRadius: 16,
                 padding: 16,
                 width: '100%',
                 maxWidth: 420,
+                alignSelf: 'center',
                 borderWidth: 1,
                 borderColor: '#00000020',
                 opacity: createAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 1] }),
@@ -318,7 +327,7 @@ export default function Groups() {
               </View>
             </Animated.View>
           </KeyboardAvoidingView>
-        </Pressable>
+        </View>
       </Modal>
 
       {/* Join Group Modal */}
@@ -328,8 +337,7 @@ export default function Groups() {
         animationType="fade"
         onRequestClose={() => !joining && setShowJoin(false)}
       >
-        <Pressable
-          onPress={() => !joining && setShowJoin(false)}
+        <View
           style={{
             flex: 1,
             backgroundColor: 'rgba(0,0,0,0.4)',
@@ -338,18 +346,28 @@ export default function Groups() {
             padding: 16,
           }}
         >
+          <Pressable
+            onPress={() => !joining && setShowJoin(false)}
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+            }}
+          />
           <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            style={{ width: '100%' }}
+            style={{ width: '100%', zIndex: 1 }}
           >
             <Animated.View
-              onStartShouldSetResponder={() => true}
               style={{
                 backgroundColor: c.card,
                 borderRadius: 16,
                 padding: 16,
                 width: '100%',
                 maxWidth: 420,
+                alignSelf: 'center',
                 borderWidth: 1,
                 borderColor: '#00000020',
                 opacity: joinAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 1] }),
@@ -417,7 +435,7 @@ export default function Groups() {
               </View>
             </Animated.View>
           </KeyboardAvoidingView>
-        </Pressable>
+        </View>
       </Modal>
     </GradientBackground>
   );

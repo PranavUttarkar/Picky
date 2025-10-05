@@ -20,6 +20,7 @@ export interface EventRowCardProps {
   onDelete?: () => void;
   isAdmin?: boolean;
   matchPercent?: number; // optional external override (e.g., personalized feed)
+  pollButtonTitle?: string; // optional custom title for the poll button
 }
 
 /**
@@ -37,6 +38,7 @@ export const EventRowCard: React.FC<EventRowCardProps> = memo(
     onDelete,
     isAdmin,
     matchPercent,
+    pollButtonTitle = 'Poll',
   }) => {
     const c = useThemeColors();
     const imgs: string[] = (event as any).image_urls?.length
@@ -132,7 +134,7 @@ export const EventRowCard: React.FC<EventRowCardProps> = memo(
                   </Pressable>
                   {onPoll ? (
                     <ThreeDButton
-                      title="Poll"
+                      title={pollButtonTitle}
                       onPress={() => {
                         onPoll();
                       }}

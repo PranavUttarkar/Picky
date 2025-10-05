@@ -198,7 +198,7 @@ export default function NewDecision() {
                     borderRadius: 10,
                   }}
                 >
-                  <Text style={{ color: c.text, fontWeight: '800' }}>Next</Text>
+                  <Text style={{ color: canNext ? '#000' : c.text, fontWeight: '800' }}>Next</Text>
                 </Pressable>
               </View>
             </View>
@@ -261,7 +261,7 @@ export default function NewDecision() {
                     borderRadius: 10,
                   }}
                 >
-                  <Text style={{ color: c.text, fontWeight: '800' }}>Next</Text>
+                  <Text style={{ color: topic.trim().length > 0 ? '#000' : c.text, fontWeight: '800' }}>Next</Text>
                 </Pressable>
               </View>
             </View>
@@ -285,7 +285,7 @@ export default function NewDecision() {
                       backgroundColor: groupId === g.id ? c.primary : c.background,
                     }}
                   >
-                    <Text style={{ color: c.text }}>{g.name}</Text>
+                    <Text style={{ color: groupId === g.id ? '#000' : c.text }}>{g.name}</Text>
                   </Pressable>
                 ))}
               </View>
@@ -300,7 +300,7 @@ export default function NewDecision() {
                     borderRadius: 10,
                   }}
                 >
-                  <Text style={{ color: c.text, fontWeight: '800' }}>
+                  <Text style={{ color: '#000', fontWeight: '800' }}>
                     {creatingGroup ? 'Creating…' : 'Create new group'}
                   </Text>
                 </Pressable>
@@ -350,7 +350,7 @@ export default function NewDecision() {
                     borderRadius: 10,
                   }}
                 >
-                  <Text style={{ color: c.text, fontWeight: '800' }}>Next</Text>
+                  <Text style={{ color: groupId || inviteCode ? '#000' : c.text, fontWeight: '800' }}>Next</Text>
                 </Pressable>
               </View>
             </View>
