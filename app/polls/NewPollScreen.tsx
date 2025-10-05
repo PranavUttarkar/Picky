@@ -292,7 +292,7 @@ export default function NewPollScreen() {
                       onToggleSave={() => {}}
                       onOpenDetails={() => {}}
                       onPoll={() => toggle(item.id)}
-                      pollButtonTitle={sel ? "Unselect" : "Select"}
+                      pollButtonTitle={sel ? 'Unselect' : 'Select'}
                     />
                     {sel && (
                       <View
@@ -339,7 +339,7 @@ export default function NewPollScreen() {
                     onToggleSave={() => {}}
                     onOpenDetails={() => {}}
                     onPoll={() => toggle(item.id)}
-                    pollButtonTitle={sel ? "Unselect" : "Select"}
+                    pollButtonTitle={sel ? 'Unselect' : 'Select'}
                     matchPercent={item.match_percent}
                   />
                   {sel && (
@@ -416,7 +416,7 @@ export default function NewPollScreen() {
                     onToggleSave={() => {}}
                     onOpenDetails={() => {}}
                     onPoll={() => toggle(item.id)}
-                    pollButtonTitle={sel ? "Unselect" : "Select"}
+                    pollButtonTitle={sel ? 'Unselect' : 'Select'}
                   />
                   {sel && (
                     <View

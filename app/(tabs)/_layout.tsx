@@ -1,4 +1,4 @@
-import { Tabs, usePathname } from 'expo-router';
+import { Tabs, usePathname, router } from 'expo-router';
 import { useTheme, useThemeColors } from '@/theme/ThemeProvider';
 import { View, Text, Pressable, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -85,18 +85,24 @@ export default function TabsLayout() {
 
   const HeaderTitle = useCallback(
     () => (
-      <Text
-        style={{
-          color: c.text,
-          fontSize: 24,
-          fontWeight: '900',
-          // Use custom font if loaded globally
-          // @ts-ignore - font may be loaded under this name
-          fontFamily: 'Pacifico_400Regular',
-        }}
+      <Pressable
+        onPress={() => router.push('/(tabs)/home')}
+        accessibilityRole="button"
+        accessibilityLabel="Go to Home"
       >
-        Picky!
-      </Text>
+        <Text
+          style={{
+            color: c.text,
+            fontSize: 24,
+            fontWeight: '900',
+            // Use custom font if loaded globally
+            // @ts-ignore - font may be loaded under this name
+            fontFamily: 'Pacifico_400Regular',
+          }}
+        >
+          Picky!
+        </Text>
+      </Pressable>
     ),
     [c.text],
   );

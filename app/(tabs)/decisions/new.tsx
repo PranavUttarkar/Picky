@@ -261,7 +261,11 @@ export default function NewDecision() {
                     borderRadius: 10,
                   }}
                 >
-                  <Text style={{ color: topic.trim().length > 0 ? '#000' : c.text, fontWeight: '800' }}>Next</Text>
+                  <Text
+                    style={{ color: topic.trim().length > 0 ? '#000' : c.text, fontWeight: '800' }}
+                  >
+                    Next
+                  </Text>
                 </Pressable>
               </View>
             </View>
@@ -350,7 +354,11 @@ export default function NewDecision() {
                     borderRadius: 10,
                   }}
                 >
-                  <Text style={{ color: groupId || inviteCode ? '#000' : c.text, fontWeight: '800' }}>Next</Text>
+                  <Text
+                    style={{ color: groupId || inviteCode ? '#000' : c.text, fontWeight: '800' }}
+                  >
+                    Next
+                  </Text>
                 </Pressable>
               </View>
             </View>
