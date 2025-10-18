@@ -34,6 +34,7 @@ import Chip from '@/components/Chip';
 import { supabase } from '@/services/supabase';
 import { optimisticUpdate } from '@/utils/optimistic';
 import { sanitizeEventImageUrls } from '@/utils/images';
+import { validateEventCopy, checkProfanity } from '@/utils/profanity';
 import { router } from 'expo-router';
 import type { Event } from '@/types/models';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -1355,6 +1356,11 @@ export default function Home() {
       Alert.alert('Missing title', 'Please provide a title for the event.');
       return;
     }
+    const profanityErr = validateEventCopy(titleVal.trim(), descVal);
+    if (profanityErr) {
+      Alert.alert('Inappropriate content', profanityErr);
+      return;
+    }
     // Require at least one image URL in admin flow
     const hasAnyAdminImage = [fImage1, fImage2, fImage3].some((s) => !!s && s.trim().length > 0);
     if (!hasAnyAdminImage) {
@@ -1604,6 +1610,12 @@ export default function Home() {
     const titleVal = mTitle.trim();
     if (!titleVal) {
       Alert.alert('Missing title', 'Please give your event a title.');
+      return;
+    }
+    // Profanity validation (client-side)
+    const profanityErr = validateEventCopy(titleVal, mDesc);
+    if (profanityErr) {
+      Alert.alert('Inappropriate content', profanityErr);
       return;
     }
     // Require at least one image (picked or URL)
@@ -2054,19 +2066,42 @@ export default function Home() {
                 />
               ))}
               {/* Removed image source selector per UX: we now prefer picked photos if present, else use typed URLs */}
-              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  gap: 8,
+                  marginBottom: 8,
+                  flexWrap: 'wrap',
+                  alignItems: 'center',
+                }}
+              >
                 {pickedUris.map((u, i) => (
-                  <View
-                    key={`${u}-${i}`}
-                    style={{
-                      width: 72,
-                      height: 72,
-                      borderRadius: 8,
-                      overflow: 'hidden',
-                      backgroundColor: '#00000015',
-                    }}
-                  >
-                    <LazyImage uri={u} width={72} height={72} borderRadius={8} />
+                  <View key={`${u}-${i}`} style={{ position: 'relative' }}>
+                    <View
+                      style={{
+                        width: 72,
+                        height: 72,
+                        borderRadius: 8,
+                        overflow: 'hidden',
+                        backgroundColor: '#00000015',
+                      }}
+                    >
+                      <LazyImage uri={u} width={72} height={72} borderRadius={8} />
+                    </View>
+                    <Pressable
+                      onPress={() => setPickedUris((prev) => prev.filter((_, idx) => idx !== i))}
+                      accessibilityLabel={`Remove image ${i + 1}`}
+                      style={{
+                        position: 'absolute',
+                        top: -6,
+                        right: -6,
+                        backgroundColor: '#00000080',
+                        borderRadius: 999,
+                        padding: 4,
+                      }}
+                    >
+                      <Ionicons name="close" size={14} color="#fff" />
+                    </Pressable>
                   </View>
                 ))}
                 <Pressable
@@ -2100,7 +2135,9 @@ export default function Home() {
                     borderRadius: 10,
                   }}
                 >
-                  <Text style={{ color: '#000', fontWeight: '700' }}>Choose images</Text>
+                  <Text style={{ color: '#000', fontWeight: '700' }}>
+                    Choose images ({pickedUris.length}/3)
+                  </Text>
                 </Pressable>
                 <Pressable
                   onPress={async () => {
@@ -2129,24 +2166,105 @@ export default function Home() {
                 >
                   <Text style={{ color: c.text, fontWeight: '700' }}>Take photo</Text>
                 </Pressable>
+                {pickedUris.length > 0 ? (
+                  <Pressable
+                    onPress={() => setPickedUris([])}
+                    style={{
+                      backgroundColor: '#00000020',
+                      paddingHorizontal: 12,
+                      paddingVertical: 10,
+                      borderRadius: 10,
+                    }}
+                  >
+                    <Text style={{ color: c.text, fontWeight: '700' }}>Clear picked</Text>
+                  </Pressable>
+                ) : null}
               </View>
               {/* Preview thumbnails for typed URLs */}
               {typedUrls.length ? (
-                <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
-                  {typedUrls.map((u, i) => (
-                    <View
-                      key={`typed-${u}-${i}`}
+                <View style={{ gap: 6, marginBottom: 8 }}>
+                  <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+                    {typedUrls.map((u, i) => (
+                      <View key={`typed-${u}-${i}`} style={{ position: 'relative' }}>
+                        <View
+                          style={{
+                            width: 72,
+                            height: 72,
+                            borderRadius: 8,
+                            overflow: 'hidden',
+                            backgroundColor: '#00000015',
+                          }}
+                        >
+                          <LazyImage uri={u} width={72} height={72} borderRadius={8} />
+                        </View>
+                        {/* Provide quick remove buttons for each URL slot */}
+                        {i === 0 ? (
+                          <Pressable
+                            onPress={() => setMImage1('')}
+                            accessibilityLabel="Remove first URL"
+                            style={{
+                              position: 'absolute',
+                              top: -6,
+                              right: -6,
+                              backgroundColor: '#00000080',
+                              borderRadius: 999,
+                              padding: 4,
+                            }}
+                          >
+                            <Ionicons name="close" size={14} color="#fff" />
+                          </Pressable>
+                        ) : i === 1 ? (
+                          <Pressable
+                            onPress={() => setMImage2('')}
+                            accessibilityLabel="Remove second URL"
+                            style={{
+                              position: 'absolute',
+                              top: -6,
+                              right: -6,
+                              backgroundColor: '#00000080',
+                              borderRadius: 999,
+                              padding: 4,
+                            }}
+                          >
+                            <Ionicons name="close" size={14} color="#fff" />
+                          </Pressable>
+                        ) : (
+                          <Pressable
+                            onPress={() => setMImage3('')}
+                            accessibilityLabel="Remove third URL"
+                            style={{
+                              position: 'absolute',
+                              top: -6,
+                              right: -6,
+                              backgroundColor: '#00000080',
+                              borderRadius: 999,
+                              padding: 4,
+                            }}
+                          >
+                            <Ionicons name="close" size={14} color="#fff" />
+                          </Pressable>
+                        )}
+                      </View>
+                    ))}
+                  </View>
+                  {typedUrls.length > 0 ? (
+                    <Pressable
+                      onPress={() => {
+                        setMImage1('');
+                        setMImage2('');
+                        setMImage3('');
+                      }}
                       style={{
-                        width: 72,
-                        height: 72,
-                        borderRadius: 8,
-                        overflow: 'hidden',
-                        backgroundColor: '#00000015',
+                        backgroundColor: '#00000020',
+                        paddingHorizontal: 12,
+                        paddingVertical: 10,
+                        borderRadius: 10,
+                        alignSelf: 'flex-start',
                       }}
                     >
-                      <LazyImage uri={u} width={72} height={72} borderRadius={8} />
-                    </View>
-                  ))}
+                      <Text style={{ color: c.text, fontWeight: '700' }}>Clear URLs</Text>
+                    </Pressable>
+                  ) : null}
                 </View>
               ) : null}
               <Text style={{ color: c.muted, fontSize: 11, marginBottom: 8 }}>
