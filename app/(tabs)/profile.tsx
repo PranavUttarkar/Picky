@@ -361,6 +361,24 @@ export default function Profile() {
                 <Text style={{ color: c.text, fontWeight: '700' }}>View Saved</Text>
               </View>
             </Pressable>
+            {/* My Events (created by me) */}
+            <Pressable
+              onPress={() => router.push('/(tabs)/my-events')}
+              style={{
+                marginTop: 10,
+                backgroundColor: '#00000030',
+                padding: 12,
+                borderRadius: 12,
+                alignItems: 'center',
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="View events you've created"
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Ionicons name="create" size={18} color={c.text} />
+                <Text style={{ color: c.text, fontWeight: '700' }}>My Events</Text>
+              </View>
+            </Pressable>
           </View>
         </>
       )}

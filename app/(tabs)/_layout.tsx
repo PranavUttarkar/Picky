@@ -192,6 +192,8 @@ export default function TabsLayout() {
           tabBarIcon: ({ color, size }) => <Ionicons name="person" size={size} color={color} />,
         }}
       />
+      {/* Hidden route for viewing user's created events */}
+      <Tabs.Screen name="my-events" options={{ href: null }} />
     </Tabs>
   );
 }
