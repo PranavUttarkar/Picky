@@ -24,6 +24,7 @@ import EventGridCard from '@/components/EventGridCard';
 import dayjs from 'dayjs';
 import LazyImage from '@/components/LazyImage';
 import EventImages from '@/components/EventImages';
+import ImageGallery from '@/components/ImageGallery';
 import { useTheme, useThemeColors } from '@/theme/ThemeProvider';
 import GradientBackground from '@/components/GradientBackground';
 import AnimatedPage from '@/components/AnimatedPage';
@@ -39,6 +40,16 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useSavedNotification } from '@/utils/SavedNotificationContext';
 import { getMyGroups } from '@/services/groups';
+import {
+  createEvent,
+  updateEvent,
+  deleteEvent as adminDeleteEvent,
+  deleteEventDirect,
+  uploadEventImages,
+  deleteEventImages,
+} from '@/services/events';
+import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
 
 type AdminHeaderProps = {
   c: ReturnType<typeof useThemeColors>;
@@ -479,7 +490,9 @@ const FiltersTopBar = memo(function FiltersTopBar({
   setQuery,
   mode,
   setMode,
-}: FiltersTopBarProps) {
+  onOpenAdd,
+  isAuthed,
+}: FiltersTopBarProps & { onOpenAdd: () => void; isAuthed: boolean }) {
   const inputRef = useRef<TextInput>(null);
   return (
     <View style={{ paddingBottom: 12 }}>
@@ -561,7 +574,7 @@ const FiltersTopBar = memo(function FiltersTopBar({
           })}
         </View>
         <Pressable
-          onPress={() => Linking.openURL('https://forms.gle/BA5SNSKJGWcrZYqt8')}
+          onPress={onOpenAdd}
           style={{
             backgroundColor: c.primary,
             paddingHorizontal: 12,
@@ -569,9 +582,9 @@ const FiltersTopBar = memo(function FiltersTopBar({
             borderRadius: 10,
           }}
           accessibilityRole="link"
-          accessibilityLabel="Add Event!"
+          accessibilityLabel={isAuthed ? 'Add Event' : 'Sign in to add event'}
         >
-          <Text style={{ color: '#000' }}>Add Event!</Text>
+          <Text style={{ color: '#000' }}>Add Event</Text>
         </Pressable>
       </View>
     </View>
@@ -965,6 +978,7 @@ export default function Home() {
   const [isFetching, setIsFetching] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [isAuthed, setIsAuthed] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   // Modal state for event details
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
@@ -973,6 +987,7 @@ export default function Home() {
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Event | null>(null);
   // Track which card is expanded; collapsed shows truncated description + hint
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
@@ -1025,7 +1040,9 @@ export default function Home() {
     const to = from + PAGE_SIZE - 1;
     const { data, error } = await supabase
       .from('events')
-      .select('id,title,description,image_url,date_time,location,tags')
+      .select(
+        'id,title,description,image_url,image_urls,date_time,location,tags,rsvp_url,created_by',
+      )
       .gte('date_time', new Date().toISOString())
       .order('date_time', { ascending: true })
       .range(from, to);
@@ -1094,6 +1111,7 @@ export default function Home() {
         return; // guests can still see events; just skip personalized data
       }
       setIsAuthed(true);
+      setCurrentUserId(user.id);
       // Admin detection
       const { data: urow } = await supabase
         .from('users')
@@ -1337,6 +1355,12 @@ export default function Home() {
       Alert.alert('Missing title', 'Please provide a title for the event.');
       return;
     }
+    // Require at least one image URL in admin flow
+    const hasAnyAdminImage = [fImage1, fImage2, fImage3].some((s) => !!s && s.trim().length > 0);
+    if (!hasAnyAdminImage) {
+      Alert.alert('Add an image', 'Please add at least one image URL for the event.');
+      return;
+    }
     const dtIso = dayjs(dateTimeVal).isValid()
       ? dayjs(dateTimeVal).toISOString()
       : dayjs().add(1, 'day').toISOString();
@@ -1363,8 +1387,8 @@ export default function Home() {
     const payload: any = {
       title: titleVal.trim(),
       description: descVal.trim() || null,
-      image_url: imageVal.trim() || null,
-      image_urls: imageUrls.length ? imageUrls : null,
+      image_urls: imageUrls.length ? imageUrls : imageVal.trim() ? [imageVal.trim()] : null,
+      image_url: imageUrls[0] || imageVal.trim() || null,
       date_time: dtIso,
       location: locationVal.trim() || null,
       tags,
@@ -1391,26 +1415,34 @@ export default function Home() {
   // Open cross-platform confirmation modal
   const deleteEvent = (id: number) => {
     setDeleteTargetId(id);
+    const found = events.find((e: any) => e.id === id) as Event | undefined;
+    setDeleteTarget(found ?? null);
     setConfirmDeleteOpen(true);
   };
 
   const performDelete = async () => {
     if (!deleteTargetId) return;
-    if (!isAdmin) {
-      Alert.alert('Not allowed', 'Only admins can delete events.');
-      setConfirmDeleteOpen(false);
-      setDeleteTargetId(null);
-      return;
-    }
     try {
       setIsDeleting(true);
-      const { error } = await supabase.from('events').delete().eq('id', deleteTargetId);
-      if (error) {
-        Alert.alert('Delete failed', error.message);
+      const owner = deleteTarget && (deleteTarget as any).created_by === currentUserId;
+      if (isAdmin) {
+        await adminDeleteEvent(deleteTargetId);
+      } else if (owner) {
+        await deleteEventDirect(deleteTargetId);
+      } else {
+        Alert.alert('Not allowed', 'You can only delete events you created.');
         return;
+      }
+      // Best-effort: remove uploaded images if we stored storage paths
+      const paths: string[] | undefined = (deleteTarget as any)?.image_storage_paths;
+      if (paths?.length) {
+        try {
+          await deleteEventImages(paths);
+        } catch {}
       }
       setConfirmDeleteOpen(false);
       setDeleteTargetId(null);
+      setDeleteTarget(null);
       await onRefresh();
       Alert.alert('Deleted', 'The event was deleted.');
     } finally {
@@ -1508,29 +1540,167 @@ export default function Home() {
   //  - Keep expand for description reveal below row or in modal
 
   // Filters: top bar outside list, interests/tags/results inside list header
-  const filtersTopBar = useMemo(
-    () => <FiltersTopBar c={c} query={query} setQuery={setQuery} mode={mode} setMode={setMode} />,
-    [c, query, mode],
+  // Add/Edit Event modal state
+  const [addOpen, setAddOpen] = useState(false);
+  const [editEventId, setEditEventId] = useState<number | null>(null);
+  const [mTitle, setMTitle] = useState('');
+  const [mDesc, setMDesc] = useState('');
+  const [mImage1, setMImage1] = useState('');
+  const [mImage2, setMImage2] = useState('');
+  const [mImage3, setMImage3] = useState('');
+  const [pickedUris, setPickedUris] = useState<string[]>([]);
+  const [mDateTime, setMDateTime] = useState(
+    dayjs().add(2, 'day').hour(18).minute(0).second(0).toISOString(),
+  );
+  const [mLocation, setMLocation] = useState('');
+  const [mTagsCsv, setMTagsCsv] = useState('');
+  const [mRsvp, setMRsvp] = useState('');
+  const [mShowDatePicker, setMShowDatePicker] = useState(false);
+  const [mShowTimePicker, setMShowTimePicker] = useState(false);
+  const [savingEvent, setSavingEvent] = useState(false);
+
+  const openAddModal = async () => {
+    const ok = await requireAuth();
+    if (!ok) return;
+    setEditEventId(null);
+    setMTitle('');
+    setMDesc('');
+    setMImage1('');
+    setMImage2('');
+    setMImage3('');
+    setPickedUris([]);
+    setMDateTime(dayjs().add(2, 'day').hour(18).minute(0).second(0).toISOString());
+    setMLocation('');
+    setMTagsCsv('');
+    setMRsvp('');
+    setAddOpen(true);
+  };
+
+  const openEditModal = async (e: Event) => {
+    const ok = await requireAuth();
+    if (!ok) return;
+    setEditEventId(e.id);
+    setMTitle(e.title);
+    setMDesc(e.description ?? '');
+    const imgs = (e as any).image_urls ?? [];
+    setMImage1(imgs[0] || e.image_url || '');
+    setMImage2(imgs[1] || '');
+    setMImage3(imgs[2] || '');
+    setPickedUris([]);
+    setMDateTime(e.date_time);
+    setMLocation(e.location ?? '');
+    setMTagsCsv((e.tags ?? []).join(', '));
+    setMRsvp((e as any).rsvp_url ?? '');
+    setAddOpen(true);
+  };
+
+  // Memoize typed URL previews so unrelated state changes don't re-create arrays
+  const typedUrls = useMemo(
+    () => [mImage1, mImage2, mImage3].map((s) => (s || '').trim()).filter(Boolean),
+    [mImage1, mImage2, mImage3],
   );
 
-  const filtersScrollable = useMemo(
-    () => (
-      <FiltersScrollable
-        c={c}
-        myTags={myTags}
-        activeTags={activeTags}
-        setActiveTags={setActiveTags}
-        setMyTags={setMyTags}
-        allTags={allTags}
-        query={query}
-        setQuery={setQuery}
-        filteredCount={filtered.length}
-        mode={mode}
-        isAuthed={isAuthed}
-      />
-    ),
-    [c, myTags, activeTags, allTags, query, filtered.length, mode, isAuthed],
-  );
+  const submitModal = async () => {
+    const titleVal = mTitle.trim();
+    if (!titleVal) {
+      Alert.alert('Missing title', 'Please give your event a title.');
+      return;
+    }
+    // Require at least one image (picked or URL)
+    const hasPicked = pickedUris.length > 0;
+    const hasUrl = [mImage1, mImage2, mImage3].some((s) => !!s && s.trim().length > 0);
+    if (!hasPicked && !hasUrl) {
+      Alert.alert(
+        'Add an image',
+        'Please add at least one image by pasting a URL or picking a photo.',
+      );
+      return;
+    }
+    const dtIso = dayjs(mDateTime).isValid()
+      ? dayjs(mDateTime).toISOString()
+      : dayjs().add(1, 'day').toISOString();
+    const tags = mTagsCsv
+      .split(',')
+      .map((t) => t.trim().toLowerCase())
+      .filter(Boolean)
+      .filter((v, i, a) => a.indexOf(v) === i);
+    const { cleaned: imageUrlsFromText, errors: imageErrors } = sanitizeEventImageUrls([
+      mImage1,
+      mImage2,
+      mImage3,
+    ]);
+    if (imageErrors.length) Alert.alert('Image issues', imageErrors.join('\n'));
+    // Upload any picked photos, then merge with typed URLs (dedupe and cap at 3)
+    let uploadedUrls: string[] = [];
+    if (pickedUris.length) {
+      try {
+        const limited = pickedUris.slice(0, 3);
+        const compressedUris: string[] = [];
+        for (const uri of limited) {
+          try {
+            const out = await ImageManipulator.manipulateAsync(uri, [{ resize: { width: 1440 } }], {
+              // Improve quality to reduce blurriness, especially on web
+              compress: 0.9,
+              format: ImageManipulator.SaveFormat.JPEG,
+            });
+            compressedUris.push(out.uri);
+          } catch {
+            compressedUris.push(uri);
+          }
+        }
+        uploadedUrls = await uploadEventImages(compressedUris);
+      } catch (e: any) {
+        Alert.alert('Upload failed', e?.message ?? 'Could not upload images');
+        return;
+      }
+    }
+    // Merge sources: prefer picked photos first, then typed URLs; dedupe; cap at 3
+    const merged = [...uploadedUrls, ...imageUrlsFromText];
+    const seen = new Set<string>();
+    const finalImages = merged
+      .map((u) => (u || '').trim())
+      .filter((u) => {
+        if (!u) return false;
+        const key = u.toLowerCase();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .slice(0, 3);
+    if (!finalImages.length) {
+      Alert.alert(
+        'Add an image',
+        'Please add at least one valid image by pasting a URL or picking a photo.',
+      );
+      return;
+    }
+    const payload = {
+      title: titleVal,
+      description: mDesc.trim() || null,
+      image_urls: finalImages,
+      image_url: finalImages[0] || null,
+      date_time: dtIso,
+      location: mLocation.trim() || null,
+      tags,
+      rsvp_url: mRsvp.trim() || null,
+    };
+    setSavingEvent(true);
+    try {
+      if (editEventId) {
+        await updateEvent(editEventId, payload);
+        Alert.alert('Updated', 'Your event was updated.');
+      } else {
+        await createEvent(payload);
+        Alert.alert('Created', 'Your event was created.');
+      }
+      setAddOpen(false);
+      await onRefresh();
+    } catch (e: any) {
+      Alert.alert('Error', e?.message ?? 'Failed to save event');
+    } finally {
+      setSavingEvent(false);
+    }
+  };
 
   // Gradient bordered match badge
   const MatchBadge: React.FC<{ value: number }> = ({ value }) => (
@@ -1555,6 +1725,41 @@ export default function Home() {
         </Text>
       </View>
     </LinearGradient>
+  );
+
+  // Filters header elements (top bar + scrollable interests/tags) — define after openAddModal
+  const filtersTopBar = useMemo(
+    () => (
+      <FiltersTopBar
+        c={c}
+        query={query}
+        setQuery={setQuery}
+        mode={mode}
+        setMode={setMode}
+        onOpenAdd={openAddModal}
+        isAuthed={isAuthed}
+      />
+    ),
+    [c, query, mode, isAuthed],
+  );
+
+  const filtersScrollable = useMemo(
+    () => (
+      <FiltersScrollable
+        c={c}
+        myTags={myTags}
+        activeTags={activeTags}
+        setActiveTags={setActiveTags}
+        setMyTags={setMyTags}
+        allTags={allTags}
+        query={query}
+        setQuery={setQuery}
+        filteredCount={filtered.length}
+        mode={mode}
+        isAuthed={isAuthed}
+      />
+    ),
+    [c, myTags, activeTags, allTags, query, filtered.length, mode, isAuthed],
   );
 
   return (
@@ -1591,15 +1796,19 @@ export default function Home() {
           </View>
         }
         renderItem={({ item }) => {
+          const isOwner = currentUserId && (item as any).created_by === currentUserId;
           const cardProps = {
             event: item,
             isSaved: savedSet.has(item.id),
             onToggleSave: toggleSave,
             onOpenDetails: () => onOpenDetails(item),
             onPoll: item.id > 0 ? () => handlePollCreation(item.id) : undefined,
-            onEdit: isAdmin && item.id > 0 ? () => prefillForEdit(item) : undefined,
-            onDelete: isAdmin && item.id > 0 ? () => deleteEvent(item.id) : undefined,
-            isAdmin,
+            onEdit:
+              (isAdmin || isOwner) && item.id > 0
+                ? () => (isOwner ? openEditModal(item) : prefillForEdit(item))
+                : undefined,
+            onDelete: (isAdmin || isOwner) && item.id > 0 ? () => deleteEvent(item.id) : undefined,
+            isAdmin: isAdmin || !!isOwner,
             matchPercent: match(item.id, item.tags),
           } as const;
           if (columns > 1) {
@@ -1656,7 +1865,7 @@ export default function Home() {
               if (!imgs.length) return null;
               return (
                 <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
-                  <EventImages images={imgs} variant="modal" />
+                  <ImageGallery images={imgs} showArrows />
                 </View>
               );
             })()}
@@ -1759,6 +1968,308 @@ export default function Home() {
         </SafeAreaView>
       </Modal>
 
+      {/* Add/Edit Event Modal (user flow) */}
+      <Modal
+        visible={addOpen}
+        animationType="slide"
+        onRequestClose={() => !savingEvent && setAddOpen(false)}
+      >
+        <SafeAreaView style={{ flex: 1, backgroundColor: c.background }}>
+          <BlurView
+            intensity={30}
+            tint={scheme === 'dark' ? 'dark' : 'light'}
+            style={{ padding: 12 }}
+          >
+            <View
+              style={{
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}
+            >
+              <Text style={{ color: c.text, fontSize: 18, fontWeight: '800' }}>
+                {editEventId ? 'Edit event' : 'Add event'}
+              </Text>
+              <Pressable
+                onPress={() => setAddOpen(false)}
+                style={{
+                  backgroundColor: '#00000020',
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  borderRadius: 10,
+                }}
+              >
+                <Ionicons name="close" size={24} color={c.text} />
+              </Pressable>
+            </View>
+          </BlurView>
+          <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
+            <View style={{ padding: 16 }}>
+              <TextInput
+                placeholder="Title"
+                placeholderTextColor={c.muted}
+                value={mTitle}
+                onChangeText={setMTitle}
+                style={{
+                  color: c.text,
+                  backgroundColor: '#00000010',
+                  padding: 10,
+                  borderRadius: 8,
+                  marginBottom: 8,
+                }}
+              />
+              <TextInput
+                placeholder="Description"
+                placeholderTextColor={c.muted}
+                value={mDesc}
+                onChangeText={setMDesc}
+                multiline
+                style={{
+                  color: c.text,
+                  backgroundColor: '#00000010',
+                  padding: 10,
+                  borderRadius: 8,
+                  minHeight: 80,
+                  marginBottom: 8,
+                }}
+              />
+              {[
+                { v: mImage1, s: setMImage1, l: 'Image 1 URL (cover)' },
+                { v: mImage2, s: setMImage2, l: 'Image 2 URL' },
+                { v: mImage3, s: setMImage3, l: 'Image 3 URL' },
+              ].map((row, idx) => (
+                <TextInput
+                  key={idx}
+                  placeholder={row.l}
+                  placeholderTextColor={c.muted}
+                  value={row.v}
+                  onChangeText={row.s as any}
+                  style={{
+                    color: c.text,
+                    backgroundColor: '#00000010',
+                    padding: 10,
+                    borderRadius: 8,
+                    marginBottom: 8,
+                  }}
+                />
+              ))}
+              {/* Removed image source selector per UX: we now prefer picked photos if present, else use typed URLs */}
+              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+                {pickedUris.map((u, i) => (
+                  <View
+                    key={`${u}-${i}`}
+                    style={{
+                      width: 72,
+                      height: 72,
+                      borderRadius: 8,
+                      overflow: 'hidden',
+                      backgroundColor: '#00000015',
+                    }}
+                  >
+                    <LazyImage uri={u} width={72} height={72} borderRadius={8} />
+                  </View>
+                ))}
+                <Pressable
+                  onPress={async () => {
+                    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+                    if (status !== 'granted') {
+                      Alert.alert(
+                        'Permission needed',
+                        'Please allow photo library access to upload images.',
+                      );
+                      return;
+                    }
+                    const result = await ImagePicker.launchImageLibraryAsync({
+                      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                      allowsMultipleSelection: true,
+                      selectionLimit: 3,
+                      quality: 0.9,
+                    });
+                    if (!result.canceled) {
+                      const uris =
+                        (result.assets as ImagePicker.ImagePickerAsset[] | undefined)
+                          ?.map((a) => a.uri)
+                          .filter(Boolean) ?? [];
+                      setPickedUris((prev) => [...prev, ...uris].slice(0, 3));
+                    }
+                  }}
+                  style={{
+                    backgroundColor: c.primary,
+                    paddingHorizontal: 12,
+                    paddingVertical: 10,
+                    borderRadius: 10,
+                  }}
+                >
+                  <Text style={{ color: '#000', fontWeight: '700' }}>Choose images</Text>
+                </Pressable>
+                <Pressable
+                  onPress={async () => {
+                    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+                    if (status !== 'granted') {
+                      Alert.alert(
+                        'Permission needed',
+                        'Please allow camera access to take a photo.',
+                      );
+                      return;
+                    }
+                    const result = await ImagePicker.launchCameraAsync({
+                      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                      quality: 0.9,
+                    });
+                    if (!result.canceled && result.assets?.[0]?.uri) {
+                      setPickedUris((prev) => [result.assets[0].uri, ...prev].slice(0, 3));
+                    }
+                  }}
+                  style={{
+                    backgroundColor: '#00000020',
+                    paddingHorizontal: 12,
+                    paddingVertical: 10,
+                    borderRadius: 10,
+                  }}
+                >
+                  <Text style={{ color: c.text, fontWeight: '700' }}>Take photo</Text>
+                </Pressable>
+              </View>
+              {/* Preview thumbnails for typed URLs */}
+              {typedUrls.length ? (
+                <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+                  {typedUrls.map((u, i) => (
+                    <View
+                      key={`typed-${u}-${i}`}
+                      style={{
+                        width: 72,
+                        height: 72,
+                        borderRadius: 8,
+                        overflow: 'hidden',
+                        backgroundColor: '#00000015',
+                      }}
+                    >
+                      <LazyImage uri={u} width={72} height={72} borderRadius={8} />
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+              <Text style={{ color: c.muted, fontSize: 11, marginBottom: 8 }}>
+                Provide up to 3 images. The first is the cover. Picked photos and pasted URLs are
+                combined (no duplicates), up to 3 total.
+              </Text>
+              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
+                <Pressable
+                  onPress={() => setMShowDatePicker(true)}
+                  style={{
+                    flex: 1,
+                    backgroundColor: '#00000010',
+                    padding: 10,
+                    borderRadius: 8,
+                    alignItems: 'center',
+                  }}
+                >
+                  <Text style={{ color: c.text, fontWeight: '700' }}>
+                    {dayjs(mDateTime).format('YYYY-MM-DD')}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => setMShowTimePicker(true)}
+                  style={{
+                    flex: 1,
+                    backgroundColor: '#00000010',
+                    padding: 10,
+                    borderRadius: 8,
+                    alignItems: 'center',
+                  }}
+                >
+                  <Text style={{ color: c.text, fontWeight: '700' }}>
+                    {dayjs(mDateTime).format('h:mm A')}
+                  </Text>
+                </Pressable>
+              </View>
+              {mShowDatePicker ? (
+                <DateTimePicker
+                  mode="date"
+                  value={new Date(mDateTime)}
+                  onChange={(evt, selectedDate) => {
+                    setMShowDatePicker(false);
+                    if (!selectedDate) return;
+                    const current = dayjs(mDateTime);
+                    const merged = current
+                      .year(selectedDate.getFullYear())
+                      .month(selectedDate.getMonth())
+                      .date(selectedDate.getDate());
+                    setMDateTime(merged.toISOString());
+                  }}
+                />
+              ) : null}
+              {mShowTimePicker ? (
+                <DateTimePicker
+                  mode="time"
+                  value={new Date(mDateTime)}
+                  onChange={(evt, selectedTime) => {
+                    setMShowTimePicker(false);
+                    if (!selectedTime) return;
+                    const current = dayjs(mDateTime);
+                    const merged = current
+                      .hour(selectedTime.getHours())
+                      .minute(selectedTime.getMinutes())
+                      .second(0)
+                      .millisecond(0);
+                    setMDateTime(merged.toISOString());
+                  }}
+                />
+              ) : null}
+              <TextInput
+                placeholder="Location"
+                placeholderTextColor={c.muted}
+                value={mLocation}
+                onChangeText={setMLocation}
+                style={{
+                  color: c.text,
+                  backgroundColor: '#00000010',
+                  padding: 10,
+                  borderRadius: 8,
+                  marginBottom: 8,
+                }}
+              />
+              <TextInput
+                placeholder="Tags (comma-separated)"
+                placeholderTextColor={c.muted}
+                value={mTagsCsv}
+                onChangeText={setMTagsCsv}
+                style={{
+                  color: c.text,
+                  backgroundColor: '#00000010',
+                  padding: 10,
+                  borderRadius: 8,
+                  marginBottom: 8,
+                }}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              <TextInput
+                placeholder="RSVP URL (optional)"
+                placeholderTextColor={c.muted}
+                value={mRsvp}
+                onChangeText={setMRsvp}
+                style={{
+                  color: c.text,
+                  backgroundColor: '#00000010',
+                  padding: 10,
+                  borderRadius: 8,
+                  marginBottom: 8,
+                }}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+                <ThreeDButton
+                  title={editEventId ? 'Update Event' : 'Create Event'}
+                  onPress={submitModal}
+                />
+                <ThreeDButton title="Cancel" onPress={() => setAddOpen(false)} />
+              </View>
+            </View>
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
       {/* Confirm Delete Modal */}
       <Modal
         visible={confirmDeleteOpen}

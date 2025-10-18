@@ -25,7 +25,7 @@ interface LazyImageProps {
  * Lightweight lazy image with tiny skeleton & fade-in.
  * NOTE: React Native already defers offscreen work; this just improves perceived loading.
  */
-export const LazyImage: React.FC<LazyImageProps> = ({
+const LazyImageBase: React.FC<LazyImageProps> = ({
   uri,
   width,
   height,
@@ -69,5 +69,13 @@ export const LazyImage: React.FC<LazyImageProps> = ({
     </View>
   );
 };
-
-export default LazyImage;
+// Avoid unnecessary re-renders when parent updates unrelated state
+const propsAreEqual = (prev: LazyImageProps, next: LazyImageProps) =>
+  prev.uri === next.uri &&
+  prev.width === next.width &&
+  prev.height === next.height &&
+  prev.borderRadius === next.borderRadius &&
+  prev.resizeMode === next.resizeMode &&
+  prev.accessibilityLabel === next.accessibilityLabel &&
+  prev.skeletonColor === next.skeletonColor;
+export default React.memo(LazyImageBase, propsAreEqual);

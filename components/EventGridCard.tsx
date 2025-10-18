@@ -3,6 +3,7 @@ import { View, Text, Pressable, Platform } from 'react-native';
 import { useThemeColors } from '@/theme/ThemeProvider';
 import { ThreeDCard, ThreeDButton } from '@/components/ThreeD';
 import LazyImage from '@/components/LazyImage';
+import ImageGallery from '@/components/ImageGallery';
 import dayjs from 'dayjs';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -67,32 +68,35 @@ export const EventGridCard: React.FC<EventGridCardProps> = memo(
               if (w && w !== cardWidth) setCardWidth(w);
             }}
           >
-            {/* Cover image */}
+            {/* Cover image: swipeable gallery; on web, auto-play on hover */}
             <View
               style={{
                 width: '100%',
-                // Prefer explicit height when measured to keep consistent total height
                 height: imageHeight,
-                // Fallback to aspect ratio on first layout
                 aspectRatio: imageHeight ? undefined : 16 / 9,
-                backgroundColor: '#00000010',
               }}
             >
-              {cover ? (
-                <LazyImage
-                  uri={cover}
-                  width={'100%'}
-                  height={'100%'}
-                  accessibilityLabel={`Image for ${event.title}`}
+              {imgs.length ? (
+                <ImageGallery
+                  images={imgs}
+                  height={imageHeight}
+                  autoPlayOnHover={Platform.OS === 'web'}
+                  onPressImage={() => onOpenDetails()}
                 />
               ) : (
-                <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                <View
+                  style={{
+                    flex: 1,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: '#00000010',
+                  }}
+                >
                   <Text style={{ color: c.muted, fontSize: 12 }}>No Image</Text>
                 </View>
               )}
             </View>
 
-            {/* Body */}
             <View style={{ padding: 10, gap: 6, height: BODY_HEIGHT, overflow: 'hidden' }}>
               <View
                 style={{

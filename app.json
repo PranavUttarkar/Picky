@@ -20,7 +20,14 @@
     "plugins": [
       ["expo-router"],
       ["expo-notifications"],
-      ["expo-calendar"]
+      ["expo-calendar"],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Picky to access your photos so you can upload event pictures.",
+          "cameraPermission": "Allow Picky to use your camera to take a photo for your event."
+        }
+      ]
     ],
     "experiments": { "tsconfigPaths": true }
   }

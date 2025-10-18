@@ -1,6 +1,7 @@
 // Utility helpers for image URL validation/sanitization for events
 
-const HTTPS_REGEX = /^https:\/\//i;
+const HTTP_OR_HTTPS_REGEX = /^https?:\/\//i;
+const DATA_URL_IMAGE_REGEX = /^data:image\//i; // allow data:image/*;base64,...
 
 export interface ImageValidationResult {
   cleaned: string[]; // cleaned list (<=3)
@@ -11,7 +12,7 @@ export interface ImageValidationResult {
  * Sanitize up to 3 image URLs:
  *  - Trim whitespace
  *  - Deduplicate while preserving first occurrence
- *  - Require https scheme
+ *  - Allow http(s) and data:image/* schemes
  *  - Filter out obviously invalid (no host or no extension-like path) lightly
  */
 export function sanitizeEventImageUrls(urls: (string | null | undefined)[]): ImageValidationResult {
@@ -22,8 +23,17 @@ export function sanitizeEventImageUrls(urls: (string | null | undefined)[]): Ima
     if (!raw) continue;
     const u = raw.trim();
     if (!u) continue;
-    if (!HTTPS_REGEX.test(u)) {
-      errors.push(`Image must use https: ${u}`);
+    // Accept data:image/* URLs directly and skip URL parsing
+    if (DATA_URL_IMAGE_REGEX.test(u)) {
+      if (!seen.has(u)) {
+        cleaned.push(u);
+        seen.add(u);
+      }
+      if (cleaned.length === 3) break;
+      continue;
+    }
+    if (!HTTP_OR_HTTPS_REGEX.test(u)) {
+      errors.push(`Image must use http(s) or data:image/*: ${u}`);
       continue;
     }
     if (seen.has(u)) continue;

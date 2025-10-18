@@ -86,3 +86,113 @@ export async function deleteEvent(eventId: number): Promise<void> {
   const { error } = await supabase.rpc('delete_event', { p_event_id: eventId });
   if (error) throw error;
 }
+
+// New: Creator-friendly CRUD using RLS (owner can update/delete)
+export type EventInput = {
+  title: string;
+  description?: string | null;
+  image_url?: string | null;
+  image_urls?: string[] | null;
+  // Optional storage paths for cleanup; not persisted on Event type by default
+  image_storage_paths?: string[] | null;
+  date_time: string; // ISO
+  location?: string | null;
+  tags?: string[] | null;
+  rsvp_url?: string | null;
+};
+
+export async function createEvent(input: EventInput): Promise<Event> {
+  const { data: auth } = await supabase.auth.getUser();
+  const user = auth.user;
+  if (!user) throw new Error('Not authenticated');
+  const image_urls = input.image_urls && input.image_urls.length ? input.image_urls : (input.image_url ? [input.image_url] : null);
+  const image_url = image_urls && image_urls.length ? image_urls[0] : (input.image_url ?? null);
+  const { data, error } = await supabase
+    .from('events')
+    .insert({ ...input, image_urls, image_url, created_by: user.id })
+    .select('id,title,description,image_url,image_urls,date_time,location,tags,rsvp_url,created_by')
+    .single();
+  if (error) throw error;
+  return data as Event;
+}
+
+export async function updateEvent(eventId: number, input: Partial<EventInput>): Promise<Event> {
+  const image_urls = input.image_urls && input.image_urls.length ? input.image_urls : (input.image_url ? [input.image_url] : undefined);
+  const image_url = image_urls && image_urls.length ? image_urls[0] : input.image_url;
+  const payload = { ...input } as any;
+  if (image_urls !== undefined) payload.image_urls = image_urls;
+  if (image_url !== undefined) payload.image_url = image_url;
+  const { data, error } = await supabase
+    .from('events')
+    .update(payload)
+    .eq('id', eventId)
+    .select('id,title,description,image_url,image_urls,date_time,location,tags,rsvp_url,created_by')
+    .single();
+  if (error) throw error;
+  return data as Event;
+}
+
+export async function deleteEventDirect(eventId: number): Promise<void> {
+  const { error } = await supabase.from('events').delete().eq('id', eventId);
+  if (error) throw error;
+}
+
+// Upload one or more local image URIs to Supabase Storage and return public URLs
+// Accepts Expo file URIs (content://, file://) or web data URLs; caller should cap at 3
+export async function uploadEventImages(uris: string[]): Promise<string[]> {
+  if (!uris.length) return [];
+  const { data: auth } = await supabase.auth.getUser();
+  if (!auth.user) throw new Error('Not authenticated');
+  const userId = auth.user.id;
+  const out: string[] = [];
+  for (const [idx, uri] of uris.entries()) {
+    if (!uri) continue;
+    // Fetch the file as a Blob (Expo/React Native supports fetch for file URIs)
+    const res = await fetch(uri);
+    const blob = await res.blob();
+    const extGuess = (blob.type && blob.type.split('/')[1]) || 'jpg';
+    const fileName = `${userId}/${Date.now()}_${idx}.${extGuess}`;
+    const { data, error } = await supabase.storage
+      .from('event-images')
+      .upload(fileName, blob, {
+        contentType: blob.type || 'image/jpeg',
+        upsert: false,
+      });
+    if (error) throw error;
+    const { data: pub } = supabase.storage.from('event-images').getPublicUrl(data.path);
+    out.push(pub.publicUrl);
+  }
+  return out;
+}
+
+// Also export a variant that returns both URLs and storage paths to support cleanup
+export async function uploadEventImagesWithPaths(uris: string[]): Promise<{ urls: string[]; paths: string[] }> {
+  if (!uris.length) return { urls: [], paths: [] };
+  const { data: auth } = await supabase.auth.getUser();
+  if (!auth.user) throw new Error('Not authenticated');
+  const userId = auth.user.id;
+  const urls: string[] = [];
+  const paths: string[] = [];
+  for (const [idx, uri] of uris.entries()) {
+    if (!uri) continue;
+    const res = await fetch(uri);
+    const blob = await res.blob();
+    const extGuess = (blob.type && blob.type.split('/')[1]) || 'jpg';
+    const fileName = `${userId}/${Date.now()}_${idx}.${extGuess}`;
+    const { data, error } = await supabase.storage.from('event-images').upload(fileName, blob, {
+      contentType: blob.type || 'image/jpeg',
+      upsert: false,
+    });
+    if (error) throw error;
+    const { data: pub } = supabase.storage.from('event-images').getPublicUrl(data.path);
+    urls.push(pub.publicUrl);
+    paths.push(data.path);
+  }
+  return { urls, paths };
+}
+
+export async function deleteEventImages(paths: string[]): Promise<void> {
+  if (!paths?.length) return;
+  const { error } = await supabase.storage.from('event-images').remove(paths);
+  if (error) throw error;
+}
