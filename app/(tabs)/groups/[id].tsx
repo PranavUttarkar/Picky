@@ -1,13 +1,15 @@
 import { View, Text, Pressable, FlatList, Alert, Platform } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import * as Linking from 'expo-linking';
 import * as Clipboard from 'expo-clipboard';
 import { useThemeColors } from '@/theme/ThemeProvider';
 import GradientBackground from '@/components/GradientBackground';
 import GradientHeader from '@/components/GradientHeader';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/services/supabase';
 import { useLocalSearchParams, router } from 'expo-router';
 import { regenerateInviteCode } from '@/services/groups';
+import { shareGroup } from '@/utils/share';
 import EventRowCard from '@/components/EventRowCard';
 import type { Event } from '@/types/models';
 
@@ -18,6 +20,9 @@ export default function GroupFeed() {
   const [group, setGroup] = useState<any>(null);
   const [polls, setPolls] = useState<any[]>([]);
   const [winnersById, setWinnersById] = useState<Record<number, Event>>({});
+  const [infoOpen, setInfoOpen] = useState<null | 'groupDecide' | 'newPoll'>(null);
+  const [regenCooldown, setRegenCooldown] = useState<number>(0);
+  const regenTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -98,6 +103,10 @@ export default function GroupFeed() {
 
   const onRegenerate = async () => {
     try {
+      if (regenCooldown > 0) {
+        Alert.alert('Please wait', `You can regenerate again in ${regenCooldown}s`);
+        return;
+      }
       const code = await regenerateInviteCode(groupId);
       // Update local immediately, then refetch to confirm
       setGroup((prev: any) => ({ ...prev, invite_code: code }));
@@ -111,10 +120,34 @@ export default function GroupFeed() {
         setGroup((prev: any) => ({ ...prev, invite_code: g.invite_code }));
       }
       Alert.alert('Invite code regenerated', g?.invite_code ?? code);
+      // Start cooldown ~30s
+      setRegenCooldown(30);
+      try {
+        if (regenTimerRef.current) clearInterval(regenTimerRef.current);
+      } catch {}
+      regenTimerRef.current = setInterval(() => {
+        setRegenCooldown((s) => {
+          if (s <= 1) {
+            if (regenTimerRef.current) clearInterval(regenTimerRef.current);
+            regenTimerRef.current = null;
+            return 0;
+          }
+          return s - 1;
+        });
+      }, 1000);
     } catch (e: any) {
       Alert.alert('Not allowed', e.message ?? String(e));
     }
   };
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      try {
+        if (regenTimerRef.current) clearInterval(regenTimerRef.current);
+      } catch {}
+    };
+  }, []);
 
   const onCopy = async () => {
     try {
@@ -149,6 +182,24 @@ export default function GroupFeed() {
     }
   };
 
+  const onShare = async () => {
+    try {
+      if (!group?.invite_code) {
+        // Attempt to generate an invite code if missing
+        try {
+          const code = await regenerateInviteCode(groupId);
+          setGroup((prev: any) => ({ ...prev, invite_code: code }));
+        } catch (e: any) {
+          Alert.alert('Cannot share', e?.message ?? 'Invite link is not available for this group');
+          return;
+        }
+      }
+      await shareGroup({ name: group?.name, invite_code: group.invite_code });
+    } catch (e: any) {
+      Alert.alert('Share failed', e?.message ?? String(e));
+    }
+  };
+
   return (
     <GradientBackground variant="dim">
       <View style={{ flex: 1, padding: 16 }}>
@@ -166,21 +217,198 @@ export default function GroupFeed() {
             <Text style={{ color: c.muted }}>Invite code:</Text>
             <Text style={{ color: c.text, letterSpacing: 2 }}>{group.invite_code}</Text>
             <View style={{ flex: 1 }} />
-            <Pressable onPress={onCopy}>
-              <Text style={{ color: c.text, fontWeight: '700' }}>Copy</Text>
+            <Pressable
+              onPress={onCopy}
+              accessibilityRole="button"
+              accessibilityLabel="Copy invite code"
+              hitSlop={8}
+              style={{ padding: 4 }}
+            >
+              <Ionicons name="copy-outline" size={18} color={c.text} />
             </Pressable>
-            <Pressable onPress={onRegenerate}>
-              <Text style={{ color: c.primary, fontWeight: '700' }}>Regenerate</Text>
+            <Pressable
+              onPress={onShare}
+              accessibilityRole="button"
+              accessibilityLabel="Share invite link"
+              hitSlop={8}
+              style={{ padding: 4 }}
+            >
+              <Ionicons name="paper-plane" size={18} color={c.text} />
+            </Pressable>
+            <Pressable
+              onPress={regenCooldown > 0 ? undefined : onRegenerate}
+              disabled={regenCooldown > 0}
+              style={{ opacity: regenCooldown > 0 ? 0.6 : 1 }}
+            >
+              <Text style={{ color: c.primary, fontWeight: '700' }}>
+                {regenCooldown > 0 ? `Regenerate (${regenCooldown}s)` : 'Regenerate'}
+              </Text>
             </Pressable>
           </View>
-        ) : null}
+        ) : (
+          <View
+            style={{
+              marginTop: 8,
+              marginBottom: 12,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 12,
+            }}
+          >
+            <Text style={{ color: c.muted }}>Invite link:</Text>
+            <Text style={{ color: c.muted }}>Not enabled</Text>
+            <View style={{ flex: 1 }} />
+            <Pressable
+              onPress={onShare}
+              accessibilityRole="button"
+              accessibilityLabel="Share invite link"
+              hitSlop={8}
+              style={{ padding: 4 }}
+            >
+              <Ionicons name="share-outline" size={18} color={c.text} />
+            </Pressable>
+            <Pressable onPress={onRegenerate}>
+              <Text style={{ color: c.primary, fontWeight: '700' }}>Enable</Text>
+            </Pressable>
+          </View>
+        )}
 
-        <Pressable
-          onPress={() => router.push(`/(tabs)/polls/new?groupId=${groupId}`)}
-          style={{ backgroundColor: c.card, padding: 12, borderRadius: 12, marginBottom: 12 }}
+        {/* Actions: Group Decide and New Poll with info icons */}
+        <View
+          style={{
+            flexDirection: 'row',
+            gap: 8,
+            marginBottom: 12,
+            flexWrap: 'wrap',
+          }}
         >
-          <Text style={{ color: c.text, fontWeight: '700' }}>New Poll</Text>
-        </Pressable>
+          {/* Group Decide button with inline info icon */}
+          <Pressable style={{ position: 'relative' }} onHoverOut={() => setInfoOpen(null)}>
+            <Pressable
+              onPress={() => router.push(`/(tabs)/group-decide?groupId=${groupId}`)}
+              style={{
+                backgroundColor: c.card,
+                paddingVertical: 10,
+                paddingHorizontal: 38,
+                borderRadius: 12,
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Start Group Decide"
+            >
+              <Text style={{ color: c.text, fontWeight: '700' }}>Group Decide</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setInfoOpen((v) => (v === 'groupDecide' ? null : 'groupDecide'))}
+              // Hover (web) opens modal as well
+              onHoverIn={() => setInfoOpen('groupDecide')}
+              accessibilityRole="button"
+              accessibilityLabel="What is Group Decide?"
+              hitSlop={8}
+              style={{ position: 'absolute', right: 10, top: 8, padding: 4, borderRadius: 999 }}
+            >
+              <Ionicons name="information-circle-outline" size={18} color={c.muted} />
+            </Pressable>
+
+            {infoOpen === 'groupDecide' && (
+              <View style={{ position: 'absolute', right: 0, bottom: '100%', marginBottom: 8 }}>
+                {/* Tooltip card */}
+                <View
+                  style={{
+                    backgroundColor: c.card,
+                    borderRadius: 10,
+                    padding: 10,
+                    maxWidth: 420,
+                    borderWidth: 1,
+                    borderColor: '#00000020',
+                  }}
+                >
+                  <Text style={{ color: c.text, fontWeight: '800', marginBottom: 4 }}>
+                    Group Decide
+                  </Text>
+                  <Text style={{ color: c.muted, lineHeight: 18 }}>
+                    Everyone swipes/rates and the best option wins fast.
+                  </Text>
+                </View>
+                {/* Tooltip arrow */}
+                <View
+                  style={{
+                    alignSelf: 'flex-end',
+                    width: 12,
+                    height: 12,
+                    marginTop: -6,
+                    backgroundColor: c.card,
+                    transform: [{ rotate: '45deg' }],
+                    borderLeftWidth: 1,
+                    borderTopWidth: 1,
+                    borderColor: '#00000020',
+                  }}
+                />
+              </View>
+            )}
+          </Pressable>
+
+          {/* New Poll button with inline info icon */}
+          <Pressable style={{ position: 'relative' }} onHoverOut={() => setInfoOpen(null)}>
+            <Pressable
+              onPress={() => router.push(`/(tabs)/polls/new?groupId=${groupId}`)}
+              style={{
+                backgroundColor: c.card,
+                paddingVertical: 10,
+                paddingHorizontal: 38,
+                borderRadius: 12,
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Create a new poll"
+            >
+              <Text style={{ color: c.text, fontWeight: '700' }}>New Poll</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setInfoOpen((v) => (v === 'newPoll' ? null : 'newPoll'))}
+              onHoverIn={() => setInfoOpen('newPoll')}
+              accessibilityRole="button"
+              accessibilityLabel="What is a New Poll?"
+              hitSlop={8}
+              style={{ position: 'absolute', right: 10, top: 8, padding: 4, borderRadius: 999 }}
+            >
+              <Ionicons name="information-circle-outline" size={18} color={c.muted} />
+            </Pressable>
+
+            {infoOpen === 'newPoll' && (
+              <View style={{ position: 'absolute', right: 0, bottom: '100%', marginBottom: 8 }}>
+                <View
+                  style={{
+                    backgroundColor: c.card,
+                    borderRadius: 10,
+                    padding: 10,
+                    maxWidth: 420,
+                    borderWidth: 1,
+                    borderColor: '#00000020',
+                  }}
+                >
+                  <Text style={{ color: c.text, fontWeight: '800', marginBottom: 4 }}>
+                    New Poll
+                  </Text>
+                  <Text style={{ color: c.muted, lineHeight: 18 }}>
+                    choose options & let members vote. You can commit the winner later.
+                  </Text>
+                </View>
+                <View
+                  style={{
+                    alignSelf: 'flex-end',
+                    width: 12,
+                    height: 12,
+                    marginTop: -6,
+                    backgroundColor: c.card,
+                    transform: [{ rotate: '45deg' }],
+                    borderLeftWidth: 1,
+                    borderTopWidth: 1,
+                    borderColor: '#00000020',
+                  }}
+                />
+              </View>
+            )}
+          </Pressable>
+        </View>
 
         <FlatList
           data={polls}

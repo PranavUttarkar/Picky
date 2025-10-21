@@ -4,9 +4,11 @@ import { router } from 'expo-router';
 import { useThemeColors } from '@/theme/ThemeProvider';
 import { supabase } from '@/services/supabase';
 import { ensureProfile } from '@/services/profile';
+import { useGroupDecisionNotification } from '@/utils/GroupDecisionNotificationContext';
 
 export default function OnboardingGroup() {
   const c = useThemeColors();
+  const { triggerNotification: triggerGroupDot } = useGroupDecisionNotification();
   const [mode, setMode] = useState<'create' | 'join'>('create');
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
@@ -54,6 +56,10 @@ export default function OnboardingGroup() {
         .single();
       if (e1 || !grp) throw new Error(e1?.message ?? 'Failed');
       await supabase.from('group_members').insert({ group_id: grp.id, user_id: user.id });
+      // Trigger a red dot on the Groups tab to highlight the new group
+      try {
+        await triggerGroupDot();
+      } catch {}
       router.replace('/(tabs)/home');
     } catch (e: any) {
       setError(e.message);

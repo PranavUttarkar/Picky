@@ -30,3 +30,24 @@ export async function shareEvent(event: { id: number; title: string }) {
   }
   return { appUrl, webUrl };
 }
+
+// Groups: build and share invite links
+export function buildGroupShareLinks(inviteCode: string) {
+  const path = `/invite?code=${encodeURIComponent(inviteCode)}`;
+  const appUrl = Linking.createURL(path);
+  const webUrl = `${WEB_BASE}${path}`; // web points to the same SPA route
+  return { appUrl, webUrl };
+}
+
+export async function shareGroup(group: { name?: string | null; invite_code: string }) {
+  const title = group?.name ? `Join ${group.name} on Picky` : 'Join my group on Picky';
+  const { appUrl, webUrl } = buildGroupShareLinks(group.invite_code);
+  const link = Platform.select({ web: webUrl, default: appUrl });
+  const message = `${title}\n${link}`;
+  try {
+    await Share.share({ message, url: appUrl, title });
+  } catch (e) {
+    console.warn('Share failed', e);
+  }
+  return { appUrl, webUrl };
+}

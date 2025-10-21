@@ -15,13 +15,37 @@ import { router } from 'expo-router';
 import MediaCard from '@/components/MediaCard';
 import BlurbBubble from '@/components/BlurbBubble';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useEffect, useState } from 'react';
+import { supabase } from '@/services/supabase';
 
 export default function HomeTab() {
   const c = useThemeColors();
   const insets = useSafeAreaInsets();
+  const [signedIn, setSignedIn] = useState(false);
   const { width } = useWindowDimensions();
   // Consider "larger width" as tablet/desktop breakpoints
   const isWide = width >= 768;
+
+  useEffect(() => {
+    let mounted = true;
+    // Check current user
+    supabase.auth.getUser().then(({ data }) => {
+      if (!mounted) return;
+      setSignedIn(Boolean(data.user));
+    });
+
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!mounted) return;
+      setSignedIn(Boolean(session));
+    });
+
+    return () => {
+      mounted = false;
+      try {
+        sub.subscription.unsubscribe();
+      } catch {}
+    };
+  }, []);
   // On web, allow wider container when there is room
   const containerMaxWidth = Platform.OS === 'web' ? (isWide ? 900 : 640) : 900;
   return (
@@ -81,22 +105,24 @@ export default function HomeTab() {
               <Text style={{ color: c.text, fontSize: 14, lineHeight: 20 }}>
                 Make decisions with friends in seconds not hours.
               </Text>
-              <Pressable
-                onPress={() => router.push('/onboarding/welcome?mode=signIn')}
-                accessibilityRole="button"
-                accessibilityLabel="Log in to Picky"
-                style={{
-                  borderWidth: 2,
-                  borderColor: '#40ade8ff',
-                  paddingVertical: 6,
-                  paddingHorizontal: 14,
-                  borderRadius: 10,
-                  alignSelf: 'flex-start',
-                  marginTop: 8,
-                }}
-              >
-                <Text style={{ color: '#40ade8ff', fontWeight: '700' }}>Create Account</Text>
-              </Pressable>
+              {!signedIn && (
+                <Pressable
+                  onPress={() => router.push('/onboarding/welcome?mode=signUp')}
+                  accessibilityRole="button"
+                  accessibilityLabel="Create an account"
+                  style={{
+                    borderWidth: 2,
+                    borderColor: '#40ade8ff',
+                    paddingVertical: 6,
+                    paddingHorizontal: 14,
+                    borderRadius: 10,
+                    alignSelf: 'flex-start',
+                    marginTop: 8,
+                  }}
+                >
+                  <Text style={{ color: '#40ade8ff', fontWeight: '700' }}>Create Account</Text>
+                </Pressable>
+              )}
             </BlurbBubble>
 
             {/* Additional padding */}
