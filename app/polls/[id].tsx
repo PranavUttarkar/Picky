@@ -28,6 +28,7 @@ import {
   addPollOption,
   recordNoVote,
   deletePoll,
+  castTextVote,
 } from '@/services/polls';
 import type { PollOptionView } from '@/services/polls';
 import type { Event } from '@/types/models';
@@ -44,7 +45,7 @@ export default function PollDetails() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const pollId = Number(id);
   const [poll, setPoll] = useState<any>(null);
-  const [options, setOptions] = useState<any[]>([]);
+  const [options, setOptions] = useState<PollOptionView[]>([]);
   // Keep a stable snapshot for swipe mode to avoid flicker on quick refreshes/reordering
   const [stableOptions, setStableOptions] = useState<any[] | null>(null);
   const [myVote, setMyVote] = useState<number | null | undefined>(undefined);
@@ -109,19 +110,20 @@ export default function PollDetails() {
         // Adjust aggregate counts
         setOptions((opts) =>
           opts.map((o) => {
-            if (o.event_id !== eventId) return o;
+            if (o.kind !== 'event' || o.id !== eventId) return o;
             const updated = { ...o };
             // Decrement previous bucket
-            if (prevRating === 1 && updated.love_it != null)
-              updated.love_it = Math.max(0, (updated.love_it || 0) - 1);
-            if (prevRating === 0 && updated.fine != null)
-              updated.fine = Math.max(0, (updated.fine || 0) - 1);
-            if (prevRating === -1 && updated.not_for_me != null)
-              updated.not_for_me = Math.max(0, (updated.not_for_me || 0) - 1);
+            if (prevRating === 1 && (updated as any).love_it != null)
+              (updated as any).love_it = Math.max(0, ((updated as any).love_it || 0) - 1);
+            if (prevRating === 0 && (updated as any).fine != null)
+              (updated as any).fine = Math.max(0, ((updated as any).fine || 0) - 1);
+            if (prevRating === -1 && (updated as any).not_for_me != null)
+              (updated as any).not_for_me = Math.max(0, ((updated as any).not_for_me || 0) - 1);
             // Increment new bucket
-            if (nextRating === 1) updated.love_it = (updated.love_it || 0) + 1;
-            if (nextRating === 0) updated.fine = (updated.fine || 0) + 1;
-            if (nextRating === -1) updated.not_for_me = (updated.not_for_me || 0) + 1;
+            if (nextRating === 1) (updated as any).love_it = ((updated as any).love_it || 0) + 1;
+            if (nextRating === 0) (updated as any).fine = ((updated as any).fine || 0) + 1;
+            if (nextRating === -1)
+              (updated as any).not_for_me = ((updated as any).not_for_me || 0) + 1;
             return updated;
           }),
         );
@@ -162,8 +164,8 @@ export default function PollDetails() {
     // If in swipe mode, avoid reordering the stack; keep existing order and append any new ones at the end
     setStableOptions((prev) => {
       if (!prev || mode !== 'swipe') return null;
-      const seen = new Set(prev.map((o: any) => o.event_id));
-      const appended = options.filter((o: any) => !seen.has(o.event_id));
+      const seen = new Set(prev.map((o: any) => o.id));
+      const appended = options.filter((o: any) => !seen.has(o.id));
       return [...prev, ...appended];
     });
     setMyVote(myVote);
@@ -228,6 +230,11 @@ export default function PollDetails() {
   }, [pollId]);
 
   const totalVotes = useMemo(() => options.reduce((sum, o) => sum + (o.votes ?? 0), 0), [options]);
+  const hasTextOptions = useMemo(() => options.some((o) => o.kind === 'text'), [options]);
+  useEffect(() => {
+    if (hasTextOptions) setMode('list');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasTextOptions]);
   const leader = useMemo(() => suggestLeader(options), [options]);
   const progressPct = useMemo(
     () => (totalMembers ? Math.round((responded * 100) / totalMembers) : 0),
@@ -291,14 +298,14 @@ export default function PollDetails() {
     })();
   }, [finalEvent, poll?.group_id]);
 
-  const onVote = async (eventId: number) => {
+  const onVote = async (opt: PollOptionView) => {
     if (!poll?.is_active) return;
     const previous = { myVote, options: [...options] };
     await optimisticUpdate({
       apply: () => {
-        setMyVote(eventId);
+        setMyVote(opt.id);
         setOptions((opts) =>
-          opts.map((o) => (o.event_id === eventId ? { ...o, votes: (o.votes ?? 0) + 1 } : o)),
+          opts.map((o) => (o.id === opt.id ? { ...o, votes: (o.votes ?? 0) + 1 } : o)),
         );
         return previous;
       },
@@ -307,7 +314,8 @@ export default function PollDetails() {
         setOptions(snap.options);
       },
       mutate: async () => {
-        await castVote(pollId, eventId);
+        if (opt.kind === 'event') await castVote(pollId, opt.id);
+        else await castTextVote(pollId, opt.id);
         // Refresh in background (do not block UI)
         scheduleRefresh(250);
       },
@@ -332,7 +340,9 @@ export default function PollDetails() {
         if (totalMembers <= 0) return;
         if (!options?.length) return;
         // For each option, count total ratings received (sum of buckets)
-        const allRated = options.every((o) => {
+        const eventOptions = options.filter((o) => o.kind === 'event');
+        if (eventOptions.length === 0) return;
+        const allRated = eventOptions.every((o: any) => {
           const total = (o.love_it || 0) + (o.fine || 0) + (o.not_for_me || 0);
           return total >= totalMembers; // allow >= to be safe if duplicates
         });
@@ -341,7 +351,7 @@ export default function PollDetails() {
         if (!leader) return;
         // Commit silently if not already committed
         try {
-          await commitPoll(pollId, leader.event_id);
+          await commitPoll(pollId, leader.id);
           await load();
         } catch {}
       } catch {}
@@ -460,11 +470,12 @@ export default function PollDetails() {
             <Pressable
               onPress={() => setMode('swipe')}
               style={{
-                backgroundColor: mode === 'swipe' ? c.primary : c.background,
+                backgroundColor: mode === 'swipe' && !hasTextOptions ? c.primary : c.background,
                 paddingVertical: 6,
                 paddingHorizontal: 10,
                 borderRadius: 8,
               }}
+              disabled={hasTextOptions}
             >
               <Text style={{ color: c.text, fontWeight: '700' }}>Swipe</Text>
             </Pressable>
@@ -482,7 +493,7 @@ export default function PollDetails() {
           </View>
         ) : null}
 
-        {mode === 'swipe' && options.length > 0 ? (
+        {mode === 'swipe' && options.length > 0 && !hasTextOptions ? (
           <View style={{ flex: 1, marginTop: 16 }}>
             {/* Per-user progress indicator */}
             {poll?.mode === 'rating' ? (
@@ -508,7 +519,7 @@ export default function PollDetails() {
             {!iAmDone ? (
               <SwipeDeck
                 data={stableOptions ?? options}
-                keyExtractor={(o) => String(o.event_id)}
+                keyExtractor={(o) => String(o.id)}
                 renderCard={(item) => (
                   <View
                     style={{
@@ -519,14 +530,14 @@ export default function PollDetails() {
                       position: 'relative',
                     }}
                   >
-                    {item.event?.image_url ? (
+                    {item.kind === 'event' && item.event?.image_url ? (
                       <Image
                         source={{ uri: item.event.image_url }}
                         style={{ width: '100%', height: 240, borderRadius: 12, marginBottom: 8 }}
                       />
                     ) : null}
                     {/* Crown for leader: tilted top-right overlay */}
-                    {leader && leader.event_id === item.event_id ? (
+                    {leader && leader.id === item.id ? (
                       <View
                         style={{
                           position: 'absolute',
@@ -545,16 +556,26 @@ export default function PollDetails() {
                         <Text style={{ fontSize: 34 }}>👑</Text>
                       </View>
                     ) : null}
-                    <Text style={{ color: c.text, fontWeight: '800', fontSize: 18 }}>
-                      {item.event?.title ?? `Event #${item.event_id}`}
-                    </Text>
-                    <Text style={{ color: c.muted, marginTop: 4 }}>
-                      {item.event?.date_time ? new Date(item.event.date_time).toLocaleString() : ''}
-                      {item.event?.location ? ` • ${item.event.location}` : ''}
-                    </Text>
-                    {item.match_percent != null ? (
+                    {item.kind === 'event' ? (
+                      <>
+                        <Text style={{ color: c.text, fontWeight: '800', fontSize: 18 }}>
+                          {item.event?.title ?? `Event #${item.id}`}
+                        </Text>
+                        <Text style={{ color: c.muted, marginTop: 4 }}>
+                          {item.event?.date_time
+                            ? new Date(item.event.date_time).toLocaleString()
+                            : ''}
+                          {item.event?.location ? ` • ${item.event.location}` : ''}
+                        </Text>
+                      </>
+                    ) : (
+                      <Text style={{ color: c.text, fontWeight: '800', fontSize: 18 }}>
+                        {('text' in item && (item as any).text) || 'Option'}
+                      </Text>
+                    )}
+                    {item.kind === 'event' && (item as any).match_percent != null ? (
                       <Text style={{ color: c.muted, marginTop: 4 }}>
-                        {item.match_percent}% match for group
+                        {(item as any).match_percent}% match for group
                       </Text>
                     ) : null}
                   </View>
@@ -563,16 +584,16 @@ export default function PollDetails() {
                   // Like
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
                   if (poll?.mode === 'rating') {
-                    await handleRating(item.event_id, 1);
+                    await handleRating(item.id, 1);
                   } else {
-                    await onVote(item.event_id);
+                    await onVote(item as any);
                   }
                 }}
                 onSwipeLeft={async (item) => {
                   // Nope
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
                   if (poll?.mode === 'rating') {
-                    await handleRating(item.event_id, -1);
+                    await handleRating(item.id, -1);
                   }
                 }}
                 onSwipeUp={async (item) => {
@@ -581,9 +602,9 @@ export default function PollDetails() {
                     () => {},
                   );
                   if (poll?.mode === 'rating') {
-                    await handleRating(item.event_id, 1);
+                    await handleRating(item.id, 1);
                   } else {
-                    await onVote(item.event_id);
+                    await onVote(item as any);
                   }
                 }}
                 overlayLabels={{
@@ -618,8 +639,10 @@ export default function PollDetails() {
                       Current leader
                     </Text>
                     {(() => {
-                      const lo = options.find((o) => o.event_id === leader.event_id);
-                      const ev = lo?.event;
+                      const lo = options.find(
+                        (o) => o.kind === 'event' && o.id === leader.id,
+                      ) as any;
+                      const ev = (lo as any)?.event;
                       return (
                         <View style={{ position: 'relative' }}>
                           <View
@@ -643,15 +666,15 @@ export default function PollDetails() {
                           <EventRowCard
                             event={
                               (ev ?? {
-                                id: leader.event_id,
-                                title: `Event #${leader.event_id}`,
+                                id: leader.id,
+                                title: `Event #${leader.id}`,
                                 date_time: new Date().toISOString(),
                               }) as any
                             }
                             isSaved={false}
                             onToggleSave={() => {}}
-                            onOpenDetails={() => router.push(`/events/${leader.event_id}`)}
-                            matchPercent={lo?.match_percent}
+                            onOpenDetails={() => router.push(`/events/${leader.id}`)}
+                            matchPercent={(lo as any)?.match_percent}
                           />
                         </View>
                       );
@@ -666,59 +689,94 @@ export default function PollDetails() {
         {mode === 'list' ? (
           options.length === 1 && poll?.mode !== 'rating' ? (
             <View style={{ marginTop: 20 }}>
-              <EventRowCard
-                event={
-                  (options[0].event ?? {
-                    id: options[0].event_id,
-                    title: `Event #${options[0].event_id}`,
-                    date_time: new Date().toISOString(),
-                  }) as any
-                }
-                isSaved={false}
-                onToggleSave={() => {}}
-                onOpenDetails={() => router.push(`/events/${options[0].event_id}`)}
-                matchPercent={options[0].match_percent}
-              />
-              <Text style={{ color: c.text, fontWeight: '700', marginBottom: 12, marginTop: 12 }}>
-                Do you want to attend?
-              </Text>
-              <View style={{ flexDirection: 'row', gap: 12 }}>
-                <Pressable
-                  onPress={() => onVote(options[0].event_id)}
-                  disabled={!poll?.is_active}
-                  style={{
-                    flex: 1,
-                    backgroundColor: myVote === options[0].event_id ? c.primary : c.card,
-                    padding: 14,
-                    borderRadius: 12,
-                    alignItems: 'center',
-                  }}
-                >
-                  <Text style={{ color: c.text, fontWeight: '700' }}>Yes</Text>
-                </Pressable>
-                <Pressable
-                  onPress={async () => {
-                    if (!poll?.is_active) return;
-                    try {
-                      await recordNoVote(pollId);
-                      await load();
-                      Alert.alert('Recorded', 'You responded No');
-                    } catch (e: any) {
-                      Alert.alert('Update failed', e.message ?? String(e));
+              {options[0].kind === 'event' ? (
+                <>
+                  <EventRowCard
+                    event={
+                      (options[0].event ?? {
+                        id: options[0].id,
+                        title: `Event #${options[0].id}`,
+                        date_time: new Date().toISOString(),
+                      }) as any
                     }
-                  }}
-                  disabled={!poll?.is_active}
-                  style={{
-                    flex: 1,
-                    backgroundColor: myVote == null ? c.accent : c.background,
-                    padding: 14,
-                    borderRadius: 12,
-                    alignItems: 'center',
-                  }}
-                >
-                  <Text style={{ color: c.text, fontWeight: '700' }}>No</Text>
-                </Pressable>
-              </View>
+                    isSaved={false}
+                    onToggleSave={() => {}}
+                    onOpenDetails={() => router.push(`/events/${options[0].id}`)}
+                    matchPercent={(options[0] as any).match_percent}
+                  />
+                  <Text
+                    style={{ color: c.text, fontWeight: '700', marginBottom: 12, marginTop: 12 }}
+                  >
+                    Do you want to attend?
+                  </Text>
+                  <View style={{ flexDirection: 'row', gap: 12 }}>
+                    <Pressable
+                      onPress={() => onVote(options[0])}
+                      disabled={!poll?.is_active}
+                      style={{
+                        flex: 1,
+                        backgroundColor: myVote === options[0].id ? c.primary : c.card,
+                        padding: 14,
+                        borderRadius: 12,
+                        alignItems: 'center',
+                      }}
+                    >
+                      <Text style={{ color: c.text, fontWeight: '700' }}>Yes</Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={async () => {
+                        if (!poll?.is_active) return;
+                        try {
+                          await recordNoVote(pollId);
+                          await load();
+                          Alert.alert('Recorded', 'You responded No');
+                        } catch (e: any) {
+                          Alert.alert('Update failed', e.message ?? String(e));
+                        }
+                      }}
+                      disabled={!poll?.is_active}
+                      style={{
+                        flex: 1,
+                        backgroundColor: myVote == null ? c.accent : c.background,
+                        padding: 14,
+                        borderRadius: 12,
+                        alignItems: 'center',
+                      }}
+                    >
+                      <Text style={{ color: c.text, fontWeight: '700' }}>No</Text>
+                    </Pressable>
+                  </View>
+                </>
+              ) : (
+                <>
+                  <View
+                    style={{
+                      backgroundColor: c.card,
+                      padding: 12,
+                      borderRadius: 12,
+                    }}
+                  >
+                    <Text style={{ color: c.text, fontWeight: '800', fontSize: 16 }}>
+                      {(options[0] as any).text}
+                    </Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', gap: 12, marginTop: 12 }}>
+                    <Pressable
+                      onPress={() => onVote(options[0])}
+                      disabled={!poll?.is_active}
+                      style={{
+                        flex: 1,
+                        backgroundColor: myVote === options[0].id ? c.primary : c.card,
+                        padding: 14,
+                        borderRadius: 12,
+                        alignItems: 'center',
+                      }}
+                    >
+                      <Text style={{ color: c.text, fontWeight: '700' }}>Vote</Text>
+                    </Pressable>
+                  </View>
+                </>
+              )}
               <View
                 style={{ backgroundColor: c.card, padding: 12, borderRadius: 12, marginTop: 12 }}
               >
@@ -726,7 +784,7 @@ export default function PollDetails() {
                 <Text style={{ color: c.muted, marginTop: 4 }}>
                   (No responses are counted as participation but not shown in the bar.)
                 </Text>
-                {myVote == null ? (
+                {options[0].kind === 'event' && myVote == null ? (
                   <Pressable
                     onPress={async () => {
                       try {
@@ -749,7 +807,7 @@ export default function PollDetails() {
             <FlatList
               style={{ marginTop: 16 }}
               data={options}
-              keyExtractor={(o) => String(o.event_id)}
+              keyExtractor={(o) => String(o.id)}
               key={`poll-list-${isWide ? 'grid' : 'list'}`}
               numColumns={isWide ? 2 : 1}
               columnWrapperStyle={isWide ? { gap: 12 } : undefined}
@@ -757,8 +815,8 @@ export default function PollDetails() {
               renderItem={({ item }) => {
                 const count = item.votes ?? 0;
                 const pct = totalVotes === 0 ? 0 : Math.round((count * 100) / totalVotes);
-                const isMine = myVote === item.event_id;
-                const isLeader = leader && leader.event_id === item.event_id;
+                const isMine = myVote === item.id;
+                const isLeader = leader && leader.id === item.id;
                 return (
                   <View style={{ marginBottom: isWide ? 0 : 10, flex: isWide ? 1 : undefined }}>
                     <View style={{ position: 'relative' }}>
@@ -782,69 +840,79 @@ export default function PollDetails() {
                           <Text style={{ fontSize: 24 }}>👑</Text>
                         </View>
                       ) : null}
-                      <EventRowCard
-                        event={
-                          (item.event ?? {
-                            id: item.event_id,
-                            title: `Event #${item.event_id}`,
-                            date_time: new Date().toISOString(),
-                          }) as any
-                        }
-                        isSaved={false}
-                        onToggleSave={() => {}}
-                        onOpenDetails={() => router.push(`/events/${item.event_id}`)}
-                        matchPercent={item.match_percent}
-                      />
+                      {item.kind === 'event' ? (
+                        <EventRowCard
+                          event={
+                            (item.event ?? {
+                              id: item.id,
+                              title: `Event #${item.id}`,
+                              date_time: new Date().toISOString(),
+                            }) as any
+                          }
+                          isSaved={false}
+                          onToggleSave={() => {}}
+                          onOpenDetails={() => router.push(`/events/${item.id}`)}
+                          matchPercent={(item as any).match_percent}
+                        />
+                      ) : (
+                        <View style={{ backgroundColor: c.card, padding: 12, borderRadius: 12 }}>
+                          <Text style={{ color: c.text, fontWeight: '800' }}>
+                            {(item as any).text}
+                          </Text>
+                        </View>
+                      )}
                     </View>
-                    {poll?.mode === 'rating' ? (
+                    {poll?.mode === 'rating' && item.kind === 'event' ? (
                       <View style={{ flexDirection: 'row', gap: 6, marginTop: 8 }}>
                         <Pressable
-                          onPress={() => handleRating(item.event_id, 1)}
-                          disabled={ratingInFlight.current.has(item.event_id)}
+                          onPress={() => handleRating(item.id, 1)}
+                          disabled={ratingInFlight.current.has(item.id)}
                           style={{
                             paddingVertical: 4,
                             paddingHorizontal: 8,
                             borderRadius: 8,
-                            opacity: ratingInFlight.current.has(item.event_id) ? 0.6 : 1,
+                            opacity: ratingInFlight.current.has(item.id) ? 0.6 : 1,
                             backgroundColor:
-                              (myRatings?.[item.event_id] ?? 0) === 1 ? c.primary : c.background,
+                              (myRatings?.[item.id] ?? 0) === 1 ? c.primary : c.background,
                           }}
-                          accessibilityLabel={`Love it ${item.love_it ?? 0}`}
+                          accessibilityLabel={`Love it ${(item as any).love_it ?? 0}`}
                         >
                           <Text style={{ color: c.text, fontSize: 12 }}>
-                            ❤️ {item.love_it ?? 0}
+                            ❤️ {(item as any).love_it ?? 0}
                           </Text>
                         </Pressable>
                         <Pressable
-                          onPress={() => handleRating(item.event_id, 0)}
-                          disabled={ratingInFlight.current.has(item.event_id)}
+                          onPress={() => handleRating(item.id, 0)}
+                          disabled={ratingInFlight.current.has(item.id)}
                           style={{
                             paddingVertical: 4,
                             paddingHorizontal: 8,
                             borderRadius: 8,
-                            opacity: ratingInFlight.current.has(item.event_id) ? 0.6 : 1,
+                            opacity: ratingInFlight.current.has(item.id) ? 0.6 : 1,
                             backgroundColor:
-                              (myRatings?.[item.event_id] ?? -99) === 0 ? c.primary : c.background,
+                              (myRatings?.[item.id] ?? -99) === 0 ? c.primary : c.background,
                           }}
-                          accessibilityLabel={`It's fine ${item.fine ?? 0}`}
-                        >
-                          <Text style={{ color: c.text, fontSize: 12 }}>👍 {item.fine ?? 0}</Text>
-                        </Pressable>
-                        <Pressable
-                          onPress={() => handleRating(item.event_id, -1)}
-                          disabled={ratingInFlight.current.has(item.event_id)}
-                          style={{
-                            paddingVertical: 4,
-                            paddingHorizontal: 8,
-                            borderRadius: 8,
-                            opacity: ratingInFlight.current.has(item.event_id) ? 0.6 : 1,
-                            backgroundColor:
-                              (myRatings?.[item.event_id] ?? 0) === -1 ? c.primary : c.background,
-                          }}
-                          accessibilityLabel={`Not for me ${item.not_for_me ?? 0}`}
+                          accessibilityLabel={`It's fine ${(item as any).fine ?? 0}`}
                         >
                           <Text style={{ color: c.text, fontSize: 12 }}>
-                            👎 {item.not_for_me ?? 0}
+                            👍 {(item as any).fine ?? 0}
+                          </Text>
+                        </Pressable>
+                        <Pressable
+                          onPress={() => handleRating(item.id, -1)}
+                          disabled={ratingInFlight.current.has(item.id)}
+                          style={{
+                            paddingVertical: 4,
+                            paddingHorizontal: 8,
+                            borderRadius: 8,
+                            opacity: ratingInFlight.current.has(item.id) ? 0.6 : 1,
+                            backgroundColor:
+                              (myRatings?.[item.id] ?? 0) === -1 ? c.primary : c.background,
+                          }}
+                          accessibilityLabel={`Not for me ${(item as any).not_for_me ?? 0}`}
+                        >
+                          <Text style={{ color: c.text, fontSize: 12 }}>
+                            👎 {(item as any).not_for_me ?? 0}
                           </Text>
                         </Pressable>
                       </View>
@@ -879,7 +947,7 @@ export default function PollDetails() {
                         </View>
                         {poll?.is_active ? (
                           <Pressable
-                            onPress={() => onVote(item.event_id)}
+                            onPress={() => onVote(item)}
                             style={{
                               alignSelf: 'flex-start',
                               backgroundColor: c.primary,
@@ -999,7 +1067,7 @@ export default function PollDetails() {
                 </View>
               }
               ListHeaderComponent={
-                leader ? (
+                leader && !hasTextOptions ? (
                   <View
                     style={{
                       backgroundColor: c.card,
@@ -1019,7 +1087,7 @@ export default function PollDetails() {
                         <Pressable
                           onPress={async () => {
                             try {
-                              await commitPoll(pollId, leader.event_id);
+                              await commitPoll(pollId, leader.id);
                               await load();
                             } catch (e: any) {
                               Alert.alert('Commit failed', e.message ?? String(e));

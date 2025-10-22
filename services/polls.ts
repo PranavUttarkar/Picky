@@ -2,17 +2,29 @@ import { supabase } from '@/services/supabase';
 import type { Event } from '@/types/models';
 import { triggerGroupDecisionNotification } from '@/utils/notifications';
 
-export interface PollOptionView {
-  poll_id: number;
-  event_id: number;
-  votes: number;
-  event?: Pick<Event, 'id' | 'title' | 'date_time' | 'location' | 'image_url' | 'tags' | 'rsvp_url'>;
-  match_percent?: number;
-  // For rating mode aggregates
-  love_it?: number;
-  fine?: number;
-  not_for_me?: number;
-}
+export type PollOptionView =
+  | ({
+      kind: 'event';
+      poll_id: number;
+      id: number; // event_id
+      votes: number;
+      event?: Pick<
+        Event,
+        'id' | 'title' | 'date_time' | 'location' | 'image_url' | 'tags' | 'rsvp_url'
+      >;
+      match_percent?: number;
+      // For rating mode aggregates
+      love_it?: number;
+      fine?: number;
+      not_for_me?: number;
+    })
+  | ({
+      kind: 'text';
+      poll_id: number;
+      id: number; // text_option_id
+      votes: number;
+      text: string;
+    });
 
 export async function createPollWithOptions(groupId: number, eventIds: number[], opts?: { title?: string | null; deadlineAt?: string | null; mode?: 'single' | 'rating' }): Promise<number> {
   // Try v2 (with title/deadline/mode). If DB isn't migrated yet, fall back to v1.
@@ -54,6 +66,27 @@ export async function createPollWithOptions(groupId: number, eventIds: number[],
   }
 }
 
+// Create a custom text poll with free-text options
+export async function createTextPoll(
+  groupId: number,
+  texts: string[],
+  opts?: { title?: string | null; deadlineAt?: string | null }
+): Promise<number> {
+  const cleaned = texts
+    .map((t) => t?.trim())
+    .filter((t): t is string => !!t && t.length > 0);
+  if (cleaned.length === 0) throw new Error('Provide at least one option');
+  const { data, error } = await supabase.rpc('create_text_poll', {
+    p_group_id: groupId,
+    p_texts: cleaned,
+    p_title: opts?.title ?? null,
+    p_deadline_at: opts?.deadlineAt ?? null,
+  });
+  if (error) throw error;
+  await triggerGroupDecisionNotification();
+  return data as number;
+}
+
 export async function closePoll(pollId: number): Promise<void> {
   const { error } = await supabase.rpc('close_poll', { p_poll_id: pollId });
   if (error) throw error;
@@ -61,24 +94,60 @@ export async function closePoll(pollId: number): Promise<void> {
 
 export async function getPoll(pollId: number): Promise<{ poll: any; options: PollOptionView[]; myVote?: number | null; myRatings?: Record<number, number>; totalMembers: number; respondedCount: number; waiting?: Array<{ id: string; name?: string | null }>; commitments?: string[]; finalEvent?: any; }> {
   const user = (await supabase.auth.getUser()).data.user;
-  const [{ data: poll }, { data: options }, { data: myVote }, { data: groupIdRow }, { data: myRatingsRows }, { data: commitmentRows }, { data: finalEvent } ] = await Promise.all([
+  const [
+    { data: poll },
+    { data: options },
+    { data: textOptions },
+    { data: myVote },
+    { data: myTextVote },
+    { data: groupIdRow },
+    { data: myRatingsRows },
+    { data: commitmentRows },
+    { data: finalEvent },
+  ] = await Promise.all([
     supabase.from('polls').select('*').eq('id', pollId).single(),
-    supabase.from('poll_options').select('poll_id,event_id,votes, event:events(id,title,description,image_url,date_time,location,tags,rsvp_url)').eq('poll_id', pollId).order('votes', { ascending: false }),
-    user ? supabase.from('poll_votes').select('event_id').eq('poll_id', pollId).eq('user_id', user.id).maybeSingle() : Promise.resolve({ data: null }),
+    supabase
+      .from('poll_options')
+      .select(
+        'poll_id,event_id,votes, event:events(id,title,description,image_url,date_time,location,tags,rsvp_url)'
+      )
+      .eq('poll_id', pollId)
+      .order('votes', { ascending: false }),
+    supabase
+      .from('poll_text_options')
+      .select('id,poll_id,text,votes')
+      .eq('poll_id', pollId)
+      .order('votes', { ascending: false }),
+    user
+      ? supabase
+          .from('poll_votes')
+          .select('event_id')
+          .eq('poll_id', pollId)
+          .eq('user_id', user.id)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+    user
+      ? supabase
+          .from('poll_text_votes')
+          .select('text_option_id')
+          .eq('poll_id', pollId)
+          .eq('user_id', user.id)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
     supabase.from('polls').select('group_id').eq('id', pollId).single(),
     user ? supabase.from('poll_ratings').select('event_id,rating').eq('poll_id', pollId).eq('user_id', user.id) : Promise.resolve({ data: [] }),
     supabase.from('poll_commitments').select('user_id').eq('poll_id', pollId),
     supabase.from('polls').select('final_event_id, event:events!polls_final_event_id_fkey(id,title,description,image_url,date_time,location,tags,rsvp_url)').eq('id', pollId).maybeSingle(),
   ]);
 
-  // Compute group match % for options
-  let optionsWithMatch: any[] = options ?? [];
+  // Compute group match % for event options
+  let eventOptionsWithMatch: any[] = options ?? [];
   try {
     const gid = (groupIdRow as any)?.group_id ?? (poll as any)?.group_id;
-    if (gid && (optionsWithMatch?.length ?? 0) > 0) {
+    if (gid && (eventOptionsWithMatch?.length ?? 0) > 0) {
       const { data: scores } = await supabase.rpc('get_group_event_scores', { p_group_id: gid });
       const scoreMap = new Map<number, number>((scores ?? []).map((s: any) => [Number(s.event_id), Number(s.match_percent ?? 0)]));
-      optionsWithMatch = (optionsWithMatch as any[]).map((o: any) => ({
+      eventOptionsWithMatch = (eventOptionsWithMatch as any[]).map((o: any) => ({
         ...o,
         match_percent: scoreMap.get(Number(o.event?.id ?? o.event_id)) ?? undefined,
       }));
@@ -147,7 +216,7 @@ export async function getPoll(pollId: number): Promise<{ poll: any; options: Pol
       else if (rating === -1) entry.not_for_me += 1;
       aggMap.set(eid, entry);
     }
-    optionsWithMatch = (optionsWithMatch as any[]).map((o: any) => ({
+    eventOptionsWithMatch = (eventOptionsWithMatch as any[]).map((o: any) => ({
       ...o,
       ...(aggMap.get(Number(o.event?.id ?? o.event_id)) ?? {}),
     }));
@@ -155,7 +224,39 @@ export async function getPoll(pollId: number): Promise<{ poll: any; options: Pol
 
   const commitmentIds = ((commitmentRows as any[]) ?? []).map((r: any) => r.user_id);
   const resolvedFinalEvent = (finalEvent as any)?.event ?? undefined;
-  return { poll, options: (optionsWithMatch as any) ?? [], myVote: (myVote as any)?.event_id ?? null, myRatings, totalMembers, respondedCount, waiting, commitments: commitmentIds, finalEvent: resolvedFinalEvent };
+  // Normalize to unified option view
+  const normalizedEventOptions: PollOptionView[] = (eventOptionsWithMatch as any[]).map((o: any) => ({
+    kind: 'event',
+    poll_id: Number(o.poll_id),
+    id: Number(o.event_id),
+    votes: Number(o.votes ?? 0),
+    event: o.event,
+    match_percent: o.match_percent,
+    love_it: (o as any).love_it,
+    fine: (o as any).fine,
+    not_for_me: (o as any).not_for_me,
+  }));
+  const normalizedTextOptions: PollOptionView[] = ((textOptions as any[]) ?? []).map((t: any) => ({
+    kind: 'text',
+    poll_id: Number(t.poll_id),
+    id: Number(t.id),
+    votes: Number(t.votes ?? 0),
+    text: String(t.text ?? ''),
+  }));
+  const unifiedOptions: PollOptionView[] = [...normalizedEventOptions, ...normalizedTextOptions];
+  // myVote: prefer whichever exists
+  const myUnifiedVote = (myVote as any)?.event_id ?? (myTextVote as any)?.text_option_id ?? null;
+  return {
+    poll,
+    options: unifiedOptions,
+    myVote: myUnifiedVote,
+    myRatings,
+    totalMembers,
+    respondedCount,
+    waiting,
+    commitments: commitmentIds,
+    finalEvent: resolvedFinalEvent,
+  };
 }
 
 export async function castVote(pollId: number, eventId: number): Promise<void> {
@@ -180,6 +281,8 @@ export function onPollRealtime(pollId: number, onChange: () => void) {
     .channel(`poll-${pollId}`)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'poll_votes', filter: `poll_id=eq.${pollId}` }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'poll_options', filter: `poll_id=eq.${pollId}` }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'poll_text_votes', filter: `poll_id=eq.${pollId}` }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'poll_text_options', filter: `poll_id=eq.${pollId}` }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'poll_ratings', filter: `poll_id=eq.${pollId}` }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'poll_commitments', filter: `poll_id=eq.${pollId}` }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'polls', filter: `id=eq.${pollId}` }, onChange)
@@ -195,12 +298,16 @@ export function suggestLeader(options: PollOptionView[]): PollOptionView | undef
   return [...options].sort((a, b) => {
     const v = (b.votes ?? 0) - (a.votes ?? 0);
     if (v !== 0) return v;
-    // If rating aggregates exist, weigh them: love_it=2, fine=1, not_for_me=-1
-    const aScore = (a.love_it ?? 0) * 2 + (a.fine ?? 0) * 1 - (a.not_for_me ?? 0);
-    const bScore = (b.love_it ?? 0) * 2 + (b.fine ?? 0) * 1 - (b.not_for_me ?? 0);
+    // If rating aggregates exist (event-only), weigh them: love_it=2, fine=1, not_for_me=-1
+    const aScore = (a as any).love_it != null || (a as any).fine != null || (a as any).not_for_me != null
+      ? ((a as any).love_it ?? 0) * 2 + ((a as any).fine ?? 0) * 1 - ((a as any).not_for_me ?? 0)
+      : 0;
+    const bScore = (b as any).love_it != null || (b as any).fine != null || (b as any).not_for_me != null
+      ? ((b as any).love_it ?? 0) * 2 + ((b as any).fine ?? 0) * 1 - ((b as any).not_for_me ?? 0)
+      : 0;
     const r = bScore - aScore;
     if (r !== 0) return r;
-    return (b.match_percent ?? 0) - (a.match_percent ?? 0);
+    return ((b as any).match_percent ?? 0) - ((a as any).match_percent ?? 0);
   })[0];
 }
 
@@ -222,6 +329,16 @@ export async function toggleCommitment(pollId: number): Promise<void> {
 // Add a new option (event) to an existing poll. Requires user to be a group member (enforced by RLS via poll_options policies).
 export async function addPollOption(pollId: number, eventId: number): Promise<void> {
   const { error } = await supabase.from('poll_options').insert({ poll_id: pollId, event_id: eventId });
+  if (error) throw error;
+}
+
+export async function addTextPollOption(pollId: number, text: string): Promise<void> {
+  const { error } = await supabase.rpc('add_text_option', { p_poll_id: pollId, p_text: text });
+  if (error) throw error;
+}
+
+export async function castTextVote(pollId: number, textOptionId: number): Promise<void> {
+  const { error } = await supabase.rpc('cast_text_vote', { p_poll_id: pollId, p_text_option_id: textOptionId });
   if (error) throw error;
 }
 
