@@ -27,6 +27,8 @@ export default function Groups() {
   const [groups, setGroups] = useState<any[]>([]);
   const [showCreate, setShowCreate] = useState(false);
   const [showJoin, setShowJoin] = useState(false);
+  const [showPickGroup, setShowPickGroup] = useState(false);
+  const [pendingFindTimes, setPendingFindTimes] = useState(false);
   const [groupName, setGroupName] = useState('');
   const [inviteCode, setInviteCode] = useState('');
   const [creating, setCreating] = useState(false);
@@ -63,6 +65,16 @@ export default function Groups() {
     router.push('/(tabs)/group-decide');
   };
 
+  const onFindCommonTimes = () => {
+    setPendingFindTimes(true);
+    // If no groups yet, guide user to create or join
+    if (groups.length === 0) {
+      setShowPickGroup(true);
+      return;
+    }
+    setShowPickGroup(true);
+  };
+
   const onCreateGroup = async () => {
     if (!groupName.trim()) {
       Alert.alert('Group name required', 'Please enter a name for your group.');
@@ -75,7 +87,12 @@ export default function Groups() {
       setShowCreate(false);
       await loadGroups();
       Alert.alert('Group created', invite_code ? `Invite code: ${invite_code}` : '');
-      router.push(`/(tabs)/groups/${group_id}`);
+      if (pendingFindTimes) {
+        setPendingFindTimes(false);
+        router.push(`/(tabs)/groups/${group_id}/availability`);
+      } else {
+        router.push(`/(tabs)/groups/${group_id}`);
+      }
     } catch (e: any) {
       Alert.alert('Create failed', e.message ?? String(e));
     } finally {
@@ -94,7 +111,12 @@ export default function Groups() {
       setInviteCode('');
       setShowJoin(false);
       await loadGroups();
-      router.push(`/(tabs)/groups/${groupId}`);
+      if (pendingFindTimes) {
+        setPendingFindTimes(false);
+        router.push(`/(tabs)/groups/${groupId}/availability`);
+      } else {
+        router.push(`/(tabs)/groups/${groupId}`);
+      }
     } catch (e: any) {
       Alert.alert('Join failed', e.message ?? String(e));
     } finally {
@@ -177,6 +199,20 @@ export default function Groups() {
               }}
             >
               <Text style={{ color: '#000', fontWeight: '700' }}>New Group Decide</Text>
+            </Pressable>
+
+            <Pressable
+              onPress={onFindCommonTimes}
+              style={{
+                backgroundColor: c.card,
+                paddingVertical: 10,
+                paddingHorizontal: 14,
+                borderRadius: 12,
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Find common times"
+            >
+              <Text style={{ color: c.text, fontWeight: '700' }}>Find common times</Text>
             </Pressable>
           </View>
 
@@ -435,6 +471,138 @@ export default function Groups() {
               </View>
             </Animated.View>
           </KeyboardAvoidingView>
+        </View>
+      </Modal>
+
+      {/* Pick Group / No Groups Modal */}
+      <Modal
+        visible={showPickGroup}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowPickGroup(false)}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(0,0,0,0.4)',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 16,
+          }}
+        >
+          <Pressable
+            onPress={() => setShowPickGroup(false)}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+          />
+          <View
+            style={{
+              backgroundColor: c.card,
+              borderRadius: 16,
+              padding: 16,
+              width: '100%',
+              maxWidth: 420,
+              alignSelf: 'center',
+              borderWidth: 1,
+              borderColor: '#00000020',
+            }}
+          >
+            <Text style={{ color: c.text, fontSize: 18, fontWeight: '800', marginBottom: 8 }}>
+              Find common times
+            </Text>
+            {groups.length === 0 ? (
+              <View>
+                <Text style={{ color: c.muted, marginBottom: 12 }}>
+                  You don’t have any groups yet. Create or join one to pick a time together.
+                </Text>
+                <View style={{ flexDirection: 'row', gap: 8, justifyContent: 'flex-end' }}>
+                  <Pressable
+                    onPress={() => {
+                      setShowPickGroup(false);
+                      setShowJoin(true);
+                    }}
+                    style={{
+                      backgroundColor: '#00000020',
+                      paddingHorizontal: 12,
+                      paddingVertical: 10,
+                      borderRadius: 10,
+                    }}
+                  >
+                    <Text style={{ color: c.text, fontWeight: '700' }}>Join Group</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => {
+                      setShowPickGroup(false);
+                      setShowCreate(true);
+                    }}
+                    style={{
+                      backgroundColor: c.primary,
+                      paddingHorizontal: 12,
+                      paddingVertical: 10,
+                      borderRadius: 10,
+                    }}
+                  >
+                    <Text style={{ color: '#000', fontWeight: '800' }}>Create Group</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ) : (
+              <View>
+                {groups.map((g) => (
+                  <Pressable
+                    key={g.id}
+                    onPress={() => {
+                      setShowPickGroup(false);
+                      setPendingFindTimes(false);
+                      router.push(`/(tabs)/groups/${g.id}/availability`);
+                    }}
+                    style={{
+                      backgroundColor: c.background,
+                      padding: 12,
+                      borderRadius: 12,
+                      marginBottom: 8,
+                      borderWidth: 1,
+                      borderColor: '#00000020',
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Choose group ${g.name}`}
+                  >
+                    <Text style={{ color: c.text, fontWeight: '700' }}>{g.name}</Text>
+                  </Pressable>
+                ))}
+                <View
+                  style={{ flexDirection: 'row', gap: 8, justifyContent: 'flex-end', marginTop: 6 }}
+                >
+                  <Pressable
+                    onPress={() => {
+                      setShowPickGroup(false);
+                    }}
+                    style={{
+                      backgroundColor: '#00000020',
+                      paddingHorizontal: 12,
+                      paddingVertical: 10,
+                      borderRadius: 10,
+                    }}
+                  >
+                    <Text style={{ color: c.text, fontWeight: '700' }}>Close</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => {
+                      setShowPickGroup(false);
+                      setShowCreate(true);
+                    }}
+                    style={{
+                      backgroundColor: c.card,
+                      paddingHorizontal: 12,
+                      paddingVertical: 10,
+                      borderRadius: 10,
+                    }}
+                  >
+                    <Text style={{ color: c.text, fontWeight: '700' }}>Create new</Text>
+                  </Pressable>
+                </View>
+              </View>
+            )}
+          </View>
         </View>
       </Modal>
     </GradientBackground>

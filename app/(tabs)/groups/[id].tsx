@@ -7,6 +7,7 @@ import GradientBackground from '@/components/GradientBackground';
 import GradientHeader from '@/components/GradientHeader';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/services/supabase';
+import { computeWindow, getGroupAvailabilitySummary } from '@/services/availability';
 import { useLocalSearchParams, router } from 'expo-router';
 import { regenerateInviteCode } from '@/services/groups';
 import { shareGroup } from '@/utils/share';
@@ -20,7 +21,12 @@ export default function GroupFeed() {
   const [group, setGroup] = useState<any>(null);
   const [polls, setPolls] = useState<any[]>([]);
   const [winnersById, setWinnersById] = useState<Record<number, Event>>({});
-  const [infoOpen, setInfoOpen] = useState<null | 'groupDecide' | 'newPoll'>(null);
+  const [infoOpen, setInfoOpen] = useState<null | 'groupDecide' | 'newPoll' | 'findTimes'>(null);
+  const [summary, setSummary] = useState<{
+    top?: { iso: string; count: number } | null;
+    memberCount: number;
+    pendingCount: number;
+  }>({ top: null, memberCount: 0, pendingCount: 0 });
   const [regenCooldown, setRegenCooldown] = useState<number>(0);
   const regenTimerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -71,9 +77,49 @@ export default function GroupFeed() {
           },
         )
         .subscribe();
+      // Subscribe to availability changes for live summary updates
+      const window = computeWindow(new Date(), 30, 7);
+      const availChannel = supabase
+        .channel(`group-${groupId}-availability`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'group_availability',
+            filter: `group_id=eq.${groupId}`,
+          },
+          async () => {
+            try {
+              const s = await getGroupAvailabilitySummary(groupId, window, 1);
+              setSummary({
+                top: s.topSlots[0]
+                  ? { iso: s.topSlots[0].slotIso, count: s.topSlots[0].count }
+                  : null,
+                memberCount: s.memberCount,
+                pendingCount: s.pendingCount,
+              });
+            } catch {}
+          },
+        )
+        .subscribe();
+
+      // Initial summary fetch
+      (async () => {
+        try {
+          const s = await getGroupAvailabilitySummary(groupId, window, 1);
+          setSummary({
+            top: s.topSlots[0] ? { iso: s.topSlots[0].slotIso, count: s.topSlots[0].count } : null,
+            memberCount: s.memberCount,
+            pendingCount: s.pendingCount,
+          });
+        } catch {}
+      })();
+
       return () => {
         supabase.removeChannel(channel);
         supabase.removeChannel(channelGroup);
+        supabase.removeChannel(availChannel);
       };
     })();
     return () => {
@@ -203,7 +249,11 @@ export default function GroupFeed() {
   return (
     <GradientBackground variant="dim">
       <View style={{ flex: 1, padding: 16 }}>
-        <GradientHeader title={group?.name ?? 'Group'} />
+        <GradientHeader
+          title={group?.name ?? 'Group'}
+          onBack={() => router.push('/(tabs)/groups')}
+          backLabel="Back to groups"
+        />
         {group?.invite_code ? (
           <View
             style={{
@@ -273,6 +323,52 @@ export default function GroupFeed() {
           </View>
         )}
 
+        {/* Common times summary card */}
+        <View
+          style={{
+            backgroundColor: c.card,
+            padding: 12,
+            borderRadius: 12,
+            marginBottom: 10,
+            borderWidth: 1,
+            borderColor: '#00000020',
+          }}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+            <Ionicons name="time-outline" size={18} color={c.text} />
+            <Text style={{ color: c.text, fontWeight: '800', marginLeft: 8 }}>
+              Common times (next 7 days)
+            </Text>
+            <View style={{ flex: 1 }} />
+            <Pressable
+              onPress={() => router.push(`/(tabs)/groups/${groupId}/availability`)}
+              style={{
+                paddingHorizontal: 10,
+                paddingVertical: 6,
+                backgroundColor: c.background,
+                borderRadius: 8,
+              }}
+            >
+              <Text style={{ color: c.text, fontWeight: '700' }}>Open</Text>
+            </Pressable>
+          </View>
+          {summary.top ? (
+            <Text style={{ color: c.text }}>
+              Top: {new Date(summary.top.iso).toLocaleString()} – {summary.top.count}/
+              {summary.memberCount} available
+            </Text>
+          ) : (
+            <Text style={{ color: c.muted }}>No availability yet.</Text>
+          )}
+          {summary.pendingCount > 0 ? (
+            <Text style={{ color: c.muted, marginTop: 4 }}>{summary.pendingCount} pending</Text>
+          ) : summary.memberCount > 0 &&
+            summary.top &&
+            summary.top.count === summary.memberCount ? (
+            <Text style={{ color: c.text, marginTop: 4, fontWeight: '700' }}>Winner found 🎉</Text>
+          ) : null}
+        </View>
+
         {/* Actions: Group Decide and New Poll with info icons */}
         <View
           style={{
@@ -282,31 +378,43 @@ export default function GroupFeed() {
             flexWrap: 'wrap',
           }}
         >
-          {/* Group Decide button with inline info icon */}
+          {/* Group Decide button with inline info icon (overlay inside button) */}
           <Pressable style={{ position: 'relative' }} onHoverOut={() => setInfoOpen(null)}>
             <Pressable
               onPress={() => router.push(`/(tabs)/group-decide?groupId=${groupId}`)}
               style={{
                 backgroundColor: c.card,
                 paddingVertical: 10,
-                paddingHorizontal: 38,
+                paddingHorizontal: 18,
                 borderRadius: 12,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 8,
+                paddingRight: 34,
+                position: 'relative',
               }}
               accessibilityRole="button"
               accessibilityLabel="Start Group Decide"
             >
+              <Ionicons name="flash-outline" size={18} color={c.text} />
               <Text style={{ color: c.text, fontWeight: '700' }}>Group Decide</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => setInfoOpen((v) => (v === 'groupDecide' ? null : 'groupDecide'))}
-              // Hover (web) opens modal as well
-              onHoverIn={() => setInfoOpen('groupDecide')}
-              accessibilityRole="button"
-              accessibilityLabel="What is Group Decide?"
-              hitSlop={8}
-              style={{ position: 'absolute', right: 10, top: 8, padding: 4, borderRadius: 999 }}
-            >
-              <Ionicons name="information-circle-outline" size={18} color={c.muted} />
+              <Pressable
+                onPress={() => setInfoOpen((v) => (v === 'groupDecide' ? null : 'groupDecide'))}
+                onHoverIn={() => setInfoOpen('groupDecide')}
+                accessibilityRole="button"
+                accessibilityLabel="What is Group Decide?"
+                hitSlop={8}
+                style={{
+                  position: 'absolute',
+                  right: 6,
+                  top: 6,
+                  padding: 4,
+                  borderRadius: 999,
+                  zIndex: 2,
+                }}
+              >
+                <Ionicons name="information-circle-outline" size={18} color={c.muted} />
+              </Pressable>
             </Pressable>
 
             {infoOpen === 'groupDecide' && (
@@ -329,48 +437,62 @@ export default function GroupFeed() {
                     Everyone swipes/rates and the best option wins fast.
                   </Text>
                 </View>
-                {/* Tooltip arrow */}
+                {/* Tooltip arrow (triangle pointing down at the right edge) */}
                 <View
                   style={{
                     alignSelf: 'flex-end',
-                    width: 12,
-                    height: 12,
-                    marginTop: -6,
-                    backgroundColor: c.card,
-                    transform: [{ rotate: '45deg' }],
-                    borderLeftWidth: 1,
-                    borderTopWidth: 1,
-                    borderColor: '#00000020',
+                    marginTop: -1,
+                    width: 0,
+                    height: 0,
+                    borderLeftWidth: 8,
+                    borderRightWidth: 8,
+                    borderBottomWidth: 10,
+                    borderLeftColor: 'transparent',
+                    borderRightColor: 'transparent',
+                    borderBottomColor: c.card,
                   }}
                 />
               </View>
             )}
           </Pressable>
 
-          {/* New Poll button with inline info icon */}
+          {/* New Poll button with inline info icon (overlay inside button) */}
           <Pressable style={{ position: 'relative' }} onHoverOut={() => setInfoOpen(null)}>
             <Pressable
               onPress={() => router.push(`/(tabs)/polls/new?groupId=${groupId}`)}
               style={{
                 backgroundColor: c.card,
                 paddingVertical: 10,
-                paddingHorizontal: 38,
+                paddingHorizontal: 18,
                 borderRadius: 12,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 8,
+                paddingRight: 34,
+                position: 'relative',
               }}
               accessibilityRole="button"
               accessibilityLabel="Create a new poll"
             >
+              <Ionicons name="create-outline" size={18} color={c.text} />
               <Text style={{ color: c.text, fontWeight: '700' }}>New Poll</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => setInfoOpen((v) => (v === 'newPoll' ? null : 'newPoll'))}
-              onHoverIn={() => setInfoOpen('newPoll')}
-              accessibilityRole="button"
-              accessibilityLabel="What is a New Poll?"
-              hitSlop={8}
-              style={{ position: 'absolute', right: 10, top: 8, padding: 4, borderRadius: 999 }}
-            >
-              <Ionicons name="information-circle-outline" size={18} color={c.muted} />
+              <Pressable
+                onPress={() => setInfoOpen((v) => (v === 'newPoll' ? null : 'newPoll'))}
+                onHoverIn={() => setInfoOpen('newPoll')}
+                accessibilityRole="button"
+                accessibilityLabel="What is a New Poll?"
+                hitSlop={8}
+                style={{
+                  position: 'absolute',
+                  right: 6,
+                  top: 6,
+                  padding: 4,
+                  borderRadius: 999,
+                  zIndex: 2,
+                }}
+              >
+                <Ionicons name="information-circle-outline" size={18} color={c.muted} />
+              </Pressable>
             </Pressable>
 
             {infoOpen === 'newPoll' && (
@@ -395,14 +517,92 @@ export default function GroupFeed() {
                 <View
                   style={{
                     alignSelf: 'flex-end',
-                    width: 12,
-                    height: 12,
-                    marginTop: -6,
+                    marginTop: -1,
+                    width: 0,
+                    height: 0,
+                    borderLeftWidth: 8,
+                    borderRightWidth: 8,
+                    borderBottomWidth: 10,
+                    borderLeftColor: 'transparent',
+                    borderRightColor: 'transparent',
+                    borderBottomColor: c.card,
+                  }}
+                />
+              </View>
+            )}
+          </Pressable>
+
+          {/* Find common times button with inline info icon (overlay inside button) */}
+          <Pressable style={{ position: 'relative' }} onHoverOut={() => setInfoOpen(null)}>
+            <Pressable
+              onPress={() => router.push(`/(tabs)/groups/${groupId}/availability`)}
+              style={{
+                backgroundColor: c.card,
+                paddingVertical: 10,
+                paddingHorizontal: 18,
+                borderRadius: 12,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 8,
+                paddingRight: 34,
+                position: 'relative',
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Find common times"
+            >
+              <Ionicons name="time-outline" size={18} color={c.text} />
+              <Text style={{ color: c.text, fontWeight: '700' }}>Find common times</Text>
+              <Pressable
+                onPress={() => setInfoOpen((v) => (v === 'findTimes' ? null : 'findTimes'))}
+                onHoverIn={() => setInfoOpen('findTimes')}
+                accessibilityRole="button"
+                accessibilityLabel="What is Find common times?"
+                hitSlop={8}
+                style={{
+                  position: 'absolute',
+                  right: 6,
+                  top: 6,
+                  padding: 4,
+                  borderRadius: 999,
+                  zIndex: 2,
+                }}
+              >
+                <Ionicons name="information-circle-outline" size={18} color={c.muted} />
+              </Pressable>
+            </Pressable>
+
+            {infoOpen === 'findTimes' && (
+              <View style={{ position: 'absolute', right: 0, bottom: '100%', marginBottom: 8 }}>
+                <View
+                  style={{
                     backgroundColor: c.card,
-                    transform: [{ rotate: '45deg' }],
-                    borderLeftWidth: 1,
-                    borderTopWidth: 1,
+                    borderRadius: 10,
+                    padding: 10,
+                    maxWidth: 420,
+                    borderWidth: 1,
                     borderColor: '#00000020',
+                  }}
+                >
+                  <Text style={{ color: c.text, fontWeight: '800', marginBottom: 4 }}>
+                    Find Common Times
+                  </Text>
+                  <Text style={{ color: c.muted, lineHeight: 18 }}>
+                    Everyone marks availability. We surface top overlaps and show pending until all
+                    respond; when everyone has responded, the winner time is highlighted.
+                  </Text>
+                </View>
+                <View
+                  style={{
+                    alignSelf: 'flex-end',
+                    marginTop: -1,
+                    width: 0,
+                    height: 0,
+                    borderLeftWidth: 8,
+                    borderRightWidth: 8,
+                    borderBottomWidth: 10,
+                    borderLeftColor: 'transparent',
+                    borderRightColor: 'transparent',
+                    borderBottomColor: c.card,
                   }}
                 />
               </View>
