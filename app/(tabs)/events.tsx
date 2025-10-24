@@ -966,6 +966,9 @@ export default function Home() {
   const isWide = width >= 900; // switch to grid on larger screens
   const columns = width >= 1280 ? 3 : isWide ? 2 : 1;
   const listRef = useRef<FlatList<Event>>(null);
+  const viewabilityConfigRef = useRef({ itemVisiblePercentThreshold: 30 });
+  const lastVisibleIndexRef = useRef(0);
+  const filteredLengthRef = useRef(0);
   const [events, setEvents] = useState<Event[]>([]);
   const [myTags, setMyTags] = useState<string[]>([]);
   const [scores, setScores] = useState<Record<number, number>>({});
@@ -1143,6 +1146,26 @@ export default function Home() {
     })();
   }, []);
 
+  // (moved) Keep a ref of the current filtered length for viewability callback
+
+  // Prefetch the next page when user scrolls near the end
+  const onViewableItemsChanged = useRef(
+    ({ viewableItems }: { viewableItems: Array<{ index?: number | null }> }) => {
+      const maxIndex = Math.max(
+        0,
+        ...viewableItems.map((v) => (typeof v.index === 'number' ? (v.index as number) : 0)),
+      );
+      if (maxIndex > lastVisibleIndexRef.current) {
+        lastVisibleIndexRef.current = maxIndex;
+        const remaining = filteredLengthRef.current - maxIndex - 1;
+        // If within 8 items from the end, start loading next page early
+        if (remaining <= 8) {
+          loadNextPage();
+        }
+      }
+    },
+  );
+
   const requireAuth = async (): Promise<boolean> => {
     const user = (await supabase.auth.getUser()).data.user;
     if (!user) {
@@ -1176,7 +1199,6 @@ export default function Home() {
         );
         return;
       }
-
       // User has groups, proceed with poll creation
       router.push({ pathname: '/polls/new', params: { fromEvent: eventId } });
     } catch (error) {
@@ -1789,11 +1811,14 @@ export default function Home() {
         ListHeaderComponent={filtersScrollable}
         refreshing={refreshing}
         onRefresh={onRefresh}
-        onEndReachedThreshold={0.25}
+        onEndReachedThreshold={0.6}
         onEndReached={loadNextPage}
+        onViewableItemsChanged={onViewableItemsChanged.current}
+        viewabilityConfig={viewabilityConfigRef.current}
         initialNumToRender={8}
-        windowSize={10}
-        removeClippedSubviews={false}
+        maxToRenderPerBatch={columns > 1 ? 12 : 10}
+        windowSize={12}
+        removeClippedSubviews={Platform.OS === 'android'}
         ListEmptyComponent={
           <View style={{ paddingTop: 48, alignItems: 'center' }}>
             <Text style={{ color: c.muted, marginBottom: 8 }}>No events match your filters</Text>
@@ -1806,6 +1831,28 @@ export default function Home() {
               }}
             />
           </View>
+        }
+        ListFooterComponent={
+          isFetching && hasMore ? (
+            <View style={{ paddingVertical: 16, gap: 12 }}>
+              {[...Array(Math.max(1, columns))].map((_, row) => (
+                <View key={row} style={{ flexDirection: 'row', gap: 12 }}>
+                  {[...Array(columns)].map((__, col) => (
+                    <View
+                      key={`${row}-${col}`}
+                      style={{
+                        flex: 1,
+                        height: columns > 1 ? 260 : 110,
+                        backgroundColor: '#00000010',
+                        borderRadius: 12,
+                        overflow: 'hidden',
+                      }}
+                    />
+                  ))}
+                </View>
+              ))}
+            </View>
+          ) : null
         }
         renderItem={({ item }) => {
           const isOwner = currentUserId && (item as any).created_by === currentUserId;

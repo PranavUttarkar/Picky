@@ -1,6 +1,6 @@
 import { Tabs, usePathname, router } from 'expo-router';
 import { useTheme, useThemeColors } from '@/theme/ThemeProvider';
-import { View, Text, Pressable, Alert } from 'react-native';
+import { View, Text, Pressable, Alert, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Linking from 'expo-linking';
 import * as Clipboard from 'expo-clipboard';
@@ -13,6 +13,8 @@ export default function TabsLayout() {
   const c = useThemeColors();
   const { toggleScheme, scheme } = useTheme();
   const pathname = usePathname();
+  const { width } = useWindowDimensions();
+  const isLargeScreen = width >= 768; // Show header on tablets/web only
   const { hasNewSavedItems, clearNotification } = useSavedNotification();
   const { hasNewGroupDecisions, clearNotification: clearGroupDecisionNotification } =
     useGroupDecisionNotification();
@@ -134,6 +136,7 @@ export default function TabsLayout() {
 
   const screenOptions = useMemo(
     () => ({
+      headerShown: isLargeScreen,
       headerStyle: { backgroundColor: c.background },
       headerTitle: HeaderTitle,
       headerTitleAlign: 'left' as const,
@@ -142,7 +145,7 @@ export default function TabsLayout() {
       tabBarActiveTintColor: c.primary,
       tabBarInactiveTintColor: c.muted,
     }),
-    [HeaderTitle, headerRight, c.background, c.card, c.primary, c.muted],
+    [HeaderTitle, headerRight, c.background, c.card, c.primary, c.muted, isLargeScreen], //Header hidden on small screens.
   );
 
   return (
