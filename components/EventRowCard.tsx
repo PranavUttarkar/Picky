@@ -98,7 +98,7 @@ export const EventRowCard: React.FC<EventRowCardProps> = memo(
               <Text style={{ color: c.muted, fontSize: 11, marginTop: 2 }} numberOfLines={1}>
                 {(event.tags ?? []).join(', ')}
               </Text>
-              {/* Actions row with score chip at bottom-right */}
+              {/* Actions row: score chip on the left, action icons on the right */}
               <View
                 style={{
                   flexDirection: 'row',
@@ -107,9 +107,37 @@ export const EventRowCard: React.FC<EventRowCardProps> = memo(
                   marginTop: 8,
                 }}
               >
+                {showScore ? (
+                  <LinearGradient
+                    colors={['#34d399', '#3b82f6']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={{ padding: 1, borderRadius: 999 }}
+                  >
+                    <View
+                      style={{
+                        backgroundColor: c.card,
+                        paddingHorizontal: 10,
+                        paddingVertical: 4,
+                        borderRadius: 999,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Text style={{ color: c.text, fontSize: 11, fontWeight: '800' }}>
+                        {/*
+                          If admin icons (edit/delete) are shown, display compact numeric percent like "86%".
+                          Otherwise keep the friendly label "86% Match" and an optional exclamation.
+                        */}
+                        {isAdmin ? `${score}%` : `${score}% Match${score > 72 ? '!' : ''}`}
+                      </Text>
+                    </View>
+                  </LinearGradient>
+                ) : null}
+
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                   <Pressable
-                    onPress={(e) => {
+                    onPress={(e: any) => {
                       e.stopPropagation();
                       shareEvent(event);
                     }}
@@ -119,7 +147,7 @@ export const EventRowCard: React.FC<EventRowCardProps> = memo(
                     <Ionicons name="share-social-outline" size={18} color={c.text} />
                   </Pressable>
                   <Pressable
-                    onPress={(e) => {
+                    onPress={(e: any) => {
                       e.stopPropagation();
                       onToggleSave(event.id);
                     }}
@@ -145,7 +173,7 @@ export const EventRowCard: React.FC<EventRowCardProps> = memo(
                   {isAdmin ? (
                     <>
                       <Pressable
-                        onPress={(e) => {
+                        onPress={(e: any) => {
                           e.stopPropagation();
                           onEdit?.();
                         }}
@@ -155,7 +183,7 @@ export const EventRowCard: React.FC<EventRowCardProps> = memo(
                         <Ionicons name="pencil" size={18} color={c.text} />
                       </Pressable>
                       <Pressable
-                        onPress={(e) => {
+                        onPress={(e: any) => {
                           e.stopPropagation();
                           onDelete?.();
                         }}
@@ -167,29 +195,6 @@ export const EventRowCard: React.FC<EventRowCardProps> = memo(
                     </>
                   ) : null}
                 </View>
-                {showScore ? (
-                  <LinearGradient
-                    colors={['#34d399', '#3b82f6']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={{ padding: 1, borderRadius: 999 }}
-                  >
-                    <View
-                      style={{
-                        backgroundColor: c.card,
-                        paddingHorizontal: 10,
-                        paddingVertical: 4,
-                        borderRadius: 999,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      <Text style={{ color: c.text, fontSize: 11, fontWeight: '800' }}>
-                        {score}% Match{score > 72 ? '!' : ''}
-                      </Text>
-                    </View>
-                  </LinearGradient>
-                ) : null}
               </View>
             </View>
           </View>

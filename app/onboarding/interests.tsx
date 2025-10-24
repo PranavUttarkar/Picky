@@ -11,10 +11,8 @@ const POPULAR_INTERESTS = [
   'Food',
   'Tech',
   'Hackathons',
-  'Volunteering',
   'Art & Museums',
   'Careers',
-  'Gaming & Esports',
   'Outdoors',
   'Culture',
   'Wellness & Fitness',
@@ -33,10 +31,8 @@ const QUICK_PREFS: { key: string; label: string }[] = [
   { key: 'outdoorsy', label: 'Outdoorsy' },
   { key: 'indoors', label: 'Indoors' },
   { key: 'morning_person', label: 'Morning' },
-  { key: 'nightlife', label: 'Nightlife' },
   { key: 'family_friendly', label: 'Chill / Low‑key' },
   { key: 'high_energy', label: 'High energy' },
-  { key: 'surprise_me', label: 'Surprise me' },
 ];
 
 export default function Interests() {
@@ -123,6 +119,7 @@ export default function Interests() {
       style={{ flex: 1, backgroundColor: c.background }}
       contentContainerStyle={{ padding: 16 }}
     >
+      <View style={{ height: 16 }} />
       <Text style={{ color: c.text, fontSize: 24, fontWeight: '800' }}>Let’s personalize!</Text>
       <Text style={{ color: c.muted, marginTop: 4, marginBottom: 12 }}>
         Quick picks below. Add your own anytime.
