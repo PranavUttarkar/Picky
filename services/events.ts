@@ -15,7 +15,7 @@ export async function getTopUserMatches(limit = 4): Promise<ScoredEvent[]> {
   if (ids.length === 0) return [];
   const { data: events, error: evErr } = await supabase
     .from('events')
-  .select('id,title,description,image_url,image_urls,date_time,location,tags')
+  .select('id,title,description,image_url,image_urls,date_time,end_time,location,tags')
     .in('id', ids)
     .gte('date_time', nowIso);
   if (evErr) throw evErr;
@@ -40,7 +40,7 @@ export async function getTopGroupMatches(groupId: number, limit = 4): Promise<Sc
   if (ids.length === 0) return [];
   const { data: events, error: evErr } = await supabase
     .from('events')
-  .select('id,title,description,image_url,image_urls,date_time,location,tags')
+  .select('id,title,description,image_url,image_urls,date_time,end_time,location,tags')
     .in('id', ids)
     .gte('date_time', nowIso);
   if (evErr) throw evErr;
@@ -60,7 +60,7 @@ export async function searchEvents(query: string, offset = 0, limit = 20): Promi
   const like = `%${q}%`;
   const { data, error } = await supabase
     .from('events')
-  .select('id,title,description,image_url,image_urls,date_time,location,tags')
+  .select('id,title,description,image_url,image_urls,date_time,end_time,location,tags')
     .gte('date_time', nowIso)
     .or(`title.ilike.${like},description.ilike.${like},location.ilike.${like}`)
     .order('date_time', { ascending: true })
@@ -96,6 +96,7 @@ export type EventInput = {
   // Optional storage paths for cleanup; not persisted on Event type by default
   image_storage_paths?: string[] | null;
   date_time: string; // ISO
+  end_time?: string | null; // ISO optional end time
   location?: string | null;
   tags?: string[] | null;
   rsvp_url?: string | null;
@@ -110,7 +111,7 @@ export async function createEvent(input: EventInput): Promise<Event> {
   const { data, error } = await supabase
     .from('events')
     .insert({ ...input, image_urls, image_url, created_by: user.id })
-    .select('id,title,description,image_url,image_urls,date_time,location,tags,rsvp_url,created_by')
+    .select('id,title,description,image_url,image_urls,date_time,end_time,location,tags,rsvp_url,created_by')
     .single();
   if (error) throw error;
   return data as Event;
@@ -126,7 +127,7 @@ export async function updateEvent(eventId: number, input: Partial<EventInput>): 
     .from('events')
     .update(payload)
     .eq('id', eventId)
-    .select('id,title,description,image_url,image_urls,date_time,location,tags,rsvp_url,created_by')
+    .select('id,title,description,image_url,image_urls,date_time,end_time,location,tags,rsvp_url,created_by')
     .single();
   if (error) throw error;
   return data as Event;

@@ -89,20 +89,11 @@ type AdminHeaderProps = {
     tagsCsv: string;
     rsvp: string;
     editingId?: number | null;
-  }) => void | Promise<void>;
+  }) => void;
   resetForm: () => void;
   events: Event[];
   deleteEvent: (id: number) => void;
 };
-
-// Keep this container at module scope so it doesn't remount on list updates
-const EventsContainer: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <GradientBackground contentContainerStyle={{ flex: 1, padding: 12 }}>
-    <AnimatedPage variant="fade-up" style={{ flex: 1 }}>
-      {children}
-    </AnimatedPage>
-  </GradientBackground>
-);
 
 const AdminHeader = memo(function AdminHeader(props: AdminHeaderProps) {
   const {
@@ -477,6 +468,751 @@ const AdminHeader = memo(function AdminHeader(props: AdminHeaderProps) {
   );
 });
 
+type AddEditEventModalProps = {
+  visible: boolean;
+  initialEvent: Event | null;
+  onClose: () => void;
+  onSaved: () => Promise<void> | void;
+};
+
+const AddEditEventModal = memo(function AddEditEventModal({
+  visible,
+  initialEvent,
+  onClose,
+  onSaved,
+}: AddEditEventModalProps) {
+  const c = useThemeColors();
+  const { scheme } = useTheme();
+
+  // Local modal state
+  const [title, setTitle] = useState('');
+  const [desc, setDesc] = useState('');
+  const [image1, setImage1] = useState('');
+  const [image2, setImage2] = useState('');
+  const [image3, setImage3] = useState('');
+  const [pickedUris, setPickedUris] = useState<string[]>([]);
+  const [dateTime, setDateTime] = useState<string>(
+    dayjs().add(2, 'day').hour(18).minute(0).second(0).millisecond(0).toISOString(),
+  );
+  const [dateInput, setDateInput] = useState<string>(dayjs().add(2, 'day').format('YYYY-MM-DD'));
+  const [timeInput, setTimeInput] = useState<string>(dayjs().add(2, 'day').format('HH:mm'));
+  const [endTimeISO, setEndTimeISO] = useState<string | null>(
+    dayjs().add(2, 'day').hour(20).minute(0).second(0).millisecond(0).toISOString(),
+  );
+  const [endTimeInput, setEndTimeInput] = useState<string>('20:00');
+  const [showEndTimePicker, setShowEndTimePicker] = useState(false);
+  const [location, setLocation] = useState('');
+  const [tagsCsv, setTagsCsv] = useState('');
+  const [rsvp, setRsvp] = useState('');
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [savingEvent, setSavingEvent] = useState(false);
+
+  // Initialize from props when opened
+  useEffect(() => {
+    if (!visible) return;
+    if (initialEvent) {
+      setTitle(initialEvent.title);
+      setDesc(initialEvent.description ?? '');
+      const imgs: string[] = (initialEvent as any).image_urls?.length
+        ? (initialEvent as any).image_urls
+        : initialEvent.image_url
+        ? [initialEvent.image_url]
+        : [];
+      setImage1(imgs[0] || '');
+      setImage2(imgs[1] || '');
+      setImage3(imgs[2] || '');
+      setPickedUris([]);
+      setDateTime(initialEvent.date_time);
+      setDateInput(dayjs(initialEvent.date_time).format('YYYY-MM-DD'));
+      setTimeInput(dayjs(initialEvent.date_time).format('HH:mm'));
+      if ((initialEvent as any).end_time) {
+        const et = dayjs((initialEvent as any).end_time);
+        setEndTimeISO(et.toISOString());
+        setEndTimeInput(et.format('HH:mm'));
+      } else {
+        const start = dayjs(initialEvent.date_time);
+        let def = start.clone().hour(20).minute(0).second(0).millisecond(0);
+        if (def.isBefore(start)) def = start.add(1, 'hour').second(0).millisecond(0);
+        setEndTimeISO(def.toISOString());
+        setEndTimeInput(def.format('HH:mm'));
+      }
+      setLocation(initialEvent.location ?? '');
+      setTagsCsv((initialEvent.tags ?? []).join(', '));
+      setRsvp((initialEvent as any).rsvp_url ?? '');
+      setShowEndTimePicker(false);
+    } else {
+      const base = dayjs().add(2, 'day');
+      const start = base.hour(18).minute(0).second(0).millisecond(0);
+      const endDefault = base.hour(20).minute(0).second(0).millisecond(0);
+      setTitle('');
+      setDesc('');
+      setImage1('');
+      setImage2('');
+      setImage3('');
+      setPickedUris([]);
+      setDateTime(start.toISOString());
+      setDateInput(base.format('YYYY-MM-DD'));
+      setTimeInput(start.format('HH:mm'));
+      setEndTimeISO(endDefault.toISOString());
+      setEndTimeInput('20:00');
+      setShowEndTimePicker(false);
+      setLocation('');
+      setTagsCsv('');
+      setRsvp('');
+    }
+  }, [visible, initialEvent]);
+
+  const typedUrls = useMemo(
+    () => [image1, image2, image3].map((s) => (s || '').trim()).filter(Boolean),
+    [image1, image2, image3],
+  );
+
+  const submit = async () => {
+    const titleVal = title.trim();
+    if (!titleVal) {
+      Alert.alert('Missing title', 'Please give your event a title.');
+      return;
+    }
+    const profanityErr = validateEventCopy(titleVal, desc);
+    if (profanityErr) {
+      Alert.alert('Inappropriate content', profanityErr);
+      return;
+    }
+    const hasPicked = pickedUris.length > 0;
+    const hasUrl = [image1, image2, image3].some((s) => !!s && s.trim().length > 0);
+    if (!hasPicked && !hasUrl) {
+      Alert.alert(
+        'Add an image',
+        'Please add at least one image by pasting a URL or picking a photo.',
+      );
+      return;
+    }
+    const dtIso = dayjs(dateTime).isValid()
+      ? dayjs(dateTime).toISOString()
+      : dayjs().add(1, 'day').toISOString();
+    let endTimeIso: string | null = null;
+    if (endTimeISO) {
+      const end = dayjs(endTimeISO);
+      if (!end.isValid()) {
+        Alert.alert('Invalid end time', 'Please enter a valid end time or clear it.');
+        return;
+      }
+      if (end.isBefore(dayjs(dtIso))) {
+        Alert.alert('End time before start', 'End time must be after the start time.');
+        return;
+      }
+      endTimeIso = end.toISOString();
+    }
+    const tags = tagsCsv
+      .split(',')
+      .map((t) => t.trim().toLowerCase())
+      .filter(Boolean)
+      .filter((v, i, a) => a.indexOf(v) === i);
+    const { cleaned: imageUrlsFromText, errors: imageErrors } = sanitizeEventImageUrls([
+      image1,
+      image2,
+      image3,
+    ]);
+    if (imageErrors.length) Alert.alert('Image issues', imageErrors.join('\n'));
+
+    let uploadedUrls: string[] = [];
+    if (pickedUris.length) {
+      try {
+        const limited = pickedUris.slice(0, 3);
+        const compressedUris: string[] = [];
+        for (const uri of limited) {
+          try {
+            const result = await ImageManipulator.manipulateAsync(
+              uri,
+              [{ resize: { width: 1600 } }],
+              {
+                compress: 0.8,
+                format: ImageManipulator.SaveFormat.JPEG,
+              },
+            );
+            compressedUris.push(result.uri);
+          } catch {}
+        }
+        uploadedUrls = await uploadEventImages(compressedUris);
+      } catch (e: any) {
+        Alert.alert('Upload failed', e?.message ?? 'Could not upload images');
+        return;
+      }
+    }
+    const merged = [...uploadedUrls, ...imageUrlsFromText];
+    const seen = new Set<string>();
+    const finalImages = merged
+      .map((u) => (u || '').trim())
+      .filter((u) => {
+        if (!u) return false;
+        const key = u.toLowerCase();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .slice(0, 3);
+    if (!finalImages.length) {
+      Alert.alert(
+        'Add an image',
+        'Please add at least one valid image by pasting a URL or picking a photo.',
+      );
+      return;
+    }
+    const payload = {
+      title: titleVal,
+      description: desc.trim() || null,
+      image_urls: finalImages,
+      image_url: finalImages[0] || null,
+      date_time: dtIso,
+      end_time: endTimeIso,
+      location: location.trim() || null,
+      tags,
+      rsvp_url: rsvp.trim() || null,
+    };
+    setSavingEvent(true);
+    try {
+      if (initialEvent?.id) {
+        await updateEvent(initialEvent.id, payload);
+        Alert.alert('Updated', 'Your event was updated.');
+      } else {
+        await createEvent(payload);
+        Alert.alert('Created', 'Your event was created.');
+      }
+      onClose();
+      await onSaved();
+    } catch (e: any) {
+      Alert.alert('Error', e?.message ?? 'Failed to save event');
+    } finally {
+      setSavingEvent(false);
+    }
+  };
+
+  // Keep web inputs in sync if dateTime changes from other flows
+  useEffect(() => {
+    setDateInput(dayjs(dateTime).format('YYYY-MM-DD'));
+    setTimeInput(dayjs(dateTime).format('HH:mm'));
+  }, [dateTime]);
+
+  return (
+    <Modal visible={visible} animationType="slide" onRequestClose={() => !savingEvent && onClose()}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: c.background }}>
+        <BlurView
+          intensity={30}
+          tint={scheme === 'dark' ? 'dark' : 'light'}
+          style={{ padding: 12 }}
+        >
+          <View
+            style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}
+          >
+            <Text style={{ color: c.text, fontSize: 18, fontWeight: '800' }}>
+              {initialEvent ? 'Edit event' : 'Add event'}
+            </Text>
+            <Pressable
+              onPress={onClose}
+              style={{
+                backgroundColor: '#00000020',
+                paddingHorizontal: 12,
+                paddingVertical: 8,
+                borderRadius: 10,
+              }}
+            >
+              <Ionicons name="close" size={24} color={c.text} />
+            </Pressable>
+          </View>
+        </BlurView>
+        <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
+          <View style={{ padding: 16 }}>
+            <TextInput
+              placeholder="Title"
+              placeholderTextColor={c.muted}
+              value={title}
+              onChangeText={setTitle}
+              style={{
+                color: c.text,
+                backgroundColor: '#00000010',
+                padding: 10,
+                borderRadius: 8,
+                marginBottom: 8,
+              }}
+            />
+            <TextInput
+              placeholder="Description"
+              placeholderTextColor={c.muted}
+              value={desc}
+              onChangeText={setDesc}
+              multiline
+              style={{
+                color: c.text,
+                backgroundColor: '#00000010',
+                padding: 10,
+                borderRadius: 8,
+                minHeight: 80,
+                marginBottom: 8,
+              }}
+            />
+            {[
+              { v: image1, s: setImage1, l: 'Image 1 URL (cover)' },
+              { v: image2, s: setImage2, l: 'Image 2 URL' },
+              { v: image3, s: setImage3, l: 'Image 3 URL' },
+            ].map((row, idx) => (
+              <TextInput
+                key={idx}
+                placeholder={row.l}
+                placeholderTextColor={c.muted}
+                value={row.v}
+                onChangeText={row.s as any}
+                style={{
+                  color: c.text,
+                  backgroundColor: '#00000010',
+                  padding: 10,
+                  borderRadius: 8,
+                  marginBottom: 8,
+                }}
+              />
+            ))}
+            <View
+              style={{
+                flexDirection: 'row',
+                gap: 8,
+                marginBottom: 8,
+                flexWrap: 'wrap',
+                alignItems: 'center',
+              }}
+            >
+              {pickedUris.map((u, i) => (
+                <View key={`${u}-${i}`} style={{ position: 'relative' }}>
+                  <View
+                    style={{
+                      width: 72,
+                      height: 72,
+                      borderRadius: 8,
+                      overflow: 'hidden',
+                      backgroundColor: '#00000015',
+                    }}
+                  >
+                    <LazyImage uri={u} width={72} height={72} borderRadius={8} />
+                  </View>
+                  <Pressable
+                    onPress={() => setPickedUris((prev) => prev.filter((_, idx) => idx !== i))}
+                    accessibilityLabel={`Remove image ${i + 1}`}
+                    style={{
+                      position: 'absolute',
+                      top: -6,
+                      right: -6,
+                      backgroundColor: '#00000080',
+                      borderRadius: 999,
+                      padding: 4,
+                    }}
+                  >
+                    <Ionicons name="close" size={14} color="#fff" />
+                  </Pressable>
+                </View>
+              ))}
+              <Pressable
+                onPress={async () => {
+                  const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+                  if (status !== 'granted') {
+                    Alert.alert(
+                      'Permission needed',
+                      'Please allow photo library access to upload images.',
+                    );
+                    return;
+                  }
+                  const result = await ImagePicker.launchImageLibraryAsync({
+                    mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                    allowsMultipleSelection: true,
+                    selectionLimit: 3,
+                    quality: 0.9,
+                  });
+                  if (!result.canceled) {
+                    const uris =
+                      (result.assets as ImagePicker.ImagePickerAsset[] | undefined)
+                        ?.map((a) => a.uri)
+                        .filter(Boolean) ?? [];
+                    setPickedUris((prev) => [...prev, ...uris].slice(0, 3));
+                  }
+                }}
+                style={{
+                  backgroundColor: c.primary,
+                  paddingHorizontal: 12,
+                  paddingVertical: 10,
+                  borderRadius: 10,
+                }}
+              >
+                <Text style={{ color: '#000', fontWeight: '700' }}>
+                  Choose images ({pickedUris.length}/3)
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={async () => {
+                  const { status } = await ImagePicker.requestCameraPermissionsAsync();
+                  if (status !== 'granted') {
+                    Alert.alert('Permission needed', 'Please allow camera access to take a photo.');
+                    return;
+                  }
+                  const result = await ImagePicker.launchCameraAsync({
+                    mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                    quality: 0.9,
+                  });
+                  if (!result.canceled && result.assets?.[0]?.uri) {
+                    setPickedUris((prev) => [result.assets[0].uri, ...prev].slice(0, 3));
+                  }
+                }}
+                style={{
+                  backgroundColor: '#00000020',
+                  paddingHorizontal: 12,
+                  paddingVertical: 10,
+                  borderRadius: 10,
+                }}
+              >
+                <Text style={{ color: c.text, fontWeight: '700' }}>Take photo</Text>
+              </Pressable>
+              {pickedUris.length > 0 ? (
+                <Pressable
+                  onPress={() => setPickedUris([])}
+                  style={{
+                    backgroundColor: '#00000020',
+                    paddingHorizontal: 12,
+                    paddingVertical: 10,
+                    borderRadius: 10,
+                  }}
+                >
+                  <Text style={{ color: c.text, fontWeight: '700' }}>Clear picked</Text>
+                </Pressable>
+              ) : null}
+            </View>
+            {typedUrls.length ? (
+              <View style={{ gap: 6, marginBottom: 8 }}>
+                <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+                  {typedUrls.map((u, i) => (
+                    <View key={`typed-${u}-${i}`} style={{ position: 'relative' }}>
+                      <View
+                        style={{
+                          width: 72,
+                          height: 72,
+                          borderRadius: 8,
+                          overflow: 'hidden',
+                          backgroundColor: '#00000015',
+                        }}
+                      >
+                        <LazyImage uri={u} width={72} height={72} borderRadius={8} />
+                      </View>
+                      {i === 0 ? (
+                        <Pressable
+                          onPress={() => setImage1('')}
+                          accessibilityLabel="Remove first URL"
+                          style={{
+                            position: 'absolute',
+                            top: -6,
+                            right: -6,
+                            backgroundColor: '#00000080',
+                            borderRadius: 999,
+                            padding: 4,
+                          }}
+                        >
+                          <Ionicons name="close" size={14} color="#fff" />
+                        </Pressable>
+                      ) : i === 1 ? (
+                        <Pressable
+                          onPress={() => setImage2('')}
+                          accessibilityLabel="Remove second URL"
+                          style={{
+                            position: 'absolute',
+                            top: -6,
+                            right: -6,
+                            backgroundColor: '#00000080',
+                            borderRadius: 999,
+                            padding: 4,
+                          }}
+                        >
+                          <Ionicons name="close" size={14} color="#fff" />
+                        </Pressable>
+                      ) : (
+                        <Pressable
+                          onPress={() => setImage3('')}
+                          accessibilityLabel="Remove third URL"
+                          style={{
+                            position: 'absolute',
+                            top: -6,
+                            right: -6,
+                            backgroundColor: '#00000080',
+                            borderRadius: 999,
+                            padding: 4,
+                          }}
+                        >
+                          <Ionicons name="close" size={14} color="#fff" />
+                        </Pressable>
+                      )}
+                    </View>
+                  ))}
+                </View>
+                {typedUrls.length > 0 ? (
+                  <Pressable
+                    onPress={() => {
+                      setImage1('');
+                      setImage2('');
+                      setImage3('');
+                    }}
+                    style={{
+                      backgroundColor: '#00000020',
+                      paddingHorizontal: 12,
+                      paddingVertical: 10,
+                      borderRadius: 10,
+                      alignSelf: 'flex-start',
+                    }}
+                  >
+                    <Text style={{ color: c.text, fontWeight: '700' }}>Clear URLs</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            ) : null}
+            <Text style={{ color: c.muted, fontSize: 11, marginBottom: 8 }}>
+              Provide up to 3 images. The first is the cover. Picked photos and pasted URLs are
+              combined (no duplicates), up to 3 total.
+            </Text>
+
+            {Platform.OS === 'web' ? (
+              <View style={{ gap: 8, marginBottom: 8 }}>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <TextInput
+                    placeholder="YYYY-MM-DD"
+                    placeholderTextColor={c.muted}
+                    value={dateInput}
+                    onChangeText={(val) => {
+                      setDateInput(val);
+                      if (/^\d{4}-\d{2}-\d{2}$/.test(val)) {
+                        const candidate = dayjs(`${val}T${timeInput}`);
+                        if (candidate.isValid()) setDateTime(candidate.toISOString());
+                        if (endTimeISO) {
+                          const endCandidate = dayjs(`${val}T${dayjs(endTimeISO).format('HH:mm')}`);
+                          if (endCandidate.isValid()) setEndTimeISO(endCandidate.toISOString());
+                        }
+                      }
+                    }}
+                    style={{
+                      flex: 1,
+                      color: c.text,
+                      backgroundColor: '#00000010',
+                      padding: 10,
+                      borderRadius: 8,
+                    }}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                </View>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <TextInput
+                    placeholder="HH:MM"
+                    placeholderTextColor={c.muted}
+                    value={timeInput}
+                    onChangeText={(val) => {
+                      setTimeInput(val);
+                      if (/^\d{2}:\d{2}$/.test(val)) {
+                        const candidate = dayjs(`${dateInput}T${val}`);
+                        if (candidate.isValid()) setDateTime(candidate.toISOString());
+                      }
+                    }}
+                    style={{
+                      flex: 1,
+                      color: c.text,
+                      backgroundColor: '#00000010',
+                      padding: 10,
+                      borderRadius: 8,
+                    }}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                  <TextInput
+                    placeholder="HH:MM"
+                    placeholderTextColor={c.muted}
+                    value={endTimeInput}
+                    onChangeText={(val) => {
+                      setEndTimeInput(val);
+                      if (/^\d{2}:\d{2}$/.test(val)) {
+                        const candidate = dayjs(`${dateInput}T${val}`);
+                        if (candidate.isValid()) setEndTimeISO(candidate.toISOString());
+                      } else if (val.trim() === '') {
+                        setEndTimeISO(null);
+                      }
+                    }}
+                    style={{
+                      flex: 1,
+                      color: c.text,
+                      backgroundColor: '#00000010',
+                      padding: 10,
+                      borderRadius: 8,
+                    }}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                </View>
+                {endTimeISO &&
+                dayjs(endTimeISO).isValid() &&
+                dayjs(endTimeISO).isBefore(dayjs(dateTime)) ? (
+                  <Text style={{ color: '#ef4444', marginTop: 4, fontSize: 12 }}>
+                    End time must be after start time.
+                  </Text>
+                ) : null}
+              </View>
+            ) : (
+              <>
+                <View style={{ marginBottom: 8 }}>
+                  <Pressable
+                    onPress={() => setShowDatePicker(true)}
+                    style={{
+                      flex: 1,
+                      backgroundColor: '#00000010',
+                      padding: 10,
+                      borderRadius: 8,
+                      alignItems: 'center',
+                    }}
+                  >
+                    <Text style={{ color: c.text, fontWeight: '700' }}>
+                      {dayjs(dateTime).format('YYYY-MM-DD')}
+                    </Text>
+                  </Pressable>
+                </View>
+                <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
+                  <Pressable
+                    onPress={() => setShowTimePicker(true)}
+                    style={{
+                      flex: 1,
+                      backgroundColor: '#00000010',
+                      padding: 10,
+                      borderRadius: 8,
+                      alignItems: 'center',
+                    }}
+                  >
+                    <Text style={{ color: c.text, fontWeight: '700' }}>
+                      {dayjs(dateTime).format('h:mm A')}
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => setShowEndTimePicker(true)}
+                    style={{
+                      flex: 1,
+                      backgroundColor: '#00000010',
+                      padding: 10,
+                      borderRadius: 8,
+                      alignItems: 'center',
+                    }}
+                  >
+                    <Text style={{ color: c.text, fontWeight: '700' }}>
+                      {endTimeISO ? dayjs(endTimeISO).format('h:mm A') : 'Add end time (optional)'}
+                    </Text>
+                  </Pressable>
+                </View>
+                {showDatePicker ? (
+                  <DateTimePicker
+                    mode="date"
+                    value={new Date(dateTime)}
+                    onChange={(evt, selectedDate) => {
+                      setShowDatePicker(false);
+                      if (!selectedDate) return;
+                      const current = dayjs(dateTime);
+                      const merged = current
+                        .year(selectedDate.getFullYear())
+                        .month(selectedDate.getMonth())
+                        .date(selectedDate.getDate());
+                      setDateTime(merged.toISOString());
+                    }}
+                  />
+                ) : null}
+                {showTimePicker ? (
+                  <DateTimePicker
+                    mode="time"
+                    value={new Date(dateTime)}
+                    onChange={(evt, selectedTime) => {
+                      setShowTimePicker(false);
+                      if (!selectedTime) return;
+                      const current = dayjs(dateTime);
+                      const merged = current
+                        .hour(selectedTime.getHours())
+                        .minute(selectedTime.getMinutes())
+                        .second(0)
+                        .millisecond(0);
+                      setDateTime(merged.toISOString());
+                    }}
+                  />
+                ) : null}
+                {showEndTimePicker ? (
+                  <DateTimePicker
+                    mode="time"
+                    value={new Date(endTimeISO ?? dateTime)}
+                    onChange={(evt, selected) => {
+                      setShowEndTimePicker(false);
+                      if (!selected) return;
+                      const base = dayjs(dateTime);
+                      const merged = base
+                        .hour(selected.getHours())
+                        .minute(selected.getMinutes())
+                        .second(0)
+                        .millisecond(0);
+                      setEndTimeISO(merged.toISOString());
+                    }}
+                  />
+                ) : null}
+              </>
+            )}
+
+            <TextInput
+              placeholder="Location"
+              placeholderTextColor={c.muted}
+              value={location}
+              onChangeText={setLocation}
+              style={{
+                color: c.text,
+                backgroundColor: '#00000010',
+                padding: 10,
+                borderRadius: 8,
+                marginBottom: 8,
+              }}
+            />
+            <TextInput
+              placeholder="Tags (comma-separated)"
+              placeholderTextColor={c.muted}
+              value={tagsCsv}
+              onChangeText={setTagsCsv}
+              style={{
+                color: c.text,
+                backgroundColor: '#00000010',
+                padding: 10,
+                borderRadius: 8,
+                marginBottom: 8,
+              }}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            <TextInput
+              placeholder="RSVP URL (optional)"
+              placeholderTextColor={c.muted}
+              value={rsvp}
+              onChangeText={setRsvp}
+              style={{
+                color: c.text,
+                backgroundColor: '#00000010',
+                padding: 10,
+                borderRadius: 8,
+                marginBottom: 8,
+              }}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+              <ThreeDButton
+                title={initialEvent ? 'Update Event' : 'Create Event'}
+                onPress={submit}
+              />
+              <ThreeDButton title="Cancel" onPress={onClose} />
+            </View>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    </Modal>
+  );
+});
+
 type FiltersTopBarProps = {
   c: ReturnType<typeof useThemeColors>;
   query: string;
@@ -559,7 +1295,14 @@ const FiltersTopBar = memo(function FiltersTopBar({
             return (
               <Pressable
                 key={opt.key}
-                onPress={() => setMode(opt.key as any)}
+                onPress={() => {
+                  if (opt.key === 'personalized' && !isAuthed) {
+                    // Guests tapping 'Personalized' go to sign in
+                    router.push('/onboarding/welcome');
+                    return;
+                  }
+                  setMode(opt.key as any);
+                }}
                 style={{
                   backgroundColor: active ? c.primary : 'transparent',
                   paddingHorizontal: 12,
@@ -1045,7 +1788,7 @@ export default function Home() {
     const { data, error } = await supabase
       .from('events')
       .select(
-        'id,title,description,image_url,image_urls,date_time,location,tags,rsvp_url,created_by',
+        'id,title,description,image_url,image_urls,date_time,end_time,location,tags,rsvp_url,created_by',
       )
       .gte('date_time', new Date().toISOString())
       .order('date_time', { ascending: true })
@@ -1112,6 +1855,8 @@ export default function Home() {
       const user = (await supabase.auth.getUser()).data.user;
       if (!user) {
         setIsAuthed(false);
+        // Default to Soonest for guests
+        setMode('all');
         return; // guests can still see events; just skip personalized data
       }
       setIsAuthed(true);
@@ -1303,42 +2048,50 @@ export default function Home() {
     return { tags, words };
   };
 
-  const { tags: queryTags, words: queryWords } = parseQuery(query);
+  const { tags: queryTags, words: queryWords } = useMemo(() => parseQuery(query), [query]);
 
   // Build tag universe from currently loaded events
-  const allTags: string[] = Array.from(
-    new Set(events.flatMap((e: any) => (e.tags ?? []).map((t: string) => t))),
-  ).sort((a, b) => a.localeCompare(b));
+  const allTags: string[] = useMemo(
+    () =>
+      Array.from(new Set(events.flatMap((e: any) => (e.tags ?? []).map((t: string) => t)))).sort(
+        (a, b) => a.localeCompare(b),
+      ),
+    [events],
+  );
 
   // Derived filtered list based on text and tag filters
-  const filteredBase = events.filter((e: any) => {
-    // Tag match: all queryTags must be present (case-insensitive)
-    const lowerEventTags = (e.tags ?? []).map((t: string) => t.toLowerCase());
-    if (queryTags.length) {
-      const et = (e.tags ?? []).map((t: string) => t.toLowerCase());
-      for (const t of queryTags) if (!et.includes(t)) return false;
-    }
-    // Also apply active tag chip filters (AND logic)
-    if (activeTags.length) {
-      for (const t of activeTags.map((t) => t.toLowerCase()))
-        if (!lowerEventTags.includes(t)) return false;
-    }
-    // Text match on title/description/location
-    if (queryWords.length) {
-      const hay = `${e.title} ${e.description ?? ''} ${e.location ?? ''}`.toLowerCase();
-      for (const w of queryWords) if (!hay.includes(w)) return false;
-    }
-    return true;
-  });
+  const filteredBase = useMemo(() => {
+    return events.filter((e: any) => {
+      // Tag match: all queryTags must be present (case-insensitive)
+      const lowerEventTags = (e.tags ?? []).map((t: string) => t.toLowerCase());
+      if (queryTags.length) {
+        const et = lowerEventTags;
+        for (const t of queryTags) if (!et.includes(t)) return false;
+      }
+      // Also apply active tag chip filters (AND logic)
+      if (activeTags.length) {
+        for (const t of activeTags.map((t) => t.toLowerCase()))
+          if (!lowerEventTags.includes(t)) return false;
+      }
+      // Text match on title/description/location
+      if (queryWords.length) {
+        const hay = `${e.title} ${e.description ?? ''} ${e.location ?? ''}`.toLowerCase();
+        for (const w of queryWords) if (!hay.includes(w)) return false;
+      }
+      return true;
+    });
+  }, [events, queryTags, activeTags, queryWords]);
 
   // Apply mode-specific sorting/filtering
-  const filtered = [...filteredBase].sort((a: any, b: any) => {
+  const filtered = useMemo(() => {
+    const arr = [...filteredBase];
     if (mode === 'personalized') {
-      return match(b.id, b.tags) - match(a.id, a.tags);
+      arr.sort((a: any, b: any) => match(b.id, b.tags) - match(a.id, a.tags));
+    } else {
+      arr.sort((a: any, b: any) => dayjs(a.date_time).valueOf() - dayjs(b.date_time).valueOf());
     }
-    // Default: chronological by date_time
-    return dayjs(a.date_time).valueOf() - dayjs(b.date_time).valueOf();
-  });
+    return arr;
+  }, [filteredBase, mode, scores, myTags]);
 
   // Admin: reset form helper
   const resetForm = () => {
@@ -1503,64 +2256,6 @@ export default function Home() {
 
   // Container moved to module scope above (EventsContainer)
 
-  // Admin header memo: only depends on admin form state, not search
-  const adminHeader = useMemo(
-    () =>
-      isAdmin ? (
-        <AdminHeader
-          c={c}
-          isAdmin={isAdmin}
-          adminOpen={adminOpen}
-          setAdminOpen={setAdminOpen}
-          editingId={editingId}
-          fTitle={fTitle}
-          setFTitle={setFTitle}
-          fDesc={fDesc}
-          setFDesc={setFDesc}
-          fImage1={fImage1}
-          setFImage1={setFImage1}
-          fImage2={fImage2}
-          setFImage2={setFImage2}
-          fImage3={fImage3}
-          setFImage3={setFImage3}
-          fDateTime={fDateTime}
-          setFDateTime={setFDateTime}
-          fLocation={fLocation}
-          setFLocation={setFLocation}
-          fTagsCsv={fTagsCsv}
-          setFTagsCsv={setFTagsCsv}
-          fRsvp={fRsvp}
-          setFRsvp={setFRsvp}
-          showDatePicker={showDatePicker}
-          setShowDatePicker={setShowDatePicker}
-          showTimePicker={showTimePicker}
-          setShowTimePicker={setShowTimePicker}
-          upsertEvent={upsertEvent}
-          resetForm={resetForm}
-          events={events}
-          deleteEvent={deleteEvent}
-        />
-      ) : null,
-    [
-      c,
-      isAdmin,
-      adminOpen,
-      editingId,
-      fTitle,
-      fDesc,
-      fImage1,
-      fImage2,
-      fImage3,
-      fDateTime,
-      fLocation,
-      fTagsCsv,
-      fRsvp,
-      showDatePicker,
-      showTimePicker,
-      events,
-    ],
-  );
-
   // TODO: Replace current vertical card layout with horizontal row cards (EventRowCard component)
   // New layout plan:
   //  - Left: square/16:9 thumb (first image) using EventImages with maxDisplay=1 or a dedicated thumb
@@ -1568,173 +2263,25 @@ export default function Home() {
   //  - Keep expand for description reveal below row or in modal
 
   // Filters: top bar outside list, interests/tags/results inside list header
-  // Add/Edit Event modal state
-  const [addOpen, setAddOpen] = useState(false);
-  const [editEventId, setEditEventId] = useState<number | null>(null);
-  const [mTitle, setMTitle] = useState('');
-  const [mDesc, setMDesc] = useState('');
-  const [mImage1, setMImage1] = useState('');
-  const [mImage2, setMImage2] = useState('');
-  const [mImage3, setMImage3] = useState('');
-  const [pickedUris, setPickedUris] = useState<string[]>([]);
-  const [mDateTime, setMDateTime] = useState(
-    dayjs().add(2, 'day').hour(18).minute(0).second(0).toISOString(),
-  );
-  const [mLocation, setMLocation] = useState('');
-  const [mTagsCsv, setMTagsCsv] = useState('');
-  const [mRsvp, setMRsvp] = useState('');
-  const [mShowDatePicker, setMShowDatePicker] = useState(false);
-  const [mShowTimePicker, setMShowTimePicker] = useState(false);
-  const [savingEvent, setSavingEvent] = useState(false);
+  // Add/Edit Event modal controller state (isolate modal to avoid parent re-renders on typing)
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalEvent, setModalEvent] = useState<Event | null>(null);
 
   const openAddModal = async () => {
     const ok = await requireAuth();
     if (!ok) return;
-    setEditEventId(null);
-    setMTitle('');
-    setMDesc('');
-    setMImage1('');
-    setMImage2('');
-    setMImage3('');
-    setPickedUris([]);
-    setMDateTime(dayjs().add(2, 'day').hour(18).minute(0).second(0).toISOString());
-    setMLocation('');
-    setMTagsCsv('');
-    setMRsvp('');
-    setAddOpen(true);
+    setModalEvent(null);
+    setModalOpen(true);
   };
 
   const openEditModal = async (e: Event) => {
     const ok = await requireAuth();
     if (!ok) return;
-    setEditEventId(e.id);
-    setMTitle(e.title);
-    setMDesc(e.description ?? '');
-    const imgs = (e as any).image_urls ?? [];
-    setMImage1(imgs[0] || e.image_url || '');
-    setMImage2(imgs[1] || '');
-    setMImage3(imgs[2] || '');
-    setPickedUris([]);
-    setMDateTime(e.date_time);
-    setMLocation(e.location ?? '');
-    setMTagsCsv((e.tags ?? []).join(', '));
-    setMRsvp((e as any).rsvp_url ?? '');
-    setAddOpen(true);
+    setModalEvent(e);
+    setModalOpen(true);
   };
 
-  // Memoize typed URL previews so unrelated state changes don't re-create arrays
-  const typedUrls = useMemo(
-    () => [mImage1, mImage2, mImage3].map((s) => (s || '').trim()).filter(Boolean),
-    [mImage1, mImage2, mImage3],
-  );
-
-  const submitModal = async () => {
-    const titleVal = mTitle.trim();
-    if (!titleVal) {
-      Alert.alert('Missing title', 'Please give your event a title.');
-      return;
-    }
-    // Profanity validation (client-side)
-    const profanityErr = validateEventCopy(titleVal, mDesc);
-    if (profanityErr) {
-      Alert.alert('Inappropriate content', profanityErr);
-      return;
-    }
-    // Require at least one image (picked or URL)
-    const hasPicked = pickedUris.length > 0;
-    const hasUrl = [mImage1, mImage2, mImage3].some((s) => !!s && s.trim().length > 0);
-    if (!hasPicked && !hasUrl) {
-      Alert.alert(
-        'Add an image',
-        'Please add at least one image by pasting a URL or picking a photo.',
-      );
-      return;
-    }
-    const dtIso = dayjs(mDateTime).isValid()
-      ? dayjs(mDateTime).toISOString()
-      : dayjs().add(1, 'day').toISOString();
-    const tags = mTagsCsv
-      .split(',')
-      .map((t) => t.trim().toLowerCase())
-      .filter(Boolean)
-      .filter((v, i, a) => a.indexOf(v) === i);
-    const { cleaned: imageUrlsFromText, errors: imageErrors } = sanitizeEventImageUrls([
-      mImage1,
-      mImage2,
-      mImage3,
-    ]);
-    if (imageErrors.length) Alert.alert('Image issues', imageErrors.join('\n'));
-    // Upload any picked photos, then merge with typed URLs (dedupe and cap at 3)
-    let uploadedUrls: string[] = [];
-    if (pickedUris.length) {
-      try {
-        const limited = pickedUris.slice(0, 3);
-        const compressedUris: string[] = [];
-        for (const uri of limited) {
-          try {
-            const out = await ImageManipulator.manipulateAsync(uri, [{ resize: { width: 1440 } }], {
-              // Improve quality to reduce blurriness, especially on web
-              compress: 0.9,
-              format: ImageManipulator.SaveFormat.JPEG,
-            });
-            compressedUris.push(out.uri);
-          } catch {
-            compressedUris.push(uri);
-          }
-        }
-        uploadedUrls = await uploadEventImages(compressedUris);
-      } catch (e: any) {
-        Alert.alert('Upload failed', e?.message ?? 'Could not upload images');
-        return;
-      }
-    }
-    // Merge sources: prefer picked photos first, then typed URLs; dedupe; cap at 3
-    const merged = [...uploadedUrls, ...imageUrlsFromText];
-    const seen = new Set<string>();
-    const finalImages = merged
-      .map((u) => (u || '').trim())
-      .filter((u) => {
-        if (!u) return false;
-        const key = u.toLowerCase();
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      })
-      .slice(0, 3);
-    if (!finalImages.length) {
-      Alert.alert(
-        'Add an image',
-        'Please add at least one valid image by pasting a URL or picking a photo.',
-      );
-      return;
-    }
-    const payload = {
-      title: titleVal,
-      description: mDesc.trim() || null,
-      image_urls: finalImages,
-      image_url: finalImages[0] || null,
-      date_time: dtIso,
-      location: mLocation.trim() || null,
-      tags,
-      rsvp_url: mRsvp.trim() || null,
-    };
-    setSavingEvent(true);
-    try {
-      if (editEventId) {
-        await updateEvent(editEventId, payload);
-        Alert.alert('Updated', 'Your event was updated.');
-      } else {
-        await createEvent(payload);
-        Alert.alert('Created', 'Your event was created.');
-      }
-      setAddOpen(false);
-      await onRefresh();
-    } catch (e: any) {
-      Alert.alert('Error', e?.message ?? 'Failed to save event');
-    } finally {
-      setSavingEvent(false);
-    }
-  };
+  // (modal state moved into AddEditEventModal)
 
   // Gradient bordered match badge
   const MatchBadge: React.FC<{ value: number }> = ({ value }) => (
@@ -1797,8 +2344,42 @@ export default function Home() {
   );
 
   return (
-    <EventsContainer>
-      {adminHeader}
+    <SafeAreaView style={{ flex: 1, backgroundColor: c.background }}>
+      {isAdmin ? (
+        <AdminHeader
+          c={c}
+          isAdmin={isAdmin}
+          adminOpen={adminOpen}
+          setAdminOpen={setAdminOpen}
+          editingId={editingId}
+          fTitle={fTitle}
+          setFTitle={setFTitle}
+          fDesc={fDesc}
+          setFDesc={setFDesc}
+          fImage1={fImage1}
+          setFImage1={setFImage1}
+          fImage2={fImage2}
+          setFImage2={setFImage2}
+          fImage3={fImage3}
+          setFImage3={setFImage3}
+          fDateTime={fDateTime}
+          setFDateTime={setFDateTime}
+          fLocation={fLocation}
+          setFLocation={setFLocation}
+          fTagsCsv={fTagsCsv}
+          setFTagsCsv={setFTagsCsv}
+          fRsvp={fRsvp}
+          setFRsvp={setFRsvp}
+          showDatePicker={showDatePicker}
+          setShowDatePicker={setShowDatePicker}
+          showTimePicker={showTimePicker}
+          setShowTimePicker={setShowTimePicker}
+          upsertEvent={upsertEvent}
+          resetForm={resetForm}
+          events={events}
+          deleteEvent={deleteEvent}
+        />
+      ) : null}
       {filtersTopBar}
       <FlatList
         ref={listRef}
@@ -1933,7 +2514,22 @@ export default function Home() {
                 {selectedEvent?.title}
               </Text>
               <Text style={{ color: c.muted, marginTop: 4 }}>
-                {selectedEvent ? dayjs(selectedEvent.date_time).format('ddd, MMM D • h:mm A') : ''}
+                {selectedEvent
+                  ? (() => {
+                      const start = dayjs(selectedEvent.date_time);
+                      const end = (selectedEvent as any).end_time
+                        ? dayjs((selectedEvent as any).end_time)
+                        : null;
+                      const sameDay = end ? start.isSame(end, 'day') : true;
+                      const datePart = start.format('ddd, MMM D');
+                      const timePart = end
+                        ? sameDay
+                          ? `${start.format('h:mm')}–${end.format('h:mm A')}`
+                          : `${start.format('h:mm A')} → ${end.format('MMM D h:mm A')}`
+                        : start.format('h:mm A');
+                      return `${datePart} • ${timePart}`;
+                    })()
+                  : ''}
                 {selectedEvent?.location ? ` • ${selectedEvent.location}` : ''}
               </Text>
               <View
@@ -1968,7 +2564,11 @@ export default function Home() {
                       // simple add-to-calendar using ICS deep link (fallback)
                       const title = encodeURIComponent(selectedEvent!.title);
                       const start = dayjs(selectedEvent!.date_time).toISOString();
-                      const end = dayjs(selectedEvent!.date_time).add(2, 'hour').toISOString();
+                      const end = (
+                        (selectedEvent as any).end_time
+                          ? dayjs((selectedEvent as any).end_time)
+                          : dayjs(selectedEvent!.date_time).add(2, 'hour')
+                      ).toISOString();
                       const details = encodeURIComponent(selectedEvent!.description ?? '');
                       const location = encodeURIComponent(selectedEvent!.location ?? '');
                       const href = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${start
@@ -2028,413 +2628,12 @@ export default function Home() {
       </Modal>
 
       {/* Add/Edit Event Modal (user flow) */}
-      <Modal
-        visible={addOpen}
-        animationType="slide"
-        onRequestClose={() => !savingEvent && setAddOpen(false)}
-      >
-        <SafeAreaView style={{ flex: 1, backgroundColor: c.background }}>
-          <BlurView
-            intensity={30}
-            tint={scheme === 'dark' ? 'dark' : 'light'}
-            style={{ padding: 12 }}
-          >
-            <View
-              style={{
-                flexDirection: 'row',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-              }}
-            >
-              <Text style={{ color: c.text, fontSize: 18, fontWeight: '800' }}>
-                {editEventId ? 'Edit event' : 'Add event'}
-              </Text>
-              <Pressable
-                onPress={() => setAddOpen(false)}
-                style={{
-                  backgroundColor: '#00000020',
-                  paddingHorizontal: 12,
-                  paddingVertical: 8,
-                  borderRadius: 10,
-                }}
-              >
-                <Ionicons name="close" size={24} color={c.text} />
-              </Pressable>
-            </View>
-          </BlurView>
-          <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
-            <View style={{ padding: 16 }}>
-              <TextInput
-                placeholder="Title"
-                placeholderTextColor={c.muted}
-                value={mTitle}
-                onChangeText={setMTitle}
-                style={{
-                  color: c.text,
-                  backgroundColor: '#00000010',
-                  padding: 10,
-                  borderRadius: 8,
-                  marginBottom: 8,
-                }}
-              />
-              <TextInput
-                placeholder="Description"
-                placeholderTextColor={c.muted}
-                value={mDesc}
-                onChangeText={setMDesc}
-                multiline
-                style={{
-                  color: c.text,
-                  backgroundColor: '#00000010',
-                  padding: 10,
-                  borderRadius: 8,
-                  minHeight: 80,
-                  marginBottom: 8,
-                }}
-              />
-              {[
-                { v: mImage1, s: setMImage1, l: 'Image 1 URL (cover)' },
-                { v: mImage2, s: setMImage2, l: 'Image 2 URL' },
-                { v: mImage3, s: setMImage3, l: 'Image 3 URL' },
-              ].map((row, idx) => (
-                <TextInput
-                  key={idx}
-                  placeholder={row.l}
-                  placeholderTextColor={c.muted}
-                  value={row.v}
-                  onChangeText={row.s as any}
-                  style={{
-                    color: c.text,
-                    backgroundColor: '#00000010',
-                    padding: 10,
-                    borderRadius: 8,
-                    marginBottom: 8,
-                  }}
-                />
-              ))}
-              {/* Removed image source selector per UX: we now prefer picked photos if present, else use typed URLs */}
-              <View
-                style={{
-                  flexDirection: 'row',
-                  gap: 8,
-                  marginBottom: 8,
-                  flexWrap: 'wrap',
-                  alignItems: 'center',
-                }}
-              >
-                {pickedUris.map((u, i) => (
-                  <View key={`${u}-${i}`} style={{ position: 'relative' }}>
-                    <View
-                      style={{
-                        width: 72,
-                        height: 72,
-                        borderRadius: 8,
-                        overflow: 'hidden',
-                        backgroundColor: '#00000015',
-                      }}
-                    >
-                      <LazyImage uri={u} width={72} height={72} borderRadius={8} />
-                    </View>
-                    <Pressable
-                      onPress={() => setPickedUris((prev) => prev.filter((_, idx) => idx !== i))}
-                      accessibilityLabel={`Remove image ${i + 1}`}
-                      style={{
-                        position: 'absolute',
-                        top: -6,
-                        right: -6,
-                        backgroundColor: '#00000080',
-                        borderRadius: 999,
-                        padding: 4,
-                      }}
-                    >
-                      <Ionicons name="close" size={14} color="#fff" />
-                    </Pressable>
-                  </View>
-                ))}
-                <Pressable
-                  onPress={async () => {
-                    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-                    if (status !== 'granted') {
-                      Alert.alert(
-                        'Permission needed',
-                        'Please allow photo library access to upload images.',
-                      );
-                      return;
-                    }
-                    const result = await ImagePicker.launchImageLibraryAsync({
-                      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-                      allowsMultipleSelection: true,
-                      selectionLimit: 3,
-                      quality: 0.9,
-                    });
-                    if (!result.canceled) {
-                      const uris =
-                        (result.assets as ImagePicker.ImagePickerAsset[] | undefined)
-                          ?.map((a) => a.uri)
-                          .filter(Boolean) ?? [];
-                      setPickedUris((prev) => [...prev, ...uris].slice(0, 3));
-                    }
-                  }}
-                  style={{
-                    backgroundColor: c.primary,
-                    paddingHorizontal: 12,
-                    paddingVertical: 10,
-                    borderRadius: 10,
-                  }}
-                >
-                  <Text style={{ color: '#000', fontWeight: '700' }}>
-                    Choose images ({pickedUris.length}/3)
-                  </Text>
-                </Pressable>
-                <Pressable
-                  onPress={async () => {
-                    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-                    if (status !== 'granted') {
-                      Alert.alert(
-                        'Permission needed',
-                        'Please allow camera access to take a photo.',
-                      );
-                      return;
-                    }
-                    const result = await ImagePicker.launchCameraAsync({
-                      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-                      quality: 0.9,
-                    });
-                    if (!result.canceled && result.assets?.[0]?.uri) {
-                      setPickedUris((prev) => [result.assets[0].uri, ...prev].slice(0, 3));
-                    }
-                  }}
-                  style={{
-                    backgroundColor: '#00000020',
-                    paddingHorizontal: 12,
-                    paddingVertical: 10,
-                    borderRadius: 10,
-                  }}
-                >
-                  <Text style={{ color: c.text, fontWeight: '700' }}>Take photo</Text>
-                </Pressable>
-                {pickedUris.length > 0 ? (
-                  <Pressable
-                    onPress={() => setPickedUris([])}
-                    style={{
-                      backgroundColor: '#00000020',
-                      paddingHorizontal: 12,
-                      paddingVertical: 10,
-                      borderRadius: 10,
-                    }}
-                  >
-                    <Text style={{ color: c.text, fontWeight: '700' }}>Clear picked</Text>
-                  </Pressable>
-                ) : null}
-              </View>
-              {/* Preview thumbnails for typed URLs */}
-              {typedUrls.length ? (
-                <View style={{ gap: 6, marginBottom: 8 }}>
-                  <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
-                    {typedUrls.map((u, i) => (
-                      <View key={`typed-${u}-${i}`} style={{ position: 'relative' }}>
-                        <View
-                          style={{
-                            width: 72,
-                            height: 72,
-                            borderRadius: 8,
-                            overflow: 'hidden',
-                            backgroundColor: '#00000015',
-                          }}
-                        >
-                          <LazyImage uri={u} width={72} height={72} borderRadius={8} />
-                        </View>
-                        {/* Provide quick remove buttons for each URL slot */}
-                        {i === 0 ? (
-                          <Pressable
-                            onPress={() => setMImage1('')}
-                            accessibilityLabel="Remove first URL"
-                            style={{
-                              position: 'absolute',
-                              top: -6,
-                              right: -6,
-                              backgroundColor: '#00000080',
-                              borderRadius: 999,
-                              padding: 4,
-                            }}
-                          >
-                            <Ionicons name="close" size={14} color="#fff" />
-                          </Pressable>
-                        ) : i === 1 ? (
-                          <Pressable
-                            onPress={() => setMImage2('')}
-                            accessibilityLabel="Remove second URL"
-                            style={{
-                              position: 'absolute',
-                              top: -6,
-                              right: -6,
-                              backgroundColor: '#00000080',
-                              borderRadius: 999,
-                              padding: 4,
-                            }}
-                          >
-                            <Ionicons name="close" size={14} color="#fff" />
-                          </Pressable>
-                        ) : (
-                          <Pressable
-                            onPress={() => setMImage3('')}
-                            accessibilityLabel="Remove third URL"
-                            style={{
-                              position: 'absolute',
-                              top: -6,
-                              right: -6,
-                              backgroundColor: '#00000080',
-                              borderRadius: 999,
-                              padding: 4,
-                            }}
-                          >
-                            <Ionicons name="close" size={14} color="#fff" />
-                          </Pressable>
-                        )}
-                      </View>
-                    ))}
-                  </View>
-                  {typedUrls.length > 0 ? (
-                    <Pressable
-                      onPress={() => {
-                        setMImage1('');
-                        setMImage2('');
-                        setMImage3('');
-                      }}
-                      style={{
-                        backgroundColor: '#00000020',
-                        paddingHorizontal: 12,
-                        paddingVertical: 10,
-                        borderRadius: 10,
-                        alignSelf: 'flex-start',
-                      }}
-                    >
-                      <Text style={{ color: c.text, fontWeight: '700' }}>Clear URLs</Text>
-                    </Pressable>
-                  ) : null}
-                </View>
-              ) : null}
-              <Text style={{ color: c.muted, fontSize: 11, marginBottom: 8 }}>
-                Provide up to 3 images. The first is the cover. Picked photos and pasted URLs are
-                combined (no duplicates), up to 3 total.
-              </Text>
-              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
-                <Pressable
-                  onPress={() => setMShowDatePicker(true)}
-                  style={{
-                    flex: 1,
-                    backgroundColor: '#00000010',
-                    padding: 10,
-                    borderRadius: 8,
-                    alignItems: 'center',
-                  }}
-                >
-                  <Text style={{ color: c.text, fontWeight: '700' }}>
-                    {dayjs(mDateTime).format('YYYY-MM-DD')}
-                  </Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => setMShowTimePicker(true)}
-                  style={{
-                    flex: 1,
-                    backgroundColor: '#00000010',
-                    padding: 10,
-                    borderRadius: 8,
-                    alignItems: 'center',
-                  }}
-                >
-                  <Text style={{ color: c.text, fontWeight: '700' }}>
-                    {dayjs(mDateTime).format('h:mm A')}
-                  </Text>
-                </Pressable>
-              </View>
-              {mShowDatePicker ? (
-                <DateTimePicker
-                  mode="date"
-                  value={new Date(mDateTime)}
-                  onChange={(evt, selectedDate) => {
-                    setMShowDatePicker(false);
-                    if (!selectedDate) return;
-                    const current = dayjs(mDateTime);
-                    const merged = current
-                      .year(selectedDate.getFullYear())
-                      .month(selectedDate.getMonth())
-                      .date(selectedDate.getDate());
-                    setMDateTime(merged.toISOString());
-                  }}
-                />
-              ) : null}
-              {mShowTimePicker ? (
-                <DateTimePicker
-                  mode="time"
-                  value={new Date(mDateTime)}
-                  onChange={(evt, selectedTime) => {
-                    setMShowTimePicker(false);
-                    if (!selectedTime) return;
-                    const current = dayjs(mDateTime);
-                    const merged = current
-                      .hour(selectedTime.getHours())
-                      .minute(selectedTime.getMinutes())
-                      .second(0)
-                      .millisecond(0);
-                    setMDateTime(merged.toISOString());
-                  }}
-                />
-              ) : null}
-              <TextInput
-                placeholder="Location"
-                placeholderTextColor={c.muted}
-                value={mLocation}
-                onChangeText={setMLocation}
-                style={{
-                  color: c.text,
-                  backgroundColor: '#00000010',
-                  padding: 10,
-                  borderRadius: 8,
-                  marginBottom: 8,
-                }}
-              />
-              <TextInput
-                placeholder="Tags (comma-separated)"
-                placeholderTextColor={c.muted}
-                value={mTagsCsv}
-                onChangeText={setMTagsCsv}
-                style={{
-                  color: c.text,
-                  backgroundColor: '#00000010',
-                  padding: 10,
-                  borderRadius: 8,
-                  marginBottom: 8,
-                }}
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-              <TextInput
-                placeholder="RSVP URL (optional)"
-                placeholderTextColor={c.muted}
-                value={mRsvp}
-                onChangeText={setMRsvp}
-                style={{
-                  color: c.text,
-                  backgroundColor: '#00000010',
-                  padding: 10,
-                  borderRadius: 8,
-                  marginBottom: 8,
-                }}
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-              <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
-                <ThreeDButton
-                  title={editEventId ? 'Update Event' : 'Create Event'}
-                  onPress={submitModal}
-                />
-                <ThreeDButton title="Cancel" onPress={() => setAddOpen(false)} />
-              </View>
-            </View>
-          </ScrollView>
-        </SafeAreaView>
-      </Modal>
+      <AddEditEventModal
+        visible={modalOpen}
+        initialEvent={modalEvent}
+        onClose={() => setModalOpen(false)}
+        onSaved={onRefresh}
+      />
       {/* Confirm Delete Modal */}
       <Modal
         visible={confirmDeleteOpen}
@@ -2503,6 +2702,6 @@ export default function Home() {
           </View>
         </View>
       </Modal>
-    </EventsContainer>
+    </SafeAreaView>
   );
 }

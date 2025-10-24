@@ -13,6 +13,7 @@ export interface Event {
   image_url?: string | null;
   image_urls?: string[] | null; // up to 3 image URLs (new multi-image support)
   date_time: string; // ISO string
+  end_time?: string | null; // ISO string (optional end time)
   location?: string | null;
   tags?: string[];
   rsvp_url?: string | null;

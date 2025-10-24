@@ -1,8 +1,8 @@
-import { Stack } from "expo-router";
+import { Stack } from 'expo-router';
 
 export default function OnboardingLayout() {
   return (
-    <Stack screenOptions={{ headerShown: false }}>
+    <Stack screenOptions={{ headerShown: true, headerTitle: 'Sign in' }}>
       <Stack.Screen name="welcome" />
       <Stack.Screen name="interests" />
       <Stack.Screen name="group" />

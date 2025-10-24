@@ -135,8 +135,17 @@ export const EventGridCard: React.FC<EventGridCardProps> = memo(
                 ) : null}
               </View>
               <Text style={{ color: c.muted, fontSize: 12 }} numberOfLines={1}>
-                {dayjs(event.date_time).format('MMM D • h:mm A')}{' '}
-                {event.location ? '• ' + event.location : ''}
+                {(() => {
+                  const start = dayjs(event.date_time);
+                  const end = (event as any).end_time ? dayjs((event as any).end_time) : null;
+                  const sameDay = end ? start.isSame(end, 'day') : true;
+                  const timePart = end
+                    ? sameDay
+                      ? `${start.format('MMM D • h:mm')}–${end.format('h:mm A')}`
+                      : `${start.format('MMM D • h:mm A')} → ${end.format('MMM D h:mm A')}`
+                    : `${start.format('MMM D • h:mm A')}`;
+                  return `${timePart}${event.location ? ' • ' + event.location : ''}`;
+                })()}
               </Text>
               {event.description ? (
                 <Text style={{ color: c.text, fontSize: 13 }} numberOfLines={2}>

@@ -1,4 +1,4 @@
-import React, { memo } from 'react';
+import React, { memo, useMemo } from 'react';
 import { View, Text, Pressable, Platform } from 'react-native';
 import { useThemeColors } from '@/theme/ThemeProvider';
 import EventImages from '@/components/EventImages';
@@ -92,12 +92,32 @@ export const EventRowCard: React.FC<EventRowCardProps> = memo(
                 </Text>
               </View>
               <Text style={{ color: c.muted, fontSize: 12, marginTop: 2 }} numberOfLines={1}>
-                {dayjs(event.date_time).format('MMM D • h:mm A')}{' '}
-                {event.location ? '• ' + event.location : ''}
+                {(() => {
+                  const start = dayjs(event.date_time);
+                  const end = (event as any).end_time ? dayjs((event as any).end_time) : null;
+                  const sameDay = end ? start.isSame(end, 'day') : true;
+                  const timePart = end
+                    ? sameDay
+                      ? `${start.format('MMM D • h:mm')}–${end.format('h:mm A')}`
+                      : `${start.format('MMM D • h:mm A')} → ${end.format('MMM D h:mm A')}`
+                    : `${start.format('MMM D • h:mm A')}`;
+                  return `${timePart}${event.location ? ' • ' + event.location : ''}`;
+                })()}
               </Text>
-              <Text style={{ color: c.muted, fontSize: 11, marginTop: 2 }} numberOfLines={1}>
-                {(event.tags ?? []).join(', ')}
-              </Text>
+              {(() => {
+                const snippet = useMemo(() => {
+                  const raw = (event.description ?? '').trim();
+                  if (!raw) return '';
+                  const parts = raw.split(/\s+/);
+                  const take = parts.slice(0, 14).join(' ');
+                  return parts.length > 14 ? take + '…' : take;
+                }, [event.description]);
+                return snippet ? (
+                  <Text style={{ color: c.muted, fontSize: 11, marginTop: 2 }} numberOfLines={1}>
+                    {snippet}
+                  </Text>
+                ) : null;
+              })()}
               {/* Actions row: score chip on the left, action icons on the right */}
               <View
                 style={{
