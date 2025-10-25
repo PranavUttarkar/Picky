@@ -19,9 +19,9 @@ export default function TabsLayout() {
   const { hasNewGroupDecisions, clearNotification: clearGroupDecisionNotification } =
     useGroupDecisionNotification();
 
-  // Clear notification when saved tab is accessed
+  // Clear saved notification when profile tab is accessed (badge moved to profile)
   useEffect(() => {
-    if (pathname === '/saved' && hasNewSavedItems) {
+    if (pathname === '/profile' && hasNewSavedItems) {
       clearNotification();
     }
   }, [pathname, hasNewSavedItems, clearNotification]);
@@ -33,12 +33,12 @@ export default function TabsLayout() {
     }
   }, [pathname, hasNewGroupDecisions, clearGroupDecisionNotification]);
 
-  // Custom saved tab icon with notification dot
-  const SavedTabIcon = useCallback(
+  // Custom profile tab icon with saved-notification dot
+  const ProfileTabIcon = useCallback(
     ({ color, size }: { color: string; size: number }) => {
       return (
         <View style={{ position: 'relative' }}>
-          <Ionicons name="bookmark" size={size} color={color} />
+          <Ionicons name="person" size={size} color={color} />
           {hasNewSavedItems && (
             <View
               style={{
@@ -165,6 +165,13 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="food"
+        options={{
+          title: '',
+          tabBarIcon: ({ color, size }) => <Ionicons name="fast-food" size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
         name="groups"
         options={{
           title: '',
@@ -181,19 +188,14 @@ export default function TabsLayout() {
       <Tabs.Screen name="group-decide" options={{ href: null }} />
       <Tabs.Screen name="groups/[id]/availability" options={{ href: null }} />
 
-      <Tabs.Screen
-        name="saved"
-        options={{
-          title: '',
-          tabBarIcon: SavedTabIcon,
-        }}
-      />
+      {/* Hide Saved tab from navbar but keep route navigable */}
+      <Tabs.Screen name="saved" options={{ href: null }} />
 
       <Tabs.Screen
         name="profile"
         options={{
           title: '',
-          tabBarIcon: ({ color, size }) => <Ionicons name="person" size={size} color={color} />,
+          tabBarIcon: ProfileTabIcon,
         }}
       />
       {/* Hidden route for viewing user's created events */}

@@ -1708,6 +1708,10 @@ export default function Home() {
   const { triggerNotification } = useSavedNotification();
   const isWide = width >= 900; // switch to grid on larger screens
   const columns = width >= 1280 ? 3 : isWide ? 2 : 1;
+  // Grid sizing: cap total grid width, keep equal columns within that bound
+  const GAP = 12;
+  const MAX_COL_WIDTH = 440; // slightly larger for event cards
+  const MAX_GRID_WIDTH = columns * MAX_COL_WIDTH + GAP * (columns - 1);
   const listRef = useRef<FlatList<Event>>(null);
   const viewabilityConfigRef = useRef({ itemVisiblePercentThreshold: 30 });
   const lastVisibleIndexRef = useRef(0);
@@ -2387,8 +2391,14 @@ export default function Home() {
         key={`layout-${columns}`}
         keyExtractor={(e: any) => String(e.id)}
         numColumns={columns}
-        columnWrapperStyle={columns > 1 ? { gap: 12 } : undefined}
-        contentContainerStyle={{ gap: 12, paddingBottom: 32 }}
+        columnWrapperStyle={columns > 1 ? { gap: GAP } : undefined}
+        contentContainerStyle={{
+          gap: 12,
+          paddingBottom: 32,
+          alignSelf: 'center',
+          maxWidth: MAX_GRID_WIDTH,
+          width: '100%',
+        }}
         ListHeaderComponent={filtersScrollable}
         refreshing={refreshing}
         onRefresh={onRefresh}
@@ -2435,7 +2445,7 @@ export default function Home() {
             </View>
           ) : null
         }
-        renderItem={({ item }) => {
+        renderItem={({ item, index }) => {
           const isOwner = currentUserId && (item as any).created_by === currentUserId;
           const cardProps = {
             event: item,
@@ -2451,9 +2461,18 @@ export default function Home() {
             isAdmin: isAdmin || !!isOwner,
             matchPercent: match(item.id, item.tags),
           } as const;
+          const total = filtered.length;
+          const rem = total % columns;
+          const isLastPartialRow = columns > 1 && rem !== 0 && index >= total - rem;
           if (columns > 1) {
             return (
-              <View style={{ flex: 1 }}>
+              <View
+                style={
+                  isLastPartialRow || total < columns
+                    ? { width: MAX_COL_WIDTH, flex: 0 }
+                    : { flex: 1 }
+                }
+              >
                 <EventGridCard {...cardProps} />
               </View>
             );

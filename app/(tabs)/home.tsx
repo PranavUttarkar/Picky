@@ -84,6 +84,20 @@ export default function HomeTab() {
             </View>
           </View>
 
+          {/* Discover Food Card */}
+          <View
+            style={[
+              styles.cardsContainer,
+              { maxWidth: containerMaxWidth, flexDirection: 'column' },
+            ]}
+          >
+            <MediaCard
+              image={require('../../assets/DiscoverFood.png')}
+              onPress={() => router.push('/food')}
+              accessibilityLabel="Discover food"
+            />
+          </View>
+
           {/* Cartoon-style persuasive blurb */}
           <View
             style={{

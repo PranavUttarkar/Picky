@@ -76,14 +76,24 @@ export const ThreeDCard: React.FC<{
 };
 
 export const ThreeDButton: React.FC<{
-  title: string;
+  title?: string;
   onPress?: () => void | Promise<void>;
   style?: ViewStyle;
   textStyle?: TextStyle;
   disabled?: boolean;
   gradient?: boolean;
   gradientColors?: readonly [string, string];
-}> = ({ title, onPress, style, textStyle, disabled, gradient = false, gradientColors }) => {
+  children?: React.ReactNode; // allow icon-only or custom content
+}> = ({
+  title,
+  onPress,
+  style,
+  textStyle,
+  disabled,
+  gradient = false,
+  gradientColors,
+  children,
+}) => {
   const { button, buttonText } = useThreeDStyles();
   if (gradient) {
     const colors = gradientColors ?? (['#34d399', '#22d3ee'] as const);
@@ -93,7 +103,7 @@ export const ThreeDButton: React.FC<{
         disabled={disabled}
         style={[{ borderRadius: 12 }, disabled ? { opacity: 0.6 } : null]}
         accessibilityRole="button"
-        accessibilityLabel={title}
+        accessibilityLabel={title || 'Button'}
       >
         <LinearGradient
           colors={colors}
@@ -101,7 +111,11 @@ export const ThreeDButton: React.FC<{
           end={{ x: 1, y: 1 }}
           style={[button, { backgroundColor: 'transparent' }, style]}
         >
-          <Text style={[{ color: '#001219', fontWeight: '800' }, textStyle]}>{title}</Text>
+          {children ? (
+            children
+          ) : (
+            <Text style={[{ color: '#001219', fontWeight: '800' }, textStyle]}>{title}</Text>
+          )}
         </LinearGradient>
       </Pressable>
     );
@@ -112,9 +126,9 @@ export const ThreeDButton: React.FC<{
       disabled={disabled}
       style={[button, disabled ? { opacity: 0.6 } : null, style]}
       accessibilityRole="button"
-      accessibilityLabel={title}
+      accessibilityLabel={title || 'Button'}
     >
-      <Text style={[buttonText, textStyle]}>{title}</Text>
+      {children ? <>{children}</> : <Text style={[buttonText, textStyle]}>{title}</Text>}
     </Pressable>
   );
 };

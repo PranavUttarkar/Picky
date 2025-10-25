@@ -41,6 +41,8 @@ export default function ImageGallery({
   onPressImage,
 }: ImageGalleryProps) {
   const clean = useMemo(() => (images || []).filter(Boolean), [images]);
+  // Maintain a local list that can drop images that fail to load
+  const [items, setItems] = useState<string[]>(clean);
   const [measuredWidth, setMeasuredWidth] = useState<number | null>(width ?? null);
   const scrollRef = useRef<ScrollView>(null);
   const [index, setIndex] = useState(0);
@@ -48,6 +50,12 @@ export default function ImageGallery({
 
   const w = measuredWidth ?? width ?? 0;
   const h = height ?? (w ? Math.round(w / (16 / 9)) : undefined);
+
+  // Keep items in sync if prop changes
+  useEffect(() => {
+    setItems(clean);
+    setIndex(0);
+  }, [clean.join('|')]);
 
   const onMomentumEnd = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -61,18 +69,18 @@ export default function ImageGallery({
 
   const scrollToIndex = useCallback(
     (i: number) => {
-      if (!w || !scrollRef.current || clean.length <= 0) return;
-      const bounded = ((i % clean.length) + clean.length) % clean.length;
+      if (!w || !scrollRef.current || items.length <= 0) return;
+      const bounded = ((i % items.length) + items.length) % items.length;
       scrollRef.current.scrollTo({ x: bounded * w, animated: true });
       setIndex(bounded);
     },
-    [w, clean.length],
+    [w, items.length],
   );
 
   // Autoplay when active (e.g., on web hover)
   useEffect(() => {
     const shouldAuto = autoPlayActive || (autoPlayOnHover && Platform.OS === 'web' && hovered);
-    if (!shouldAuto || !w || clean.length <= 1) return;
+    if (!shouldAuto || !w || items.length <= 1) return;
     const id = setInterval(() => {
       scrollToIndex(index + 1);
     }, Math.max(600, autoPlayIntervalMs));
@@ -82,13 +90,14 @@ export default function ImageGallery({
     autoPlayOnHover,
     hovered,
     w,
-    clean.length,
+    items.length,
     index,
     autoPlayIntervalMs,
     scrollToIndex,
   ]);
 
-  if (!clean.length) return null;
+  // If all images failed, render nothing
+  if (!items.length) return null;
 
   return (
     <Pressable
@@ -125,21 +134,47 @@ export default function ImageGallery({
           }}
           contentContainerStyle={{}}
         >
-          {clean.map((uri, i) =>
-            onPressImage ? (
-              <Pressable
-                key={`${uri}-${i}`}
-                onPress={() => onPressImage(i)}
-                style={{ width: w, height: h }}
-              >
-                <LazyImage uri={uri} width={w} height={h} borderRadius={0} />
+          {items.map((uri, i) => {
+            const shouldRender = Math.abs(i - index) <= 1; // render only current slide and neighbors
+            const key = `${uri}-${i}`;
+            const child = shouldRender ? (
+              <LazyImage
+                uri={uri}
+                width={w}
+                height={h}
+                borderRadius={0}
+                onError={() => {
+                  // Drop this URI from local list and advance if needed
+                  setItems((prev) => {
+                    const next = prev.filter((x, idx) => !(idx === i && x === uri));
+                    // Adjust index if we removed the current item or index is out of bounds
+                    if (next.length === 0) {
+                      setIndex(0);
+                    } else if (index >= next.length) {
+                      setIndex(next.length - 1);
+                      // snap scroll to new index
+                      setTimeout(() => scrollToIndex(next.length - 1), 0);
+                    } else if (i === index) {
+                      // move to the same index, which now points to the next item
+                      setTimeout(() => scrollToIndex(index), 0);
+                    }
+                    return next;
+                  });
+                }}
+              />
+            ) : (
+              <View style={{ width: w, height: h, backgroundColor: '#00000010' }} />
+            );
+            return onPressImage ? (
+              <Pressable key={key} onPress={() => onPressImage(i)} style={{ width: w, height: h }}>
+                {child}
               </Pressable>
             ) : (
-              <View key={`${uri}-${i}`} style={{ width: w, height: h }}>
-                <LazyImage uri={uri} width={w} height={h} borderRadius={0} />
+              <View key={key} style={{ width: w, height: h }}>
+                {child}
               </View>
-            ),
-          )}
+            );
+          })}
         </ScrollView>
       ) : (
         // Fallback blank box while measuring width
@@ -149,7 +184,7 @@ export default function ImageGallery({
       )}
 
       {/* Arrows */}
-      {showArrows && w && clean.length > 1 ? (
+      {showArrows && w && items.length > 1 ? (
         <View
           pointerEvents="box-none"
           style={{
@@ -192,7 +227,7 @@ export default function ImageGallery({
         </View>
       ) : null}
 
-      {showDots && clean.length > 1 ? (
+      {showDots && items.length > 1 ? (
         <View
           style={{
             position: 'absolute',
@@ -203,9 +238,9 @@ export default function ImageGallery({
             justifyContent: 'center',
             gap: 6,
           }}
-          accessibilityLabel={`Image ${index + 1} of ${clean.length}`}
+          accessibilityLabel={`Image ${index + 1} of ${items.length}`}
         >
-          {clean.map((_, i) => (
+          {items.map((_, i) => (
             <View
               key={i}
               style={{

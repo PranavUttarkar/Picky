@@ -30,8 +30,8 @@ import PollDeadlinePicker from '@/components/PollDeadlinePicker';
 
 export default function NewPollScreen() {
   const c = useThemeColors();
-  const params = useLocalSearchParams<{ groupId?: string; eventId?: string }>();
-  const [mode, setMode] = useState<'events' | 'custom'>('events');
+  const params = useLocalSearchParams<{ groupId?: string; eventId?: string; texts?: string }>();
+  const [mode, setMode] = useState<'events' | 'custom'>(() => (params.texts ? 'custom' : 'events'));
   const [groups, setGroups] = useState<any[]>([]);
   const [groupId, setGroupId] = useState<number | null>(
     params.groupId ? Number(params.groupId) : null,
@@ -49,7 +49,15 @@ export default function NewPollScreen() {
   const [deadlineAt, setDeadlineAt] = useState<string | null>(null);
   // Custom poll state
   const [customInput, setCustomInput] = useState('');
-  const [customOptions, setCustomOptions] = useState<string[]>([]);
+  const [customOptions, setCustomOptions] = useState<string[]>(() => {
+    try {
+      const t = params.texts ? JSON.parse(String(params.texts)) : [];
+      if (Array.isArray(t)) return t.map((x) => String(x)).filter((s) => s.trim().length > 0);
+      return [];
+    } catch {
+      return [];
+    }
+  });
 
   useEffect(() => {
     let mounted = true;

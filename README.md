@@ -13,6 +13,7 @@ Tech stack
 - `expo` + `react-native` + `expo-router`
 - `@supabase/supabase-js` for auth and data
 - `dayjs` for date/time
+ - Optional image proxy/caching helper to avoid 429s from third‑party hosts
 
 Project structure
 - `app/` routes (expo-router)
@@ -78,6 +79,9 @@ npm i
 ```
 EXPO_PUBLIC_SUPABASE_URL=your-project-url
 EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+# Optional: point to your deployed image proxy to cache remote images and avoid 429.
+# If not set, the app will use direct image URLs (no public fallback proxy).
+EXPO_PUBLIC_IMAGE_PROXY_BASE=https://your-vercel-app.vercel.app/api/image-proxy
 ```
 
 3) Apply database schema
@@ -233,6 +237,53 @@ Then serve the `dist` folder with any static server (for example using `npx serv
 - 404 on refresh of nested route: missing catch‑all route → ensure `vercel.json` has the routes array with `{ "handle": "filesystem" }` followed by the wildcard mapping.
 - Wrong output folder (empty deploy): make sure `distDir` matches the folder produced by Expo export (`dist`).
 - Stale assets after deploy: Vercel caches aggressively; force a redeploy or append a cache-busting query parameter during testing.
+
+### Image proxy to avoid 429 (Too Many Requests)
+
+If you reference images hosted on third‑party sites (e.g., Google user content), those hosts may rate‑limit hotlinking, causing images to fail with 429 errors when many load at once. This app includes a small helper that can route non‑first‑party image URLs through a cache/proxy:
+
+- Client uses `EXPO_PUBLIC_IMAGE_PROXY_BASE` if set (e.g., a Vercel serverless function at `/api/image-proxy`).
+- If not set, the app does NOT proxy and uses original URLs (we removed public fallback proxies to avoid unexpected 404s).
+
+To enable your own proxy on Vercel:
+1) Deploy this repo to Vercel (already configured for static web). The `/api/image-proxy.ts` function will be detected automatically.
+2) Set `EXPO_PUBLIC_IMAGE_PROXY_BASE` in Vercel Project Settings → Environment Variables to your deployment URL, e.g. `https://your-app.vercel.app/api/image-proxy`.
+3) Rebuild and redeploy. The app will start fetching third‑party images via the proxy with CDN cache headers to reduce repeated upstream requests.
+
+Notes:
+- First‑party images served from Supabase Storage (`*.supabase.co`) are not proxied.
+- Data URLs (`data:image/*`) are not proxied.
+- The proxy sets `Cache-Control: s-maxage=86400, stale-while-revalidate=86400` so images are cached at the edge.
+
+### Mirror restaurant images into Supabase (recommended)
+
+To remove third‑party rate limits entirely, mirror all restaurant images into your Supabase Storage and rewrite URLs in the `restaurants` table. A ready‑to‑run script is included.
+
+Prereqs
+- Node 18+
+- Environment variables:
+	- `SUPABASE_URL=https://<your-project>.supabase.co`
+	- `SUPABASE_SERVICE_ROLE_KEY=...` (service role key; keep it secret)
+
+Run (dry run first):
+
+```powershell
+# Show what would be uploaded without changing DB
+npm run ingest:restaurant-images -- --dry --limit=200
+
+# Real run (uploads + updates rows)
+npm run ingest:restaurant-images -- --concurrency=3 --bucket=restaurant-images
+```
+
+What it does
+- Iterates rows in `restaurants` in batches.
+- For each of `main_image`, `image_1..image_3` that points to an external host (not `*.supabase.co`), it fetches the image, uploads to Storage bucket (default: `restaurant-images`) at path `place_id/<field>.<ext>`, and then updates the row with the public URL.
+- Skips images that are already first‑party or fail to fetch.
+
+Notes
+- The script creates the bucket if missing (public read). You can rename the bucket via `--bucket=`.
+- Use `--limit=` to cap rows during testing.
+- The script uses a small concurrency to be gentle with upstream hosts; tweak with `--concurrency=`.
 
 ### Custom Domains & HTTPS
 Once verified, attach your custom domain in Vercel. HTTPS is automatic; no extra configuration needed for SPA routing.

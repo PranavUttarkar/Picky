@@ -73,11 +73,19 @@ export default function Profile() {
   // Normalized tag list state
   const [tags, setTags] = useState<string[]>([]);
   const [newTagInput, setNewTagInput] = useState('');
+  // Food interests (separate from generic interests)
+  const [foodTags, setFoodTags] = useState<string[]>([]);
+  const [foodNewInput, setFoodNewInput] = useState('');
   const [loadingInterests, setLoadingInterests] = useState(false);
+  const [loadingFoodInterests, setLoadingFoodInterests] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [savingFood, setSavingFood] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
+  const [saveFoodMsg, setSaveFoodMsg] = useState<string | null>(null);
   const lastSavedRef = useRef<string[]>([]);
+  const lastSavedFoodRef = useRef<string[]>([]);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const debounceFoodRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -99,6 +107,18 @@ export default function Profile() {
         setTags(names);
         lastSavedRef.current = names;
         setLoadingInterests(false);
+
+        // Load food interests
+        setLoadingFoodInterests(true);
+        const { data: fdata } = await supabase
+          .from('user_food_interests')
+          .select('names')
+          .eq('user_id', user.id)
+          .maybeSingle();
+        const fnames: string[] = ((fdata?.names as any) ?? []).map((n: string) => n.toLowerCase());
+        setFoodTags(fnames);
+        lastSavedFoodRef.current = fnames;
+        setLoadingFoodInterests(false);
       }
     })();
     const { data: sub } = supabase.auth.onAuthStateChange((_evt, sess) => {
@@ -117,6 +137,19 @@ export default function Profile() {
           setTags(names);
           lastSavedRef.current = names;
           setLoadingInterests(false);
+
+          setLoadingFoodInterests(true);
+          const { data: fdata } = await supabase
+            .from('user_food_interests')
+            .select('names')
+            .eq('user_id', sess.user!.id)
+            .maybeSingle();
+          const fnames: string[] = ((fdata?.names as any) ?? []).map((n: string) =>
+            n.toLowerCase(),
+          );
+          setFoodTags(fnames);
+          lastSavedFoodRef.current = fnames;
+          setLoadingFoodInterests(false);
         })();
       } else {
         setInterestsCsv('');
@@ -157,6 +190,23 @@ export default function Profile() {
     setTags((prev) => prev.filter((x) => x !== t));
   }, []);
 
+  const addFoodTagsFromInput = useCallback(
+    (raw: string) => {
+      if (!raw) return;
+      const split = raw
+        .split(/[\n,]/)
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean);
+      if (!split.length) return;
+      setFoodTags((prev) => normalized([...prev, ...split]));
+    },
+    [normalized],
+  );
+
+  const removeFoodTag = useCallback((t: string) => {
+    setFoodTags((prev) => prev.filter((x) => x !== t));
+  }, []);
+
   const saveInterests = useCallback(async () => {
     const user = (await supabase.auth.getUser()).data.user;
     if (!user) {
@@ -178,6 +228,27 @@ export default function Profile() {
     setSaving(false);
   }, [normalized, tags]);
 
+  const saveFoodInterests = useCallback(async () => {
+    const user = (await supabase.auth.getUser()).data.user;
+    if (!user) {
+      router.push('/onboarding/welcome');
+      return;
+    }
+    const arr = normalized(foodTags);
+    setSavingFood(true);
+    setSaveFoodMsg(null);
+    const { error } = await supabase
+      .from('user_food_interests')
+      .upsert({ user_id: user.id, names: arr });
+    if (error) {
+      setSaveFoodMsg(error.message);
+    } else {
+      setSaveFoodMsg(`Saved ${arr.length} interest${arr.length === 1 ? '' : 's'}.`);
+      lastSavedFoodRef.current = arr;
+    }
+    setSavingFood(false);
+  }, [normalized, foodTags]);
+
   // Debounced autosave when tags change, avoiding initial hydration saves
   useEffect(() => {
     // Skip while loading initial interests
@@ -196,6 +267,22 @@ export default function Profile() {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
   }, [tags, loadingInterests, normalized, saveInterests]);
+
+  // Debounced autosave for food interests
+  useEffect(() => {
+    if (loadingFoodInterests) return;
+    const current = normalized(foodTags);
+    const prev = lastSavedFoodRef.current;
+    const equal = current.length === prev.length && current.every((v, i) => v === prev[i]);
+    if (equal) return;
+    if (debounceFoodRef.current) clearTimeout(debounceFoodRef.current);
+    debounceFoodRef.current = setTimeout(() => {
+      void saveFoodInterests();
+    }, 700);
+    return () => {
+      if (debounceFoodRef.current) clearTimeout(debounceFoodRef.current);
+    };
+  }, [foodTags, loadingFoodInterests, normalized, saveFoodInterests]);
 
   // Memoized handlers to keep TextInput from causing broad re-renders
   const handleChangeText = useCallback(
@@ -342,7 +429,101 @@ export default function Profile() {
               </View>
             ) : null}
 
-            {/* Saved events button moved here (swap with deprecated Save Interests) */}
+            {/* Food Interests Editor */}
+            <View style={{ marginTop: 24 }}>
+              <Text style={{ color: c.text, fontSize: 18, fontWeight: '700', marginBottom: 6 }}>
+                Your food interests
+              </Text>
+              <Text style={{ color: c.muted, fontSize: 12, marginBottom: 8 }}>
+                Add cuisines or food tags separated by commas. Press Enter or type a comma to make a
+                tag.
+              </Text>
+              {loadingFoodInterests ? (
+                <View
+                  style={{
+                    backgroundColor: '#00000015',
+                    padding: 16,
+                    borderRadius: 12,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 8,
+                  }}
+                >
+                  <ActivityIndicator />
+                  <Text style={{ color: c.muted }}>Loading food interests…</Text>
+                </View>
+              ) : (
+                <View>
+                  <TagList tags={foodTags} onRemove={removeFoodTag} />
+                  <TextInput
+                    value={foodNewInput}
+                    onChangeText={(val) => {
+                      if (/[\n,]/.test(val)) {
+                        addFoodTagsFromInput(val);
+                        setFoodNewInput('');
+                      } else setFoodNewInput(val);
+                    }}
+                    onSubmitEditing={(e: any) => {
+                      const text = e?.nativeEvent?.text ?? foodNewInput;
+                      if (text) {
+                        addFoodTagsFromInput(text);
+                        setFoodNewInput('');
+                      }
+                    }}
+                    placeholder={
+                      foodTags.length ? 'Add another cuisine' : 'Add a cuisine (e.g. mexican)'
+                    }
+                    placeholderTextColor={c.muted}
+                    style={{
+                      backgroundColor: '#00000015',
+                      color: c.text,
+                      borderRadius: 12,
+                      padding: 12,
+                      fontSize: 14,
+                    }}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    blurOnSubmit={false}
+                    returnKeyType="done"
+                  />
+                  {foodTags.length ? (
+                    <Pressable
+                      onPress={() => setFoodTags([])}
+                      style={{ marginTop: 8, alignSelf: 'flex-start', padding: 4 }}
+                      accessibilityLabel="Clear all food interests"
+                    >
+                      <Text style={{ color: c.muted, fontSize: 12 }}>Clear all</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+              )}
+              {saveFoodMsg ? (
+                <Text
+                  style={{
+                    color: saveFoodMsg.startsWith('Saved') ? c.muted : '#ff6666',
+                    marginTop: 8,
+                  }}
+                >
+                  {saveFoodMsg}
+                </Text>
+              ) : null}
+              {savingFood ? (
+                <View
+                  style={{
+                    marginTop: 10,
+                    backgroundColor: '#00000015',
+                    paddingVertical: 8,
+                    paddingHorizontal: 12,
+                    borderRadius: 10,
+                    alignSelf: 'flex-start',
+                  }}
+                >
+                  <Text style={{ color: c.muted }}>Saving…</Text>
+                </View>
+              ) : null}
+            </View>
+
+            {/* Saved events link lives here now */}
             <Pressable
               onPress={() => router.push('/(tabs)/saved')}
               style={{

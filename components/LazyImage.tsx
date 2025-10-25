@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Image,
@@ -9,6 +9,7 @@ import {
   StyleProp,
   ImageStyle,
 } from 'react-native';
+import { proxiedImageUrl } from '@/utils/imageProxy';
 
 interface LazyImageProps {
   uri: string;
@@ -19,6 +20,8 @@ interface LazyImageProps {
   resizeMode?: ImageResizeMode;
   style?: StyleProp<ImageStyle>;
   accessibilityLabel?: string;
+  onError?: () => void;
+  onLoad?: () => void;
 }
 
 /**
@@ -34,11 +37,20 @@ const LazyImageBase: React.FC<LazyImageProps> = ({
   style,
   resizeMode = 'cover',
   accessibilityLabel,
+  onError,
+  onLoad,
 }) => {
   const [loaded, setLoaded] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const proxied = useMemo(() => {
+    // Try to pass numeric width/height when available to help proxy resize & cache
+    const wNum = typeof width === 'number' ? width : undefined;
+    const hNum = typeof height === 'number' ? height : undefined;
+    return proxiedImageUrl(uri, wNum, hNum);
+  }, [uri, width, height]);
   return (
     <View style={{ width, height, position: 'relative', borderRadius, overflow: 'hidden' }}>
-      {!loaded ? (
+      {!loaded && !failed ? (
         <View
           style={{
             position: 'absolute',
@@ -51,21 +63,30 @@ const LazyImageBase: React.FC<LazyImageProps> = ({
           <ActivityIndicator size="small" color={Platform.OS === 'ios' ? '#888' : '#ccc'} />
         </View>
       ) : null}
-      <Image
-        source={{ uri }}
-        onLoadEnd={() => setLoaded(true)}
-        resizeMode={resizeMode}
-        accessibilityLabel={accessibilityLabel}
-        style={[
-          {
-            width: '100%',
-            height: '100%',
-            opacity: loaded ? 1 : 0,
-            borderRadius,
-          },
-          style as any,
-        ]}
-      />
+      {!failed ? (
+        <Image
+          source={{ uri: proxied }}
+          onError={() => {
+            setFailed(true);
+            onError?.();
+          }}
+          onLoad={() => {
+            onLoad?.();
+          }}
+          onLoadEnd={() => setLoaded(true)}
+          resizeMode={resizeMode}
+          accessibilityLabel={accessibilityLabel}
+          style={[
+            {
+              width: '100%',
+              height: '100%',
+              opacity: loaded ? 1 : 0,
+              borderRadius,
+            },
+            style as any,
+          ]}
+        />
+      ) : null}
     </View>
   );
 };
