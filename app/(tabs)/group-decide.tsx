@@ -15,7 +15,8 @@ import { router, useRootNavigationState } from 'expo-router';
 import { supabase } from '@/services/supabase';
 import { getMyGroups } from '@/services/groups';
 import { getTopGroupMatches } from '@/services/events';
-import { createPollWithOptions } from '@/services/polls';
+import { getTopGroupRestaurantMatches } from '@/services/food';
+import { createPollWithOptions, createTextPoll } from '@/services/polls';
 import MediaCard from '@/components/MediaCard';
 
 export default function GroupDecideStart() {
@@ -61,23 +62,46 @@ export default function GroupDecideStart() {
     if (creating != null) return;
     try {
       setCreating(groupId);
-      // Fetch top 7 recommendations for the group
-      const recs = await getTopGroupMatches(groupId, 7);
-      const eventIds = recs.map((e) => e.id);
-      if (eventIds.length < 1) {
-        Alert.alert(
-          'No suggestions',
-          'We could not find recommended events for this group yet. Try browsing and saving some events first.',
-        );
+      let pollId: number | null = null;
+      if (decisionType === 'events') {
+        // Fetch top 7 event recommendations and create rating poll
+        const recs = await getTopGroupMatches(groupId, 7);
+        const eventIds = recs.map((e) => e.id);
+        if (eventIds.length < 1) {
+          Alert.alert(
+            'No suggestions',
+            'We could not find recommended events for this group yet. Try browsing and saving some events first.',
+          );
+          setCreating(null);
+          return;
+        }
+        pollId = await createPollWithOptions(groupId, eventIds, {
+          title: 'Decide: Events',
+          deadlineAt: null,
+          mode: 'rating',
+        });
+      } else if (decisionType === 'food') {
+        // Fetch top 7 restaurant recommendations and create a text poll.
+        // Encode place_id in the text so the poll details screen can render rich restaurant cards and enable swipe.
+        const recs = await getTopGroupRestaurantMatches(groupId, 7);
+        const texts = recs.map((r) => `FOOD|${r.id}`);
+        if (texts.length < 1) {
+          Alert.alert(
+            'No suggestions',
+            'We could not find recommended restaurants for this group yet. Try browsing and saving some places first.',
+          );
+          setCreating(null);
+          return;
+        }
+        pollId = await createTextPoll(groupId, texts, {
+          title: 'Decide: Food',
+          deadlineAt: null,
+        });
+      } else {
+        Alert.alert('Coming soon', 'Activities group decide is not available yet.');
         setCreating(null);
         return;
       }
-      // Create a new poll in rating mode (swipe UX uses ratings under the hood)
-      const pollId = await createPollWithOptions(groupId, eventIds, {
-        title: 'Group Decide',
-        deadlineAt: null,
-        mode: 'rating',
-      });
       if (mountedRef.current && navReady) {
         router.replace(`/polls/${pollId}`);
       }
@@ -117,8 +141,8 @@ export default function GroupDecideStart() {
                   key: 'food' as const,
                   label: 'Food',
                   image: require('../../assets/DecideFood.png'),
-                  disabled: true,
-                  caption: 'Coming Soon',
+                  disabled: false,
+                  caption: undefined as string | undefined,
                 },
                 {
                   key: 'activities' as const,

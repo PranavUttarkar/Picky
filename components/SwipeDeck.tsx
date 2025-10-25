@@ -18,6 +18,7 @@ type SwipeDeckProps<T> = {
   overlayLabels?: OverlayLabels;
   stackDepth?: number; // number of cards to render in stack
   enableHaptics?: boolean;
+  activeCardOutlineRadius?: number; // border radius for the animated outline around the active card
 };
 
 const { width, height } = Dimensions.get('window');
@@ -33,6 +34,7 @@ export default function SwipeDeck<T = any>({
   onSwipeUp,
   overlayLabels,
   stackDepth = 3,
+  activeCardOutlineRadius = 16,
 }: SwipeDeckProps<T>) {
   const [index, setIndex] = useState(0);
   const position = useRef(new Animated.ValueXY()).current;
@@ -98,6 +100,22 @@ export default function SwipeDeck<T = any>({
   const superOpacity = position.y.interpolate({
     inputRange: [-SWIPE_THRESHOLD_Y, 0],
     outputRange: [1, 0],
+    extrapolate: 'clamp',
+  });
+  // Animated outline widths for card highlighting based on swipe direction
+  const likeOutlineWidth = position.x.interpolate({
+    inputRange: [0, SWIPE_THRESHOLD_X],
+    outputRange: [0, 3],
+    extrapolate: 'clamp',
+  });
+  const nopeOutlineWidth = position.x.interpolate({
+    inputRange: [-SWIPE_THRESHOLD_X, 0],
+    outputRange: [3, 0],
+    extrapolate: 'clamp',
+  });
+  const superOutlineWidth = position.y.interpolate({
+    inputRange: [-SWIPE_THRESHOLD_Y, 0],
+    outputRange: [3, 0],
     extrapolate: 'clamp',
   });
 
@@ -214,6 +232,40 @@ export default function SwipeDeck<T = any>({
           >
             <View>
               {renderCard(currentItem, index)}
+              {/* Animated card outlines for like/nope/super */}
+              <Animated.View
+                pointerEvents="none"
+                style={[
+                  styles.outline,
+                  {
+                    borderRadius: activeCardOutlineRadius,
+                    borderColor: overlayLabels?.like?.color || '#22c55e',
+                    borderWidth: likeOutlineWidth,
+                  },
+                ]}
+              />
+              <Animated.View
+                pointerEvents="none"
+                style={[
+                  styles.outline,
+                  {
+                    borderRadius: activeCardOutlineRadius,
+                    borderColor: overlayLabels?.nope?.color || '#ef4444',
+                    borderWidth: nopeOutlineWidth,
+                  },
+                ]}
+              />
+              <Animated.View
+                pointerEvents="none"
+                style={[
+                  styles.outline,
+                  {
+                    borderRadius: activeCardOutlineRadius,
+                    borderColor: overlayLabels?.super?.color || '#f59e0b',
+                    borderWidth: superOutlineWidth,
+                  },
+                ]}
+              />
               {/* Overlays */}
               <Animated.View
                 style={[
@@ -276,13 +328,20 @@ export default function SwipeDeck<T = any>({
 
 const styles = StyleSheet.create({
   container: { flex: 1, width: '100%', alignItems: 'center', justifyContent: 'center' },
+  outline: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+  },
   badge: {
     position: 'absolute',
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderRadius: 8,
     borderWidth: 2,
-    backgroundColor: '#00000020',
+    backgroundColor: '#00000099',
   },
   badgeText: { fontWeight: '900', fontSize: 16 },
 });

@@ -37,6 +37,12 @@ import { getTopGroupMatches, getTopUserMatches } from '@/services/events';
 import SwipeDeck from '@/components/SwipeDeck';
 import * as Haptics from 'expo-haptics';
 import EventRowCard from '@/components/EventRowCard';
+import LazyImage from '@/components/LazyImage';
+import Chip from '@/components/Chip';
+import dayjs from 'dayjs';
+import type { Restaurant } from '@/types/models';
+import { getRestaurantById, restaurantImages } from '@/services/food';
+import { Ionicons } from '@expo/vector-icons';
 
 export default function PollDetails() {
   const c = useThemeColors();
@@ -67,8 +73,12 @@ export default function PollDetails() {
   const [addingMany, setAddingMany] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [closeOpen, setCloseOpen] = useState(false);
+  const [closing, setClosing] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
   const [mode, setMode] = useState<'list' | 'swipe'>('swipe');
+  // Map text option id -> restaurant details (for FOOD|<place_id> encoded options)
+  const [foodOptions, setFoodOptions] = useState<Record<number, Restaurant | null>>({});
   // When mode switches to swipe or poll id changes, set stableOptions from current options
   useEffect(() => {
     if (mode === 'swipe') {
@@ -230,11 +240,54 @@ export default function PollDetails() {
   }, [pollId]);
 
   const totalVotes = useMemo(() => options.reduce((sum, o) => sum + (o.votes ?? 0), 0), [options]);
+  const parseFoodToken = (t: string): string | null => {
+    const s = (t || '').trim();
+    if (!s.startsWith('FOOD|')) return null;
+    const parts = s.split('|');
+    if (parts.length < 2) return null;
+    const placeId = parts[1]?.trim();
+    return placeId || null;
+  };
   const hasTextOptions = useMemo(() => options.some((o) => o.kind === 'text'), [options]);
+  const hasFoodTextOptions = useMemo(
+    () => options.some((o) => o.kind === 'text' && parseFoodToken((o as any).text)),
+    [options],
+  );
+  const hasNonFoodText = useMemo(
+    () => options.some((o) => o.kind === 'text' && !parseFoodToken((o as any).text)),
+    [options],
+  );
+  // Only force list mode when there are non-food free-text options. Food text options support swipe.
   useEffect(() => {
-    if (hasTextOptions) setMode('list');
+    if (hasNonFoodText) setMode('list');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasTextOptions]);
+  }, [hasNonFoodText]);
+
+  // Prefetch restaurant details for food text options
+  useEffect(() => {
+    (async () => {
+      const foodTexts = options.filter((o) => o.kind === 'text');
+      const tasks: Array<Promise<void>> = [];
+      for (const o of foodTexts) {
+        const text = (o as any).text as string;
+        const pid = parseFoodToken(text);
+        if (!pid) continue;
+        if (foodOptions[o.id] !== undefined) continue; // already loaded
+        tasks.push(
+          (async () => {
+            try {
+              const r = await getRestaurantById(pid);
+              setFoodOptions((prev) => ({ ...prev, [o.id]: r ?? null }));
+            } catch {
+              setFoodOptions((prev) => ({ ...prev, [o.id]: null }));
+            }
+          })(),
+        );
+      }
+      if (tasks.length) await Promise.allSettled(tasks);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [options.map((o) => (o.kind === 'text' ? (o as any).text : '')).join('|')]);
   const leader = useMemo(() => suggestLeader(options), [options]);
   const progressPct = useMemo(
     () => (totalMembers ? Math.round((responded * 100) / totalMembers) : 0),
@@ -324,10 +377,14 @@ export default function PollDetails() {
 
   const onClose = async () => {
     try {
+      setClosing(true);
       await closePoll(pollId);
       await load();
     } catch (e: any) {
       Alert.alert('Close failed', e.message ?? String(e));
+    } finally {
+      setClosing(false);
+      setCloseOpen(false);
     }
   };
 
@@ -395,7 +452,13 @@ export default function PollDetails() {
       <View style={{ flex: 1, padding: 16 }}>
         <GradientHeader
           title={poll?.title || `Poll #${pollId}`}
-          subtitle={poll?.is_active ? 'Open' : 'Closed'}
+          subtitle={
+            poll?.is_active
+              ? poll?.mode === 'rating'
+                ? 'Swipe right to like, left for no, up for love.'
+                : 'Open'
+              : 'Closed'
+          }
           shareUrl={'https://usepicky.app'}
           onBack={() => {
             const gid = poll?.group_id;
@@ -404,96 +467,108 @@ export default function PollDetails() {
           }}
           backLabel="Back to group"
         />
-        <Text style={{ color: c.muted, marginTop: 6 }}>
-          {poll?.is_active ? 'Open' : 'Closed'}
-          {poll?.deadline_at ? ` • closes ${new Date(poll.deadline_at).toLocaleString()}` : ''}
-        </Text>
-
-        {/* Response progress */}
-        {totalMembers > 0 ? (
-          <View style={{ backgroundColor: c.card, padding: 10, borderRadius: 12, marginTop: 10 }}>
-            <Text style={{ color: c.text, fontWeight: '700' }}>
-              {responded}/{totalMembers} responded ({progressPct}%)
-            </Text>
-            <View
-              style={{
-                height: 6,
-                backgroundColor: c.background,
-                borderRadius: 6,
-                marginTop: 6,
-                overflow: 'hidden',
-              }}
-            >
-              <View style={{ width: `${progressPct}%`, backgroundColor: c.primary, flex: 1 }} />
-            </View>
-            {waiting && waiting.length > 0 ? (
-              <Text style={{ color: c.muted, marginTop: 6 }}>
-                Waiting on {waiting.length} {waiting.length === 1 ? 'person' : 'people'}
-              </Text>
-            ) : null}
-          </View>
-        ) : null}
-
-        {poll?.is_active ? (
-          <Pressable
-            onPress={onClose}
-            style={{
-              alignSelf: 'flex-start',
-              backgroundColor: c.card,
-              paddingVertical: 8,
-              paddingHorizontal: 12,
-              borderRadius: 10,
-              marginTop: 12,
-            }}
-          >
-            <Text style={{ color: c.text, fontWeight: '700' }}>Close Poll</Text>
-          </Pressable>
-        ) : null}
-        {/* Delete poll button (always visible to members; server enforces auth) */}
-        <Pressable
-          onPress={() => setDeleteOpen(true)}
+        {/* Task bar: responded count, mode toggle icons, close & delete icons */}
+        <View
           style={{
-            alignSelf: 'flex-start',
-            backgroundColor: c.background,
-            paddingVertical: 8,
+            backgroundColor: c.card,
+            paddingVertical: 10,
             paddingHorizontal: 12,
-            borderRadius: 10,
-            marginTop: 12,
+            borderRadius: 12,
+            marginTop: 10,
           }}
         >
-          <Text style={{ color: '#ff5555', fontWeight: '700' }}>Delete Poll</Text>
-        </Pressable>
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 8,
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Text style={{ color: c.text, fontWeight: '800' }}>
+                {responded}/{totalMembers}
+              </Text>
+              {waiting && waiting.length > 0 ? (
+                <Text style={{ color: c.muted, fontSize: 12 }}>Waiting on {waiting.length}</Text>
+              ) : null}
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              {/* Mode toggle icons */}
+              <Pressable
+                onPress={() => setMode('swipe')}
+                disabled={hasTextOptions && hasNonFoodText}
+                style={{
+                  backgroundColor:
+                    mode === 'swipe' && !(hasTextOptions && hasNonFoodText)
+                      ? c.primary
+                      : c.background,
+                  paddingVertical: 6,
+                  paddingHorizontal: 10,
+                  borderRadius: 8,
+                }}
+                accessibilityLabel="Swipe mode"
+              >
+                <Ionicons
+                  name="swap-horizontal-outline"
+                  size={18}
+                  color={
+                    mode === 'swipe' && !(hasTextOptions && hasNonFoodText) ? c.background : c.text
+                  }
+                />
+              </Pressable>
+              <Pressable
+                onPress={() => setMode('list')}
+                style={{
+                  backgroundColor: mode === 'list' ? c.primary : c.background,
+                  paddingVertical: 6,
+                  paddingHorizontal: 10,
+                  borderRadius: 8,
+                }}
+                accessibilityLabel="List mode"
+              >
+                <Ionicons
+                  name="list-outline"
+                  size={18}
+                  color={mode === 'list' ? c.background : c.text}
+                />
+              </Pressable>
+              {/* Close poll icon */}
+              {poll?.is_active ? (
+                <Pressable
+                  onPress={() => setCloseOpen(true)}
+                  style={{
+                    backgroundColor: c.background,
+                    paddingVertical: 6,
+                    paddingHorizontal: 10,
+                    borderRadius: 8,
+                  }}
+                  accessibilityLabel="Close poll"
+                >
+                  <Ionicons name="close-circle-outline" size={20} color={c.text} />
+                </Pressable>
+              ) : null}
+              {/* Delete poll icon */}
+              <Pressable
+                onPress={() => setDeleteOpen(true)}
+                style={{
+                  backgroundColor: c.background,
+                  paddingVertical: 6,
+                  paddingHorizontal: 10,
+                  borderRadius: 8,
+                }}
+                accessibilityLabel="Delete poll"
+              >
+                <Ionicons name="trash-outline" size={20} color="#ff5555" />
+              </Pressable>
+            </View>
+          </View>
+        </View>
 
         {/* Mode toggle and Swipe deck */}
-        {options.length > 0 ? (
-          <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
-            <Pressable
-              onPress={() => setMode('swipe')}
-              style={{
-                backgroundColor: mode === 'swipe' && !hasTextOptions ? c.primary : c.background,
-                paddingVertical: 6,
-                paddingHorizontal: 10,
-                borderRadius: 8,
-              }}
-              disabled={hasTextOptions}
-            >
-              <Text style={{ color: c.text, fontWeight: '700' }}>Swipe</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => setMode('list')}
-              style={{
-                backgroundColor: mode === 'list' ? c.primary : c.background,
-                paddingVertical: 6,
-                paddingHorizontal: 10,
-                borderRadius: 8,
-              }}
-            >
-              <Text style={{ color: c.text, fontWeight: '700' }}>List</Text>
-            </Pressable>
-          </View>
-        ) : null}
+        {/* Mode toggle row moved into task bar above */}
 
-        {mode === 'swipe' && options.length > 0 && !hasTextOptions ? (
+        {mode === 'swipe' && options.length > 0 && !(hasTextOptions && hasNonFoodText) ? (
           <View style={{ flex: 1, marginTop: 16 }}>
             {/* Per-user progress indicator */}
             {poll?.mode === 'rating' ? (
@@ -501,21 +576,7 @@ export default function PollDetails() {
                 You’ve rated {Math.min(myRatedCount, totalOptionsCount)}/{totalOptionsCount}
               </Text>
             ) : null}
-            {/* Swipe tips */}
-            <View
-              style={{
-                backgroundColor: c.card,
-                borderRadius: 10,
-                padding: 8,
-                borderWidth: 1,
-                borderColor: '#00000020',
-                marginBottom: 8,
-              }}
-            >
-              <Text style={{ color: c.text, fontSize: 12 }}>
-                Swipe right to like, left for no, up for love.
-              </Text>
-            </View>
+            {/* Tips moved to header subtitle/task bar to keep swipe area clean */}
             {!iAmDone ? (
               <SwipeDeck
                 data={stableOptions ?? options}
@@ -525,17 +586,13 @@ export default function PollDetails() {
                     style={{
                       backgroundColor: c.card,
                       borderRadius: 16,
-                      padding: 12,
+                      padding: 10,
                       width: '100%',
                       position: 'relative',
+                      alignSelf: 'center',
+                      maxWidth: 480,
                     }}
                   >
-                    {item.kind === 'event' && item.event?.image_url ? (
-                      <Image
-                        source={{ uri: item.event.image_url }}
-                        style={{ width: '100%', height: 240, borderRadius: 12, marginBottom: 8 }}
-                      />
-                    ) : null}
                     {/* Crown for leader: tilted top-right overlay */}
                     {leader && leader.id === item.id ? (
                       <View
@@ -548,6 +605,7 @@ export default function PollDetails() {
                           paddingHorizontal: 8,
                           paddingVertical: 4,
                           borderRadius: 999,
+                          zIndex: 5,
                         }}
                         pointerEvents="none"
                         accessibilityElementsHidden
@@ -556,28 +614,178 @@ export default function PollDetails() {
                         <Text style={{ fontSize: 34 }}>👑</Text>
                       </View>
                     ) : null}
-                    {item.kind === 'event' ? (
-                      <>
+
+                    {/* Top square: image */}
+                    <View
+                      style={{
+                        width: '100%',
+                        aspectRatio: 1.1,
+                        borderRadius: 12,
+                        overflow: 'hidden',
+                        backgroundColor: '#00000015',
+                      }}
+                    >
+                      {item.kind === 'event'
+                        ? (() => {
+                            const ev = (item as any).event || {};
+                            const imgs: string[] = ev.image_urls?.length
+                              ? ev.image_urls
+                              : ev.image_url
+                              ? [ev.image_url]
+                              : [];
+                            const thumb = imgs[0];
+                            return thumb ? (
+                              <LazyImage
+                                uri={thumb}
+                                width={'100%'}
+                                height={'100%'}
+                                borderRadius={12}
+                                accessibilityLabel={`Image for ${ev.title ?? 'event'}`}
+                              />
+                            ) : (
+                              <View
+                                style={{
+                                  flex: 1,
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                }}
+                              >
+                                <Text style={{ color: c.muted, fontSize: 12 }}>No Image</Text>
+                              </View>
+                            );
+                          })()
+                        : item.kind === 'text' && parseFoodToken((item as any).text)
+                        ? (() => {
+                            const rest = foodOptions[item.id];
+                            const imgs = rest ? restaurantImages(rest) : [];
+                            const thumb = imgs[0];
+                            return thumb ? (
+                              <LazyImage
+                                uri={thumb}
+                                width={'100%'}
+                                height={'100%'}
+                                borderRadius={12}
+                                accessibilityLabel={`Image for ${rest?.restaurant_name ?? 'place'}`}
+                              />
+                            ) : (
+                              <View
+                                style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}
+                              >
+                                <Text style={{ color: c.muted, fontSize: 12 }}>No Image</Text>
+                              </View>
+                            );
+                          })()
+                        : null}
+                    </View>
+
+                    {/* Bottom square: info */}
+                    <View
+                      style={{
+                        width: '100%',
+                        aspectRatio: 1.1,
+                        marginTop: 8,
+                        backgroundColor: c.background,
+                        borderRadius: 12,
+                        padding: 10,
+                        gap: 6,
+                      }}
+                    >
+                      {item.kind === 'event' ? (
+                        <>
+                          <Text style={{ color: c.text, fontWeight: '800', fontSize: 18 }}>
+                            {item.event?.title ?? `Event #${item.id}`}
+                          </Text>
+                          <Text style={{ color: c.muted }}>
+                            {(() => {
+                              const ev = (item as any).event || {};
+                              const start = ev?.date_time ? dayjs(ev.date_time) : null;
+                              const end = ev?.end_time ? dayjs(ev.end_time) : null;
+                              if (start) {
+                                const sameDay = end ? start.isSame(end, 'day') : true;
+                                const timePart = end
+                                  ? sameDay
+                                    ? `${start.format('MMM D • h:mm')}–${end.format('h:mm A')}`
+                                    : `${start.format('MMM D • h:mm A')} → ${end.format(
+                                        'MMM D h:mm A',
+                                      )}`
+                                  : `${start.format('MMM D • h:mm A')}`;
+                                return `${timePart}${ev.location ? ' • ' + ev.location : ''}`;
+                              }
+                              return ev?.location ?? '';
+                            })()}
+                          </Text>
+                          {(() => {
+                            const desc = (item as any).event?.description ?? '';
+                            const snippet = desc.trim().split(/\s+/).slice(0, 24).join(' ');
+                            return snippet ? (
+                              <Text style={{ color: c.muted }} numberOfLines={3}>
+                                {snippet}
+                                {desc.trim().split(/\s+/).length > 24 ? '…' : ''}
+                              </Text>
+                            ) : null;
+                          })()}
+                          {/* Tags */}
+                          {Array.isArray((item as any).event?.tags) &&
+                          (item as any).event.tags.length ? (
+                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                              {((item as any).event.tags as string[]).slice(0, 6).map((t) => (
+                                <Chip key={t} label={t} />
+                              ))}
+                            </View>
+                          ) : null}
+                          {/* Match percent */}
+                          {(item as any).match_percent != null ? (
+                            <Text style={{ color: c.muted }}>
+                              {(item as any).match_percent}% match for group
+                            </Text>
+                          ) : null}
+                        </>
+                      ) : item.kind === 'text' && parseFoodToken((item as any).text) ? (
+                        (() => {
+                          const rest = foodOptions[item.id];
+                          return (
+                            <>
+                              <Text style={{ color: c.text, fontWeight: '800', fontSize: 18 }}>
+                                {rest?.restaurant_name ?? 'Restaurant'}
+                              </Text>
+                              <Text style={{ color: c.muted }}>
+                                {rest?.address}
+                                {rest?.city ? ` • ${rest.city}` : ''}
+                              </Text>
+                              {rest?.description ? (
+                                <Text style={{ color: c.muted }} numberOfLines={3}>
+                                  {rest.description}
+                                </Text>
+                              ) : null}
+                              {rest?.category ? (
+                                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                                  {String(rest.category)
+                                    .split(',')
+                                    .map((t) => t.trim())
+                                    .filter(Boolean)
+                                    .slice(0, 6)
+                                    .map((t) => (
+                                      <Chip key={t} label={t} />
+                                    ))}
+                                </View>
+                              ) : null}
+                              {rest?.price_range || rest?.review_points ? (
+                                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                                  {rest.price_range ? <Chip label={rest.price_range} /> : null}
+                                  {rest.review_points ? (
+                                    <Chip label={`${rest.review_points}★`} />
+                                  ) : null}
+                                </View>
+                              ) : null}
+                            </>
+                          );
+                        })()
+                      ) : (
                         <Text style={{ color: c.text, fontWeight: '800', fontSize: 18 }}>
-                          {item.event?.title ?? `Event #${item.id}`}
+                          {('text' in item && (item as any).text) || 'Option'}
                         </Text>
-                        <Text style={{ color: c.muted, marginTop: 4 }}>
-                          {item.event?.date_time
-                            ? new Date(item.event.date_time).toLocaleString()
-                            : ''}
-                          {item.event?.location ? ` • ${item.event.location}` : ''}
-                        </Text>
-                      </>
-                    ) : (
-                      <Text style={{ color: c.text, fontWeight: '800', fontSize: 18 }}>
-                        {('text' in item && (item as any).text) || 'Option'}
-                      </Text>
-                    )}
-                    {item.kind === 'event' && (item as any).match_percent != null ? (
-                      <Text style={{ color: c.muted, marginTop: 4 }}>
-                        {(item as any).match_percent}% match for group
-                      </Text>
-                    ) : null}
+                      )}
+                    </View>
                   </View>
                 )}
                 onSwipeRight={async (item) => {
@@ -1219,6 +1427,68 @@ export default function PollDetails() {
           <Text style={{ fontSize: 48, transform: [{ rotate: '-10deg' }] }}>🎉</Text>
         </View>
       ) : null}
+
+      <Modal
+        visible={closeOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => !closing && setCloseOpen(false)}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(0,0,0,0.4)',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 16,
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: c.card,
+              padding: 16,
+              borderRadius: 16,
+              width: '100%',
+              maxWidth: 420,
+            }}
+          >
+            <Text style={{ color: c.text, fontSize: 18, fontWeight: '800' }}>Close this poll?</Text>
+            <Text style={{ color: c.muted, marginTop: 8 }}>
+              Members won’t be able to vote after closing. You can still commit a winner later.
+            </Text>
+            <View
+              style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}
+            >
+              <Pressable
+                onPress={() => !closing && setCloseOpen(false)}
+                style={{
+                  backgroundColor: '#00000030',
+                  paddingHorizontal: 12,
+                  paddingVertical: 10,
+                  borderRadius: 10,
+                }}
+              >
+                <Text style={{ color: c.text, fontWeight: '700' }}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                onPress={onClose}
+                disabled={closing}
+                style={{
+                  backgroundColor: c.primary,
+                  paddingHorizontal: 12,
+                  paddingVertical: 10,
+                  borderRadius: 10,
+                  opacity: closing ? 0.6 : 1,
+                }}
+              >
+                <Text style={{ color: c.text, fontWeight: '800' }}>
+                  {closing ? 'Closing…' : 'Close poll'}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       <Modal
         visible={deleteOpen}

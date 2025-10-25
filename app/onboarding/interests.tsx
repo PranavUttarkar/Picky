@@ -15,7 +15,7 @@ const POPULAR_INTERESTS = [
   'Careers',
   'Outdoors',
   'Culture',
-  'Wellness & Fitness',
+  'Fitness',
   'Business',
   'Entrepreneurship',
   'CS',
@@ -25,6 +25,22 @@ const POPULAR_INTERESTS = [
 // Majors removed per request
 
 const FOOD_RESTRICTIONS = ['Vegetarian', 'Vegan', 'Gluten‑free', 'Dairy‑free', 'Nut‑free'];
+
+// Quick-add cuisines for food interests
+const POPULAR_FOOD_INTERESTS = [
+  'Mexican',
+  'Italian',
+  'Chinese',
+  'Indian',
+  'Thai',
+  'Japanese',
+  'Mediterranean',
+  'Korean',
+  'BBQ',
+  'Vegan',
+  'Vegetarian',
+  'Halal',
+];
 
 const QUICK_PREFS: { key: string; label: string }[] = [
   { key: 'budget_friendly', label: 'Budget‑friendly' },
@@ -42,6 +58,8 @@ export default function Interests() {
   const [customInput, setCustomInput] = useState('');
   // majors removed
   const [foods, setFoods] = useState<string[]>([]);
+  const [foodInterests, setFoodInterests] = useState<string[]>([]);
+  const [foodCustomInput, setFoodCustomInput] = useState('');
   const [prefs, setPrefs] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
 
@@ -79,6 +97,14 @@ export default function Interests() {
     setCustomInput('');
   };
 
+  const onAddFoodCustom = () => {
+    const v = foodCustomInput.trim();
+    if (!v) return;
+    const next = Array.from(new Set([...foodInterests, v]));
+    setFoodInterests(next);
+    setFoodCustomInput('');
+  };
+
   const minOk = useMemo(() => interests.length >= 2, [interests.length]);
   const remaining = useMemo(() => Math.max(0, 2 - interests.length), [interests.length]);
   const shake = useRef(new Animated.Value(0)).current;
@@ -106,6 +132,18 @@ export default function Interests() {
         preferences: prefs,
         complete: true,
       });
+      // Also persist food interests into dedicated table
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user) {
+        const normalized = Array.from(
+          new Set(foodInterests.map((s) => s.trim().toLowerCase()).filter(Boolean)),
+        ).slice(0, 24);
+        await supabase
+          .from('user_food_interests')
+          .upsert({ user_id: user.id, names: normalized }, { onConflict: 'user_id' });
+      }
       router.replace('/onboarding/group');
     } catch (e) {
       // swallow for now
@@ -122,7 +160,7 @@ export default function Interests() {
       <View style={{ height: 16 }} />
       <Text style={{ color: c.text, fontSize: 24, fontWeight: '800' }}>Let’s personalize!</Text>
       <Text style={{ color: c.muted, marginTop: 4, marginBottom: 12 }}>
-        Quick picks below. Add your own anytime.
+        Tap to quick add interests. you can also add custom interests.
       </Text>
 
       {/* Popular interests */}
@@ -146,6 +184,8 @@ export default function Interests() {
                 borderRadius: 12,
                 alignItems: 'center',
                 backgroundColor: active ? c.primary : c.card,
+                borderWidth: 1,
+                borderColor: active ? 'transparent' : c.muted,
               }}
             >
               <Text
@@ -157,6 +197,91 @@ export default function Interests() {
           );
         }}
       />
+
+      {/* Food interests quick add */}
+      <Text style={{ color: c.text, fontWeight: '800', marginTop: 16, marginBottom: 8 }}>
+        Food interests
+      </Text>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+        {POPULAR_FOOD_INTERESTS.map((fi) => {
+          const active = foodInterests.includes(fi);
+          return (
+            <Pressable
+              key={fi}
+              onPress={() => toggle(foodInterests, setFoodInterests, fi)}
+              style={{
+                paddingVertical: 8,
+                paddingHorizontal: 12,
+                borderRadius: 999,
+                backgroundColor: active ? c.primary : c.card,
+                borderWidth: 1,
+                borderColor: active ? 'transparent' : c.muted,
+              }}
+            >
+              <Text style={{ color: active ? '#000' : c.text }}>{fi}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      {/* Add custom food interests */}
+      <View style={{ marginTop: 12 }}>
+        <Text style={{ color: c.text, fontWeight: '800', marginBottom: 8 }}>
+          Add custom food interests
+        </Text>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <TextInput
+            value={foodCustomInput}
+            onChangeText={setFoodCustomInput}
+            placeholder="e.g., ramen, sushi"
+            placeholderTextColor={c.muted}
+            style={{
+              flex: 1,
+              padding: 12,
+              backgroundColor: c.card,
+              color: c.text,
+              borderRadius: 12,
+            }}
+            returnKeyType="done"
+            onSubmitEditing={onAddFoodCustom}
+          />
+          <Pressable
+            onPress={onAddFoodCustom}
+            style={{
+              paddingHorizontal: 14,
+              borderRadius: 12,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: c.primary,
+            }}
+          >
+            <Text style={{ color: '#000', fontWeight: '800' }}>Add</Text>
+          </Pressable>
+        </View>
+        {foodInterests.length ? (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+            {foodInterests.map((ci) => {
+              const active = true; // chips just display added items; tap toggles remove
+              return (
+                <Pressable
+                  key={ci}
+                  onPress={() => setFoodInterests((prev) => prev.filter((x) => x !== ci))}
+                  style={{
+                    paddingVertical: 6,
+                    paddingHorizontal: 10,
+                    borderRadius: 999,
+                    backgroundColor: active ? c.primary : c.card,
+                    borderWidth: 1,
+                    borderColor: active ? 'transparent' : c.muted,
+                  }}
+                >
+                  <Text style={{ color: active ? '#000' : c.text }}>{ci}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        ) : null}
+      </View>
 
       {/* Preferences */}
       <Text style={{ color: c.text, fontWeight: '800', marginTop: 16, marginBottom: 8 }}>
@@ -184,7 +309,9 @@ export default function Interests() {
 
       {/* Add your own (moved below preferences) */}
       <View style={{ marginTop: 12 }}>
-        <Text style={{ color: c.text, fontWeight: '800', marginBottom: 8 }}>Add your own</Text>
+        <Text style={{ color: c.text, fontWeight: '800', marginBottom: 8 }}>
+          Add custom event interests
+        </Text>
         <View style={{ flexDirection: 'row', gap: 8 }}>
           <TextInput
             value={customInput}
@@ -237,29 +364,33 @@ export default function Interests() {
         ) : null}
       </View>
 
-      {/* Food restrictions moved to bottom */}
-      <Text style={{ color: c.text, fontWeight: '800', marginTop: 16, marginBottom: 8 }}>
-        Food restrictions
-      </Text>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-        {FOOD_RESTRICTIONS.map((f) => {
-          const active = foods.includes(f);
-          return (
-            <Pressable
-              key={f}
-              onPress={() => toggle(foods, setFoods, f)}
-              style={{
-                paddingVertical: 8,
-                paddingHorizontal: 12,
-                borderRadius: 999,
-                backgroundColor: active ? c.primary : c.card,
-              }}
-            >
-              <Text style={{ color: active ? '#000' : c.text }}>{f}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
+      {/* Food restrictions section commented out per request */}
+      {false && (
+        <>
+          <Text style={{ color: c.text, fontWeight: '800', marginTop: 16, marginBottom: 8 }}>
+            Food restrictions
+          </Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            {FOOD_RESTRICTIONS.map((f) => {
+              const active = foods.includes(f);
+              return (
+                <Pressable
+                  key={f}
+                  onPress={() => toggle(foods, setFoods, f)}
+                  style={{
+                    paddingVertical: 8,
+                    paddingHorizontal: 12,
+                    borderRadius: 999,
+                    backgroundColor: active ? c.primary : c.card,
+                  }}
+                >
+                  <Text style={{ color: active ? '#000' : c.text }}>{f}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </>
+      )}
 
       {/* Continue */}
       <Animated.View

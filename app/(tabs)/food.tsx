@@ -527,7 +527,14 @@ export default function FoodExplore() {
               borderRadius: 8,
             }}
           >
-            <Text style={{ color: c.text, fontWeight: '700' }}>Personalized</Text>
+            <Text
+              style={{
+                color: mode === 'personalized' ? c.background : c.text,
+                fontWeight: '700',
+              }}
+            >
+              Personalized
+            </Text>
           </Pressable>
           <Pressable
             onPress={() => setView((v) => (v === 'row' ? 'grid' : 'row'))}

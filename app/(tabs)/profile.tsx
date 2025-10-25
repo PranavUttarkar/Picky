@@ -65,7 +65,7 @@ const TagList = memo(function TagList({
 
 export default function Profile() {
   const c = useThemeColors();
-  const { scheme } = useTheme();
+  const { scheme, setScheme } = useTheme();
   const [authed, setAuthed] = useState<boolean | null>(null);
   const [email, setEmail] = useState<string | null>(null);
   // Legacy CSV representation kept for backwards compat (used only when loading)
@@ -337,6 +337,50 @@ export default function Profile() {
           {email ? (
             <Text style={{ color: c.muted, marginBottom: 12 }}>Signed in as {email}</Text>
           ) : null}
+          {/* Appearance / Theme */}
+          <View
+            style={{
+              backgroundColor: c.card,
+              padding: 12,
+              borderRadius: 12,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: 12,
+            }}
+          >
+            <Text style={{ color: c.text, fontWeight: '700' }}>Appearance</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Pressable
+                onPress={() => setScheme('light')}
+                accessibilityLabel="Switch to light mode"
+                style={{
+                  backgroundColor: scheme === 'light' ? c.primary : c.background,
+                  paddingVertical: 8,
+                  paddingHorizontal: 10,
+                  borderRadius: 10,
+                }}
+              >
+                <Ionicons name="sunny-outline" size={18} color={c.text} />
+              </Pressable>
+              <Pressable
+                onPress={() => setScheme('dark')}
+                accessibilityLabel="Switch to dark mode"
+                style={{
+                  backgroundColor: scheme === 'dark' ? c.primary : c.background,
+                  paddingVertical: 8,
+                  paddingHorizontal: 10,
+                  borderRadius: 10,
+                }}
+              >
+                <Ionicons
+                  name="moon-outline"
+                  size={18}
+                  color={scheme === 'dark' ? c.background : c.text}
+                />
+              </Pressable>
+            </View>
+          </View>
           {/* Saved events button moved below interests section */}
           <Pressable
             onPress={() => supabase.auth.signOut()}
