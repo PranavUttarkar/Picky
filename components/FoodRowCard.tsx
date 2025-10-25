@@ -1,5 +1,5 @@
 import React, { memo, useState } from 'react';
-import { View, Text, Pressable, Platform, Linking, Share } from 'react-native';
+import { View, Text, Pressable, Platform, Linking, Share, Image } from 'react-native';
 import { useThemeColors } from '@/theme/ThemeProvider';
 import LazyImage from '@/components/LazyImage';
 import { ThreeDCard, ThreeDButton } from '@/components/ThreeD';
@@ -45,16 +45,27 @@ const FoodRowCard: React.FC<FoodRowCardProps> = memo(
                   onError={() => setImgIdx((i) => (i + 1 < imgs.length ? i + 1 : imgs.length))}
                 />
               ) : (
-                <View
-                  style={{
-                    flex: 1,
-                    backgroundColor: '#00000015',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    borderRadius: 12,
-                  }}
-                >
-                  <Text style={{ color: c.muted, fontSize: 11 }}>No Image</Text>
+                <View style={{ flex: 1 }}>
+                  <Image
+                    source={require('../assets/NoImageRestaurant.jpg')}
+                    style={{ width: '100%', height: '100%' }}
+                    resizeMode="cover"
+                  />
+                  <View
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Text style={{ color: '#ffffffcc', fontSize: 11, fontWeight: '700' }}>
+                      No Image
+                    </Text>
+                  </View>
                 </View>
               )}
             </View>

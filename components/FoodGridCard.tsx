@@ -1,5 +1,5 @@
 import React, { memo, useState } from 'react';
-import { View, Text, Pressable, Platform, Linking } from 'react-native';
+import { View, Text, Pressable, Platform, Linking, Image } from 'react-native';
 import { ThreeDCard, ThreeDButton } from '@/components/ThreeD';
 import ImageGallery from '@/components/ImageGallery';
 import { useThemeColors } from '@/theme/ThemeProvider';
@@ -57,15 +57,27 @@ const FoodGridCard: React.FC<FoodGridCardProps> = memo(
                   onPressImage={() => onOpenDetails?.()}
                 />
               ) : (
-                <View
-                  style={{
-                    flex: 1,
-                    backgroundColor: '#00000010',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <Text style={{ color: c.muted, fontSize: 12 }}>No Image</Text>
+                <View style={{ flex: 1, position: 'relative' }}>
+                  <Image
+                    source={require('../assets/NoImageRestaurant.jpg')}
+                    style={{ width: '100%', height: '100%' }}
+                    resizeMode="cover"
+                  />
+                  <View
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Text style={{ color: '#ffffffcc', fontSize: 12, fontWeight: '800' }}>
+                      No Image
+                    </Text>
+                  </View>
                 </View>
               )}
             </View>

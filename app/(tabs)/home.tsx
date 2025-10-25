@@ -25,6 +25,10 @@ export default function HomeTab() {
   const { width } = useWindowDimensions();
   // Consider "larger width" as tablet/desktop breakpoints
   const isWide = width >= 768;
+  // Grid sizing for top cards: keep fixed column width so last single card doesn't scale
+  const GAP = 12;
+  const COL_WIDTH = 420;
+  const MAX_GRID_WIDTH = isWide ? COL_WIDTH * 2 + GAP : undefined;
 
   useEffect(() => {
     let mounted = true;
@@ -59,43 +63,57 @@ export default function HomeTab() {
             <Text style={{ color: c.text, fontSize: 24, fontWeight: '900' }}>Dashboard</Text>
           </View>
 
-          {/* Top Card: Discover Events */}
+          {/* Top Cards: Discover Events + Discover Food (side-by-side on wide, stacked on small) */}
           <View
             style={[
               styles.cardsContainer,
-              { maxWidth: containerMaxWidth, flexDirection: isWide ? 'row' : 'column' },
+              {
+                maxWidth: MAX_GRID_WIDTH ?? containerMaxWidth,
+                flexDirection: isWide ? 'row' : 'column',
+                alignSelf: 'center',
+              },
             ]}
           >
-            <View style={isWide ? { flex: 1 } : undefined}>
+            <View style={isWide ? { width: COL_WIDTH } : undefined}>
               <MediaCard
                 image={require('../../assets/DiscoverEvents.png')}
                 onPress={() => router.push('/events')}
                 accessibilityLabel="Discover events"
               />
             </View>
+            <View style={[isWide ? { width: COL_WIDTH } : undefined]}>
+              <MediaCard
+                image={require('../../assets/DiscoverFood.png')}
+                onPress={() => router.push('/food')}
+                accessibilityLabel="Discover food"
+              />
+            </View>
+          </View>
 
-            {/* Second Card: Group Decide */}
-            <View style={isWide ? { flex: 1 } : undefined}>
+          {/* Second Row: Group Decide (do not scale up on wide) */}
+          <View
+            style={[
+              styles.cardsContainer,
+              {
+                maxWidth: MAX_GRID_WIDTH ?? containerMaxWidth,
+                flexDirection: isWide ? 'row' : 'column',
+                alignSelf: 'center',
+                // Extra vertical spacing between rows; larger on small screens for smoother look
+                marginTop: isWide ? 10 : 14,
+                marginLeft: isWide ? 26 : 0,
+                justifyContent: isWide ? 'center' : undefined,
+              },
+            ]}
+          >
+            <View style={isWide ? { width: COL_WIDTH } : undefined}>
               <MediaCard
                 image={require('../../assets/GroupDecide.png')}
                 onPress={() => router.push('/(tabs)/group-decide')}
                 accessibilityLabel="Start a new decision"
               />
             </View>
-          </View>
-
-          {/* Discover Food Card */}
-          <View
-            style={[
-              styles.cardsContainer,
-              { maxWidth: containerMaxWidth, flexDirection: 'column' },
-            ]}
-          >
-            <MediaCard
-              image={require('../../assets/DiscoverFood.png')}
-              onPress={() => router.push('/food')}
-              accessibilityLabel="Discover food"
-            />
+            {/* Spacer to preserve 2-col grid on wide, avoid third element scaling */}
+            {isWide ? <View style={{ width: COL_WIDTH }} /> : null}
           </View>
 
           {/* Cartoon-style persuasive blurb */}
@@ -109,15 +127,16 @@ export default function HomeTab() {
             }}
           >
             <BlurbBubble
-              title="Welcome to Picky!"
+              title="Find it All, Decide Quick!"
               footerTag="Food 😋, Activities 🏈 & more soon!!"
               illustration={require('../../assets/PickyMascot.png')}
             >
               <Text style={{ color: c.text, fontSize: 14, lineHeight: 20 }}>
-                Explore everything happening around campus with a personalized feed!
+                Welcome to Picky! Explore everything happening around campus with a personalized
+                feed!
               </Text>
               <Text style={{ color: c.text, fontSize: 14, lineHeight: 20 }}>
-                Make decisions with friends in seconds not hours.
+                Make decisions with friends in seconds not hours with Group Decide.
               </Text>
               {!signedIn && (
                 <Pressable
