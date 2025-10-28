@@ -8,6 +8,7 @@ import { Share } from 'react-native';
 import { useCallback, useMemo, useEffect } from 'react';
 import { useSavedNotification } from '@/utils/SavedNotificationContext';
 import { useGroupDecisionNotification } from '@/utils/GroupDecisionNotificationContext';
+import { trackCTA, trackEvent } from '@/utils/analytics';
 
 export default function TabsLayout() {
   const c = useThemeColors();
@@ -25,6 +26,17 @@ export default function TabsLayout() {
       clearNotification();
     }
   }, [pathname, hasNewSavedItems, clearNotification]);
+
+  // Track tab views explicitly (in addition to global screen_view)
+  useEffect(() => {
+    if (!pathname) return;
+    const p = pathname.startsWith('/') ? pathname.slice(1) : pathname;
+    const tab = p.split('/')[0];
+    const known = ['home', 'events', 'food', 'groups', 'profile', 'saved', 'my-events'];
+    if (known.includes(tab)) {
+      trackEvent('tab_view', { tab }).catch(() => {});
+    }
+  }, [pathname]);
 
   // Clear notification when groups tab is accessed
   useEffect(() => {
@@ -88,7 +100,10 @@ export default function TabsLayout() {
   const HeaderTitle = useCallback(
     () => (
       <Pressable
-        onPress={() => router.push('/(tabs)/home')}
+        onPress={() => {
+          trackCTA('header_title_pressed').catch(() => {});
+          router.push('/(tabs)/home');
+        }}
         accessibilityRole="button"
         accessibilityLabel="Go to Home"
       >
@@ -126,7 +141,15 @@ export default function TabsLayout() {
   const headerRight = useCallback(
     () => (
       <View style={{ flexDirection: 'row', gap: 12, marginRight: 8 }}>
-        <Pressable onPress={toggleScheme} hitSlop={8}>
+        <Pressable
+          onPress={() => {
+            trackCTA('toggle_theme', { next: scheme === 'dark' ? 'light' : 'dark' }).catch(
+              () => {},
+            );
+            toggleScheme();
+          }}
+          hitSlop={8}
+        >
           <Ionicons name={scheme === 'dark' ? 'moon' : 'sunny'} size={22} color={c.text} />
         </Pressable>
       </View>

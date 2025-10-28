@@ -7,6 +7,7 @@ import { supabase } from '@/services/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useState, useCallback, memo, useRef } from 'react';
 import { router } from 'expo-router';
+import { trackCTA, trackEvent } from '@/utils/analytics';
 
 // Hoisted components to avoid remounting on each keystroke
 function Container({ children }: { children: React.ReactNode }) {
@@ -68,6 +69,7 @@ export default function Profile() {
   const { scheme, setScheme } = useTheme();
   const [authed, setAuthed] = useState<boolean | null>(null);
   const [email, setEmail] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState<boolean>(false);
   // Legacy CSV representation kept for backwards compat (used only when loading)
   const [interestsCsv, setInterestsCsv] = useState('');
   // Normalized tag list state
@@ -95,6 +97,14 @@ export default function Profile() {
       setAuthed(!!user);
       setEmail(user?.email ?? null);
       if (user) {
+        try {
+          const { data: u } = await supabase
+            .from('users')
+            .select('is_admin')
+            .eq('id', user.id)
+            .single();
+          setIsAdmin(!!(u as any)?.is_admin);
+        } catch {}
         // Load interests
         setLoadingInterests(true);
         const { data } = await supabase
@@ -126,6 +136,14 @@ export default function Profile() {
       setEmail(sess?.user?.email ?? null);
       if (sess?.user) {
         (async () => {
+          try {
+            const { data: u } = await supabase
+              .from('users')
+              .select('is_admin')
+              .eq('id', sess.user!.id)
+              .single();
+            setIsAdmin(!!(u as any)?.is_admin);
+          } catch {}
           setLoadingInterests(true);
           const { data } = await supabase
             .from('user_interests_temp')
@@ -317,7 +335,10 @@ export default function Profile() {
         <>
           <Text style={{ color: c.muted, marginBottom: 12 }}>You’re not signed in.</Text>
           <Pressable
-            onPress={() => router.push('/onboarding/welcome')}
+            onPress={() => {
+              trackCTA('profile_sign_in_press').catch(() => {});
+              router.push('/onboarding/welcome');
+            }}
             style={{
               backgroundColor: c.primary,
               padding: 12,
@@ -329,6 +350,25 @@ export default function Profile() {
           >
             <Text style={{ color: '#000', fontWeight: '700' }}>Sign up or sign in</Text>
           </Pressable>
+          {isAdmin && (
+            <Pressable
+              onPress={() => router.push('/admin/analytics')}
+              style={{
+                marginTop: 10,
+                backgroundColor: '#1f2937',
+                padding: 12,
+                borderRadius: 12,
+                alignItems: 'center',
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Open admin analytics"
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Ionicons name="stats-chart" size={18} color={c.text} />
+                <Text style={{ color: c.text, fontWeight: '700' }}>Admin Analytics</Text>
+              </View>
+            </Pressable>
+          )}
         </>
       )}
 
@@ -337,6 +377,25 @@ export default function Profile() {
           {email ? (
             <Text style={{ color: c.muted, marginBottom: 12 }}>Signed in as {email}</Text>
           ) : null}
+          {isAdmin && (
+            <Pressable
+              onPress={() => router.push('/admin/analytics')}
+              style={{
+                backgroundColor: '#1f2937',
+                padding: 12,
+                borderRadius: 12,
+                alignItems: 'center',
+                marginBottom: 12,
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Open admin analytics"
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Ionicons name="stats-chart" size={18} color={c.text} />
+                <Text style={{ color: c.text, fontWeight: '700' }}>Admin Analytics</Text>
+              </View>
+            </Pressable>
+          )}
           {/* Appearance / Theme */}
           <View
             style={{
@@ -352,7 +411,10 @@ export default function Profile() {
             <Text style={{ color: c.text, fontWeight: '700' }}>Appearance</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <Pressable
-                onPress={() => setScheme('light')}
+                onPress={() => {
+                  trackCTA('profile_theme_select', { value: 'light' }).catch(() => {});
+                  setScheme('light');
+                }}
                 accessibilityLabel="Switch to light mode"
                 style={{
                   backgroundColor: scheme === 'light' ? c.primary : c.background,
@@ -364,7 +426,10 @@ export default function Profile() {
                 <Ionicons name="sunny-outline" size={18} color={c.text} />
               </Pressable>
               <Pressable
-                onPress={() => setScheme('dark')}
+                onPress={() => {
+                  trackCTA('profile_theme_select', { value: 'dark' }).catch(() => {});
+                  setScheme('dark');
+                }}
                 accessibilityLabel="Switch to dark mode"
                 style={{
                   backgroundColor: scheme === 'dark' ? c.primary : c.background,
@@ -383,7 +448,10 @@ export default function Profile() {
           </View>
           {/* Saved events button moved below interests section */}
           <Pressable
-            onPress={() => supabase.auth.signOut()}
+            onPress={async () => {
+              trackCTA('profile_sign_out_press').catch(() => {});
+              await supabase.auth.signOut();
+            }}
             style={{
               backgroundColor: c.primary,
               padding: 12,
@@ -441,7 +509,10 @@ export default function Profile() {
                 />
                 {tags.length ? (
                   <Pressable
-                    onPress={() => setTags([])}
+                    onPress={() => {
+                      trackCTA('profile_clear_interests').catch(() => {});
+                      setTags([]);
+                    }}
                     style={{ marginTop: 8, alignSelf: 'flex-start', padding: 4 }}
                     accessibilityLabel="Clear all interests"
                   >
@@ -532,7 +603,10 @@ export default function Profile() {
                   />
                   {foodTags.length ? (
                     <Pressable
-                      onPress={() => setFoodTags([])}
+                      onPress={() => {
+                        trackCTA('profile_clear_food_interests').catch(() => {});
+                        setFoodTags([]);
+                      }}
                       style={{ marginTop: 8, alignSelf: 'flex-start', padding: 4 }}
                       accessibilityLabel="Clear all food interests"
                     >
@@ -569,7 +643,10 @@ export default function Profile() {
 
             {/* Saved events link lives here now */}
             <Pressable
-              onPress={() => router.push('/(tabs)/saved')}
+              onPress={() => {
+                trackCTA('profile_view_saved_press').catch(() => {});
+                router.push('/(tabs)/saved');
+              }}
               style={{
                 marginTop: 14,
                 backgroundColor: c.accent,
@@ -588,7 +665,10 @@ export default function Profile() {
             </Pressable>
             {/* My Events (created by me) */}
             <Pressable
-              onPress={() => router.push('/(tabs)/my-events')}
+              onPress={() => {
+                trackCTA('profile_view_my_events_press').catch(() => {});
+                router.push('/(tabs)/my-events');
+              }}
               style={{
                 marginTop: 10,
                 backgroundColor: '#00000030',

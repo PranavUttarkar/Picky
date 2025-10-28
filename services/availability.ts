@@ -1,4 +1,5 @@
 import { supabase } from '@/services/supabase';
+import { trackEvent } from '@/utils/analytics';
 
 export type SlotKey = string; // ISO string of slot_start in UTC (rounded to slot)
 
@@ -97,6 +98,7 @@ export async function replaceMyAvailability(
   const rows = slots.map((iso) => ({ group_id: groupId, user_id: user.id, slot_start: iso }));
   const { error } = await supabase.from('group_availability').insert(rows);
   if (error) throw error;
+  trackEvent('availability_replaced', { group_id: groupId, slots_count: slots.length, window_days: Math.max(1, Math.floor((new Date(window.endIso).getTime() - new Date(window.startIso).getTime()) / (24 * 60 * 60 * 1000))) }).catch(() => {});
 }
 
 export async function getGroupAvailabilitySummary(
