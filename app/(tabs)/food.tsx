@@ -18,6 +18,8 @@ import type { Restaurant } from '@/types/models';
 import { router } from 'expo-router';
 import { supabase } from '@/services/supabase';
 import { Ionicons } from '@expo/vector-icons';
+import { optimisticUpdate } from '@/utils/optimistic';
+import { useSavedNotification } from '@/utils/SavedNotificationContext';
 
 export default function FoodExplore() {
   const c = useThemeColors();
@@ -38,6 +40,7 @@ export default function FoodExplore() {
   const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [savedIds, setSavedIds] = useState<string[]>([]);
   // Interests and filters (similar to events)
   const [isAuthed, setIsAuthed] = useState(false);
   const [myTags, setMyTags] = useState<string[]>([]);
@@ -69,6 +72,12 @@ export default function FoodExplore() {
         const names: string[] = ((data?.names as any) ?? []).map((n: string) => n.toLowerCase());
         setMyTags(names);
         setEditTags(names);
+        // Load saved restaurants for the user
+        const se = await supabase
+          .from('saved_restaurants')
+          .select('restaurant_id')
+          .eq('user_id', user.id);
+        setSavedIds(((se.data ?? []) as any[]).map((r: any) => String(r.restaurant_id)));
       }
     })();
   }, []);
@@ -146,6 +155,50 @@ export default function FoodExplore() {
     const rest = items.filter((i) => !recIds.has(i.id));
     return [...recommended, ...rest];
   }, [items, recommended, mode, query]);
+
+  const savedSet = useMemo(() => new Set(savedIds), [savedIds]);
+
+  const { triggerNotification } = useSavedNotification();
+
+  const requireAuth = async (): Promise<boolean> => {
+    const user = (await supabase.auth.getUser()).data.user;
+    if (!user) {
+      router.push('/onboarding/welcome');
+      return false;
+    }
+    return true;
+  };
+
+  const toggleSaveRestaurant = async (id: string) => {
+    const ok = await requireAuth();
+    if (!ok) return;
+    const user = (await supabase.auth.getUser()).data.user!;
+    const isSaved = savedSet.has(id);
+    await optimisticUpdate({
+      apply: () => {
+        const prev = savedIds;
+        setSavedIds((s) => (isSaved ? s.filter((x) => x !== id) : [...s, id]));
+        return prev;
+      },
+      rollback: (prev) => setSavedIds(prev),
+      mutate: async () => {
+        if (isSaved) {
+          const { error } = await supabase
+            .from('saved_restaurants')
+            .delete()
+            .eq('user_id', user.id)
+            .eq('restaurant_id', id);
+          if (error) throw error;
+        } else {
+          const { error } = await supabase
+            .from('saved_restaurants')
+            .insert({ user_id: user.id, restaurant_id: id });
+          if (error) throw error;
+          await triggerNotification();
+        }
+      },
+    });
+  };
 
   // Apply filters: tag filters (AND) and price tiers (OR)
   const filteredCombined = useMemo(() => {
@@ -620,6 +673,8 @@ export default function FoodExplore() {
                     })
                   }
                   selected={sel}
+                  isSaved={savedSet.has(item.id)}
+                  onToggleSave={toggleSaveRestaurant}
                 />
               );
             }}
@@ -677,6 +732,8 @@ export default function FoodExplore() {
                       })
                     }
                     selected={sel}
+                    isSaved={savedSet.has(item.id)}
+                    onToggleSave={toggleSaveRestaurant}
                   />
                 </View>
               );

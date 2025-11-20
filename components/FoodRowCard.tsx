@@ -12,10 +12,12 @@ export interface FoodRowCardProps {
   onOpenDetails?: () => void;
   onSelect?: () => void; // for building a poll selection list
   selected?: boolean;
+  isSaved?: boolean;
+  onToggleSave?: (restaurantId: string) => void;
 }
 
 const FoodRowCard: React.FC<FoodRowCardProps> = memo(
-  ({ item, matchPercent, onOpenDetails, onSelect, selected }) => {
+  ({ item, matchPercent, onOpenDetails, onSelect, selected, isSaved = false, onToggleSave }) => {
     const c = useThemeColors();
     const imgs: string[] = [item.main_image, item.image_1, item.image_2, item.image_3].filter(
       Boolean,
@@ -137,6 +139,22 @@ const FoodRowCard: React.FC<FoodRowCardProps> = memo(
                   >
                     <Ionicons name="share-social-outline" size={18} color={c.text} />
                   </Pressable>
+                  {onToggleSave ? (
+                    <Pressable
+                      onPress={(e?: any) => {
+                        e?.stopPropagation?.();
+                        onToggleSave?.(item.id);
+                      }}
+                      accessibilityLabel={isSaved ? 'Unsave restaurant' : 'Save restaurant'}
+                      style={{ padding: 4 }}
+                    >
+                      <Ionicons
+                        name={isSaved ? 'heart' : 'heart-outline'}
+                        size={18}
+                        color={isSaved ? c.primary : c.text}
+                      />
+                    </Pressable>
+                  ) : null}
                   {onSelect ? (
                     selected ? (
                       <ThreeDButton
