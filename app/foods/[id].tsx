@@ -1,4 +1,4 @@
-import { View, Text, ScrollView, Pressable, Linking, Alert, Image } from 'react-native';
+import { View, Text, ScrollView, Pressable, Linking, Alert, Image, Platform } from 'react-native';
 import { useLocalSearchParams, router, useNavigation } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { useThemeColors } from '@/theme/ThemeProvider';
@@ -8,6 +8,7 @@ import ImageGallery from '@/components/ImageGallery';
 import { getRestaurantById, restaurantImages } from '@/services/food';
 import Chip from '@/components/Chip';
 import { Ionicons } from '@expo/vector-icons';
+import RestaurantMap from '@/components/RestaurantMap';
 
 export default function FoodDetails() {
   const c = useThemeColors();
@@ -50,16 +51,28 @@ export default function FoodDetails() {
   }
 
   const images = restaurantImages(item);
-  const meta = [
+  const metaParts: React.ReactNode[] = [
     item.category,
     item.price_range,
-    item.review_points ? `${item.review_points}★` : null,
+    item.review_points != null
+      ? (
+        <Text key="rp" style={{ color: '#fce354ff' }}>
+          {String(item.review_points)} ★
+        </Text>
+      )
+      : null,
   ]
     .filter(Boolean)
-    .join(' • ');
+    .map((v) => (typeof v === 'string' ? String(v).replace(/\b\w/g, (c) => c.toUpperCase()) : v));
+
+  const meta = metaParts.reduce<React.ReactNode[]>((acc, part, i) => (i === 0 ? [part] : [...acc, ' • ', part]), []);
   const faviconUrl = item.website
     ? `https://www.google.com/s2/favicons?sz=64&domain_url=${encodeURIComponent(item.website)}`
     : null;
+
+  const lat = item.latitude != null ? Number(item.latitude) : null;
+  const lon = item.longitude != null ? Number(item.longitude) : null;
+  const hasCoords = lat != null && lon != null && isFinite(lat) && isFinite(lon);
 
   return (
     <GradientBackground variant="dim">
@@ -71,7 +84,10 @@ export default function FoodDetails() {
               <ImageGallery images={images} height={260} showArrows showDots />
             </View>
           ) : null}
-          <Text style={{ color: c.muted, marginTop: 8 }}>{meta}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
+            <Ionicons name="location-sharp" size={16} color={c.muted} />
+            <Text style={{ color: c.muted, marginLeft: 8 }}>{meta}</Text>
+          </View>
           {item.address ? (
             <Text style={{ color: c.muted, marginTop: 4 }}>
               {item.address}
@@ -82,7 +98,7 @@ export default function FoodDetails() {
           {/* Description */}
           {item.description ? (
             <View style={{ backgroundColor: c.card, padding: 12, borderRadius: 12, marginTop: 12 }}>
-              <Text style={{ color: c.text, fontWeight: '800', marginBottom: 6 }}>About</Text>
+              <Text style={{ color: c.text, fontWeight: '800', marginBottom: 6 }}>About Us</Text>
               <Text style={{ color: c.text }}>{item.description}</Text>
             </View>
           ) : null}
@@ -102,37 +118,29 @@ export default function FoodDetails() {
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
             {item.website ? (
               <Pressable
-                onPress={() => item.website && Linking.openURL(item.website)}
-                accessibilityLabel="Open website"
-                style={{
-                  backgroundColor: c.card,
-                  paddingVertical: 8,
-                  paddingHorizontal: 12,
-                  borderRadius: 10,
-                }}
+              onPress={() => item.website && Linking.openURL(item.website)}
+              accessibilityLabel="Open website"
+              style={{
+                backgroundColor: c.card,
+                paddingVertical: 8,
+                paddingHorizontal: 12,
+                borderRadius: 10,
+              }}
               >
-                {faviconUrl && faviconOk ? (
-                  <Image
-                    source={{ uri: faviconUrl }}
-                    style={{ width: 18, height: 18, borderRadius: 4 }}
-                    onError={() => setFaviconOk(false)}
-                  />
-                ) : (
-                  <Ionicons name="globe" size={18} color={c.text} />
-                )}
+              <Ionicons name="globe" size={18} color={c.primary} />
               </Pressable>
             ) : null}
             {item.page_url ? (
               <Pressable
-                onPress={() => item.page_url && Linking.openURL(item.page_url)}
-                style={{
-                  backgroundColor: c.card,
-                  paddingVertical: 8,
-                  paddingHorizontal: 12,
-                  borderRadius: 10,
-                }}
+              onPress={() => item.page_url && Linking.openURL(item.page_url)}
+              style={{
+                backgroundColor: c.card,
+                paddingVertical: 8,
+                paddingHorizontal: 12,
+                borderRadius: 10,
+              }}
               >
-                <Text style={{ color: c.text, fontWeight: '800' }}>Google Maps</Text>
+                <Text style={{ color: c.text, fontWeight: '800' }}>Info & Directions</Text>
               </Pressable>
             ) : null}
             <Pressable
@@ -173,6 +181,20 @@ export default function FoodDetails() {
               },
             )}
           </View>
+
+          {/* Map Section */}
+          {hasCoords && (
+            <View style={{ marginTop: 16 }}>
+              <Text style={{ color: c.text, fontWeight: '800', marginBottom: 8 }}>Location</Text>
+              <RestaurantMap
+                latitude={lat!}
+                longitude={lon!}
+                restaurantName={item.restaurant_name}
+                address={item.address}
+                pageUrl={item.page_url}
+              />
+            </View>
+          )}
         </View>
       </ScrollView>
     </GradientBackground>
