@@ -195,7 +195,7 @@ export const EventGridCard: React.FC<EventGridCardProps> = memo(
                     style={{ padding: 6 }}
                   >
                     <Ionicons
-                      name={isSaved ? 'bookmark' : 'bookmark-outline'}
+                      name={isSaved ? 'heart' : 'heart-outline'}
                       size={18}
                       color={isSaved ? c.primary : c.text}
                     />

@@ -659,7 +659,7 @@ export default function Profile() {
               accessibilityLabel="Open saved events"
             >
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Ionicons name="bookmark" size={18} color={c.text} />
+                <Ionicons name="heart" size={18} color={c.text} />
                 <Text style={{ color: c.text, fontWeight: '700' }}>View Saved</Text>
               </View>
             </Pressable>

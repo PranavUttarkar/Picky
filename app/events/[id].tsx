@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { View, Text, Image, Pressable, Linking, ScrollView } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import HeaderSpacer from '@/components/HeaderSpacer';
 import LazyImage from '@/components/LazyImage';
 import EventImages from '@/components/EventImages';
 import { useLocalSearchParams } from 'expo-router';
@@ -54,7 +56,8 @@ export default function EventDetails() {
 
   if (!event) return null;
   return (
-    <View style={{ flex: 1, backgroundColor: c.background }}>
+    <SafeAreaView edges={['bottom']} style={{ flex: 1, backgroundColor: c.background }}>
+      <HeaderSpacer />
       <View style={{ flex: 1 }}>
         {(() => {
           const imgs: string[] = (event as any).image_urls?.length
@@ -119,6 +122,6 @@ export default function EventDetails() {
           </View>
         </View>
       </View>
-    </View>
+    </SafeAreaView>
   );
 }

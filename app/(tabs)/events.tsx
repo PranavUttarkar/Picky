@@ -8,7 +8,6 @@ import {
   TextInput,
   Modal,
   ScrollView,
-  SafeAreaView,
   Alert,
   Linking,
   Platform,
@@ -16,6 +15,7 @@ import {
   UIManager,
   useWindowDimensions,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
 import { ThreeDButton, ThreeDCard } from '@/components/ThreeD';
@@ -29,6 +29,7 @@ import { useTheme, useThemeColors } from '@/theme/ThemeProvider';
 import GradientBackground from '@/components/GradientBackground';
 import AnimatedPage from '@/components/AnimatedPage';
 import { LinearGradient } from 'expo-linear-gradient';
+import HeaderSpacer from '@/components/HeaderSpacer';
 import { BlurView } from 'expo-blur';
 import Chip from '@/components/Chip';
 import { supabase } from '@/services/supabase';
@@ -696,7 +697,8 @@ const AddEditEventModal = memo(function AddEditEventModal({
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={() => !savingEvent && onClose()}>
-      <SafeAreaView style={{ flex: 1, backgroundColor: c.background }}>
+      <SafeAreaView edges={['bottom']} style={{ flex: 1, backgroundColor: c.background }}>
+        <HeaderSpacer />
         <BlurView
           intensity={30}
           tint={scheme === 'dark' ? 'dark' : 'light'}
@@ -1244,7 +1246,7 @@ const FiltersTopBar = memo(function FiltersTopBar({
           borderColor: '#00000020',
         }}
       >
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 }}>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Focus search"
@@ -1915,6 +1917,21 @@ export default function Home() {
     },
   );
 
+  // Track list and content heights to auto-load when content is shorter than viewport
+  const listViewportHeightRef = useRef(0);
+  const contentHeightRef = useRef(0);
+  const fillCheckDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const maybeLoadMoreIfShort = () => {
+    if (fillCheckDebounce.current) clearTimeout(fillCheckDebounce.current);
+    fillCheckDebounce.current = setTimeout(() => {
+      const vh = listViewportHeightRef.current;
+      const ch = contentHeightRef.current;
+      if (vh > 0 && ch > 0 && ch < vh * 1.05 && hasMore && !isFetching) {
+        loadNextPage();
+      }
+    }, 50);
+  };
+
   const requireAuth = async (): Promise<boolean> => {
     const user = (await supabase.auth.getUser()).data.user;
     if (!user) {
@@ -2096,6 +2113,11 @@ export default function Home() {
     }
     return arr;
   }, [filteredBase, mode, scores, myTags]);
+
+  // Keep a ref of the current filtered length for the viewability callback
+  useEffect(() => {
+    filteredLengthRef.current = filtered.length;
+  }, [filtered.length]);
 
   // Admin: reset form helper
   const resetForm = () => {
@@ -2348,7 +2370,7 @@ export default function Home() {
   );
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: c.background }}>
+    <SafeAreaView edges={['bottom']} style={{ flex: 1, backgroundColor: c.background }}>
       {isAdmin ? (
         <AdminHeader
           c={c}
@@ -2399,6 +2421,15 @@ export default function Home() {
           maxWidth: MAX_GRID_WIDTH,
           width: '100%',
         }}
+        style={{ flex: 1 }}
+        onLayout={(e) => {
+          listViewportHeightRef.current = e.nativeEvent.layout.height;
+          maybeLoadMoreIfShort();
+        }}
+        onContentSizeChange={(_w, h) => {
+          contentHeightRef.current = h;
+          maybeLoadMoreIfShort();
+        }}
         ListHeaderComponent={filtersScrollable}
         refreshing={refreshing}
         onRefresh={onRefresh}
@@ -2409,7 +2440,8 @@ export default function Home() {
         initialNumToRender={8}
         maxToRenderPerBatch={columns > 1 ? 12 : 10}
         windowSize={12}
-        removeClippedSubviews={Platform.OS === 'android'}
+        // removeClippedSubviews can break onEndReached on some Android devices
+        removeClippedSubviews={false}
         ListEmptyComponent={
           <View style={{ paddingTop: 48, alignItems: 'center' }}>
             <Text style={{ color: c.muted, marginBottom: 8 }}>No events match your filters</Text>
@@ -2487,7 +2519,8 @@ export default function Home() {
         animationType="slide"
         onRequestClose={() => setDetailsOpen(false)}
       >
-        <SafeAreaView style={{ flex: 1, backgroundColor: c.background }}>
+        <SafeAreaView edges={['bottom']} style={{ flex: 1, backgroundColor: c.background }}>
+          <HeaderSpacer />
           <BlurView
             intensity={30}
             tint={scheme === 'dark' ? 'dark' : 'light'}
@@ -2619,7 +2652,7 @@ export default function Home() {
                     }}
                   >
                     <Ionicons
-                      name={savedSet.has(selectedEvent.id) ? 'bookmark' : 'bookmark-outline'}
+                      name={savedSet.has(selectedEvent.id) ? 'heart' : 'heart-outline'}
                       size={18}
                       color={savedSet.has(selectedEvent.id) ? c.primary : c.text}
                     />

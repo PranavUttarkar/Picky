@@ -48,9 +48,11 @@ export default function FoodExplore() {
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   // Budget slider: 4 stops (0:$1-10, 1:$10-20, 2:$20-30, 3:$30+); null = no filter
-  const [priceStep, setPriceStep] = useState<number | null>(null);
+  // priceRange is [minIndex, maxIndex] or null
+  const [priceRange, setPriceRange] = useState<[number, number] | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const PAGE_SIZE = 20;
+  const endReachedDuringMomentum = useRef(true);
 
   useEffect(() => {
     (async () => {
@@ -159,7 +161,7 @@ export default function FoodExplore() {
         return true;
       });
     }
-    if (priceStep != null) {
+    if (priceRange != null) {
       const bucketOf = (range?: string | null): number | null => {
         if (!range) return null;
         const s = String(range)
@@ -185,13 +187,14 @@ export default function FoodExplore() {
         if (dollarCount) return Math.max(0, Math.min(3, dollarCount - 1));
         return null;
       };
+      const [minIdx, maxIdx] = priceRange;
       arr = arr.filter((r) => {
         const b = bucketOf(r.price_range);
-        return b === priceStep;
+        return b !== null && b >= minIdx && b <= maxIdx;
       });
     }
     return arr;
-  }, [combined, activeTags, priceStep]);
+  }, [combined, activeTags, priceRange]);
 
   const normalize = (arr: string[]) =>
     arr
@@ -233,6 +236,29 @@ export default function FoodExplore() {
     setSaving(false);
   };
 
+  // Budget labels and helpers for two-thumb discrete range selection
+  const PRICE_LABELS = ['$1-10', '$10-20', '$20-30', '$30+'] as const;
+  const setRangeOnPress = (index: number) => {
+    if (!priceRange) {
+      setPriceRange([index, index]);
+      return;
+    }
+    const [minIdx, maxIdx] = priceRange;
+    if (index < minIdx) {
+      setPriceRange([index, maxIdx]);
+      return;
+    }
+    if (index > maxIdx) {
+      setPriceRange([minIdx, index]);
+      return;
+    }
+    // index is within current range: move the closer thumb
+    const distToMin = index - minIdx;
+    const distToMax = maxIdx - index;
+    if (distToMin <= distToMax) setPriceRange([index, maxIdx]);
+    else setPriceRange([minIdx, index]);
+  };
+
   // (Removed quick-add from event interests by request)
 
   const ListHeader = () => (
@@ -252,8 +278,8 @@ export default function FoodExplore() {
           style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
         >
           <Text style={{ color: c.text, fontWeight: '800' }}>Budget</Text>
-          {priceStep != null ? (
-            <Pressable onPress={() => setPriceStep(null)} accessibilityLabel="Clear budget filter">
+          {priceRange != null ? (
+            <Pressable onPress={() => setPriceRange(null)} accessibilityLabel="Clear budget filter">
               <Text style={{ color: c.muted }}>Clear</Text>
             </Pressable>
           ) : null}
@@ -275,11 +301,11 @@ export default function FoodExplore() {
               }}
             >
               {[0, 1, 2, 3].map((i) => {
-                const active = priceStep === i;
+                const active = priceRange != null && i >= priceRange[0] && i <= priceRange[1];
                 return (
                   <Pressable
                     key={i}
-                    onPress={() => setPriceStep((prev) => (prev === i ? null : i))}
+                    onPress={() => setRangeOnPress(i)}
                     accessibilityLabel={`Select budget ${
                       i === 0 ? '$1-10' : i === 1 ? '$10-20' : i === 2 ? '$20-30' : '$30+'
                     }`}
@@ -308,13 +334,19 @@ export default function FoodExplore() {
           </View>
           {/* Labels */}
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 }}>
-            {['$1-10', '$10-20', '$20-30', '$30+'].map((label, idx) => (
+            {PRICE_LABELS.map((label, idx) => (
               <Text
                 key={label}
                 style={{
-                  color: priceStep === idx ? c.text : c.muted,
+                  color:
+                    priceRange != null && idx >= priceRange[0] && idx <= priceRange[1]
+                      ? c.text
+                      : c.muted,
                   fontSize: 12,
-                  fontWeight: priceStep === idx ? '800' : '600',
+                  fontWeight:
+                    priceRange != null && idx >= priceRange[0] && idx <= priceRange[1]
+                      ? '800'
+                      : '600',
                 }}
               >
                 {label}
@@ -571,6 +603,7 @@ export default function FoodExplore() {
             keyExtractor={(i) => i.id}
             ListHeaderComponent={ListHeader}
             contentContainerStyle={{ gap: 10, paddingTop: 12, paddingBottom: 40 }}
+            style={{ flex: 1 }}
             renderItem={({ item }) => {
               const sel = selected.has(item.id);
               return (
@@ -590,9 +623,15 @@ export default function FoodExplore() {
                 />
               );
             }}
-            onEndReachedThreshold={0.6}
+            onEndReachedThreshold={0.2}
+            onMomentumScrollBegin={() => {
+              endReachedDuringMomentum.current = false;
+            }}
             onEndReached={() => {
-              if (!loading && hasMore && query.trim().length < 2) loadPage(page);
+              if (!endReachedDuringMomentum.current) {
+                endReachedDuringMomentum.current = true;
+                if (!loading && hasMore && query.trim().length < 2) loadPage(page);
+              }
             }}
           />
         ) : (
@@ -611,6 +650,7 @@ export default function FoodExplore() {
               maxWidth: MAX_GRID_WIDTH,
               width: '100%',
             }}
+            style={{ flex: 1 }}
             renderItem={({ item, index }) => {
               const sel = selected.has(item.id);
               const total = filteredCombined.length;
@@ -641,9 +681,15 @@ export default function FoodExplore() {
                 </View>
               );
             }}
-            onEndReachedThreshold={0.6}
+            onEndReachedThreshold={0.2}
+            onMomentumScrollBegin={() => {
+              endReachedDuringMomentum.current = false;
+            }}
             onEndReached={() => {
-              if (!loading && hasMore && query.trim().length < 2) loadPage(page);
+              if (!endReachedDuringMomentum.current) {
+                endReachedDuringMomentum.current = true;
+                if (!loading && hasMore && query.trim().length < 2) loadPage(page);
+              }
             }}
           />
         )}

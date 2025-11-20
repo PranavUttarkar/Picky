@@ -1,5 +1,6 @@
 import { Stack, router } from 'expo-router';
 import { useColorScheme } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { ThemeProvider } from '@/theme/ThemeProvider';
 import { useFonts, Pacifico_400Regular } from '@expo-google-fonts/pacifico';
 import { SavedNotificationProvider } from '@/utils/SavedNotificationContext';
@@ -8,6 +9,7 @@ import { useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/services/supabase';
 import { joinGroupByCode } from '@/services/groups';
+import HeaderSpacer from '@/components/HeaderSpacer';
 
 export default function RootLayout() {
   const scheme = useColorScheme();
@@ -47,20 +49,24 @@ export default function RootLayout() {
     };
   }, []);
   return (
-    <ThemeProvider>
-      <SavedNotificationProvider>
-        <GroupDecisionNotificationProvider>
-          <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="index" />
-            <Stack.Screen name="invite" />
-            <Stack.Screen name="onboarding" />
-            <Stack.Screen name="(tabs)" />
-            <Stack.Screen name="events/[id]" />
-            {/** decisions routed via (tabs) to keep header/tab visible */}
-            {/** Poll routes are under (tabs)/polls now to keep header/tab visible */}
-          </Stack>
-        </GroupDecisionNotificationProvider>
-      </SavedNotificationProvider>
-    </ThemeProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ThemeProvider>
+        <SavedNotificationProvider>
+          <GroupDecisionNotificationProvider>
+            {/* Spacer to avoid status bar overlap on iOS/Android; no-op on web */}
+            <HeaderSpacer />
+            <Stack screenOptions={{ headerShown: false }}>
+              <Stack.Screen name="index" />
+              <Stack.Screen name="invite" />
+              <Stack.Screen name="onboarding" />
+              <Stack.Screen name="(tabs)" />
+              <Stack.Screen name="events/[id]" />
+              {/** decisions routed via (tabs) to keep header/tab visible */}
+              {/** Poll routes are under (tabs)/polls now to keep header/tab visible */}
+            </Stack>
+          </GroupDecisionNotificationProvider>
+        </SavedNotificationProvider>
+      </ThemeProvider>
+    </GestureHandlerRootView>
   );
 }

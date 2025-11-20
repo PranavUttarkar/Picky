@@ -175,7 +175,7 @@ export const EventRowCard: React.FC<EventRowCardProps> = memo(
                     style={{ padding: 4 }}
                   >
                     <Ionicons
-                      name={isSaved ? 'bookmark' : 'bookmark-outline'}
+                      name={isSaved ? 'heart' : 'heart-outline'}
                       size={18}
                       color={isSaved ? c.primary : c.text}
                     />

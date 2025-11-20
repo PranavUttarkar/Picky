@@ -9,10 +9,11 @@ import {
   useWindowDimensions,
   Alert,
   Modal,
-  SafeAreaView,
   ScrollView,
   TextInput,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import HeaderSpacer from '@/components/HeaderSpacer';
 import { useTheme, useThemeColors } from '@/theme/ThemeProvider';
 import GradientBackground from '@/components/GradientBackground';
 import AnimatedPage from '@/components/AnimatedPage';
@@ -334,7 +335,8 @@ export default function MyEvents() {
         animationType="slide"
         onRequestClose={() => !saving && setEditOpen(false)}
       >
-        <SafeAreaView style={{ flex: 1, backgroundColor: c.background }}>
+        <SafeAreaView edges={['bottom']} style={{ flex: 1, backgroundColor: c.background }}>
+          <HeaderSpacer />
           <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 32 }}>
             <Text style={{ color: c.text, fontSize: 18, fontWeight: '800', marginBottom: 12 }}>
               Edit event

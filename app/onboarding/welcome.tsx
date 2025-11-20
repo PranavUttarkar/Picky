@@ -277,7 +277,7 @@ export default function Welcome() {
       {mode === 'signIn' ? (
         !isAuthed ? (
           <Pressable onPress={startSignUp} style={{ marginTop: 16 }}>
-            <Text style={{ textDecorationLine: 'underline' }}>
+            <Text style={{ textDecorationLine: 'underline', color: c.muted }}>
               {"Don't have an account? Create one"}
             </Text>
           </Pressable>
