@@ -12,6 +12,7 @@ import {
   KeyboardAvoidingView,
   Modal,
 } from 'react-native';
+import dayjs from 'dayjs';
 import { useTheme, useThemeColors } from '@/theme/ThemeProvider';
 import GradientBackground from '@/components/GradientBackground';
 import AnimatedPage from '@/components/AnimatedPage';
@@ -22,7 +23,7 @@ import { router } from 'expo-router';
 import { trackCTA, trackEvent } from '@/utils/analytics';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
-import { updateUserProfile, checkUsernameAvailability } from '@/services/friends';
+import { updateUserProfile, checkUsernameAvailability, updateUsername } from '@/services/friends';
 import { checkProfanity } from '@/utils/profanity';
 import Avatar from '@/components/Avatar';
 import type { UserProfile } from '@/types/models';
@@ -237,11 +238,15 @@ const UsernameEditModal = memo(function UsernameEditModal({
   onClose,
   currentUsername,
   onSave,
+  canEditUsername,
+  nextAllowedDate,
 }: {
   visible: boolean;
   onClose: () => void;
   currentUsername: string;
   onSave: (newUsername: string) => Promise<void>;
+  canEditUsername: boolean;
+  nextAllowedDate: Date | null;
 }) {
   const c = useThemeColors();
   const [newUsername, setNewUsername] = useState(currentUsername);
@@ -320,7 +325,8 @@ const UsernameEditModal = memo(function UsernameEditModal({
     }
   };
 
-  const canSave = newUsername.trim() && 
+  const canSave = canEditUsername &&
+                  newUsername.trim() && 
                   newUsername !== currentUsername && 
                   isAvailable === true && 
                   !error && 
@@ -375,18 +381,28 @@ const UsernameEditModal = memo(function UsernameEditModal({
           <Text style={{
             fontSize: 14,
             color: c.muted,
-            marginBottom: 16,
+            marginBottom: 12,
             lineHeight: 20,
           }}>
-            Choose a unique username. It can only contain letters, numbers, and underscores.
+            You can change your username once every 7 days. It can only contain letters, numbers, and underscores.
           </Text>
+          {!canEditUsername && (
+            <Text style={{
+              fontSize: 13,
+              color: '#ef4444',
+              marginBottom: 12,
+            }}>
+              You changed your username recently. You can edit again on {nextAllowedDate ? dayjs(nextAllowedDate).format('MMM D, YYYY') : 'later'}.
+            </Text>
+          )}
 
           <View style={{ position: 'relative', marginBottom: 16 }}>
             <TextInput
               value={newUsername}
               onChangeText={setNewUsername}
-              placeholder="Enter new username"
+              placeholder={canEditUsername ? 'Enter new username' : 'Username locked'}
               placeholderTextColor={c.muted}
+              editable={canEditUsername}
               autoCapitalize="none"
               autoCorrect={false}
               style={{
@@ -396,8 +412,9 @@ const UsernameEditModal = memo(function UsernameEditModal({
                 color: c.text,
                 fontSize: 16,
                 paddingRight: 50,
+                opacity: canEditUsername ? 1 : 0.6,
                 borderWidth: 2,
-                borderColor: error ? '#ef4444' : 
+                borderColor: !canEditUsername ? c.muted : error ? '#ef4444' : 
                            isAvailable === true ? '#10b981' : 
                            isAvailable === false ? '#ef4444' : c.muted,
               }}
@@ -462,10 +479,11 @@ const UsernameEditModal = memo(function UsernameEditModal({
                 paddingVertical: 16,
                 borderRadius: 12,
                 alignItems: 'center',
+                opacity: canSave ? 1 : 0.6,
               }}
             >
               <Text style={{ color: 'white', fontWeight: '600' }}>
-                {saving ? 'Saving...' : 'Save'}
+                {saving ? 'Saving...' : canEditUsername ? 'Save' : 'Locked'}
               </Text>
             </Pressable>
           </View>
@@ -506,6 +524,7 @@ export default function Profile() {
   const [loadingFoodInterests, setLoadingFoodInterests] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savingFood, setSavingFood] = useState(false);
+  // Server timestamp drives cooldown logic; stored in userProfile.username_last_changed
 
   // Load user profile and data
   useEffect(() => {
@@ -654,11 +673,18 @@ export default function Profile() {
   // Username functions
   const handleUsernameUpdate = async (newUsername: string) => {
     try {
-      await updateUserProfile({ username: newUsername });
-      setUserProfile(prev => prev ? { ...prev, username: newUsername } : null);
+      await updateUsername(newUsername.toLowerCase());
+      // Refetch minimal profile fields to get updated timestamp
+      const { data: refreshed } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userProfile?.id)
+        .single();
+      if (refreshed) setUserProfile(refreshed as any);
       Alert.alert('Success', 'Username updated successfully!');
     } catch (error: any) {
-      throw new Error(error.message || 'Failed to update username');
+      Alert.alert('Error', error.message || 'Failed to update username');
+      throw error;
     }
   };
 
@@ -731,7 +757,7 @@ export default function Profile() {
   if (loadingProfile) {
     return (
       <GradientBackground>
-        <AnimatedPage>
+        <AnimatedPage style={{ flex: 1 }}>
           <View style={{ 
             flex: 1, 
             alignItems: 'center', 
@@ -754,7 +780,7 @@ export default function Profile() {
   if (!authed) {
     return (
       <GradientBackground>
-        <AnimatedPage>
+        <AnimatedPage style={{ flex: 1 }}>
           <ScrollView 
             style={{ flex: 1 }}
             contentContainerStyle={{ 
@@ -830,9 +856,14 @@ export default function Profile() {
     );
   }
 
+  const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+  const lastChangedTs = userProfile?.username_last_changed ? new Date(userProfile.username_last_changed).getTime() : null;
+  const canEditUsername = !lastChangedTs || (Date.now() - lastChangedTs) > SEVEN_DAYS_MS;
+  const nextAllowedDate = lastChangedTs ? new Date(lastChangedTs + SEVEN_DAYS_MS) : null;
+
   return (
     <GradientBackground>
-      <AnimatedPage>
+      <AnimatedPage style={{ flex: 1 }}>
         <ScrollView 
           style={{ flex: 1 }}
           contentContainerStyle={{ 
@@ -848,6 +879,7 @@ export default function Profile() {
           <View style={{
             alignItems: 'center',
             marginBottom: 32,
+            width: '100%',
           }}>
             {/* Avatar */}
             <View style={{ position: 'relative', marginBottom: 16 }}>
@@ -877,36 +909,61 @@ export default function Profile() {
             </View>
             
             {/* User Info */}
-            <Text style={{
-              fontSize: 24,
-              fontWeight: '700',
-              color: c.text,
-              marginBottom: 4,
-            }}>
-              {userProfile?.display_name || userProfile?.username || 'User'}
-            </Text>
-            
-            {userProfile?.username && (
+            <View style={{ position: 'relative', marginBottom: 4 }}>
+              <Text style={{
+                fontSize: 24,
+                fontWeight: '700',
+                color: c.text,
+              }}>
+                {userProfile?.display_name || userProfile?.username || 'User'}
+              </Text>
               <Pressable
-                onPress={() => setShowUsernameEdit(true)}
+                onPress={() => {
+                  if (canEditUsername) {
+                    setShowUsernameEdit(true);
+                  } else {
+                    Alert.alert('Username Locked', `You can edit again on ${nextAllowedDate ? dayjs(nextAllowedDate).format('MMM D, YYYY') : 'later'}.`);
+                  }
+                }}
+                accessibilityLabel="Edit username"
+                hitSlop={8}
                 style={{
-                  flexDirection: 'row',
+                  position: 'absolute',
+                  bottom: -5,
+                  right: -30,
+                  width: 34,
+                  height: 34,
+                  borderRadius: 17,
                   alignItems: 'center',
-                  gap: 4,
-                  marginBottom: 8,
-                  paddingHorizontal: 8,
-                  paddingVertical: 4,
-                  borderRadius: 8,
+                  justifyContent: 'center',
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 1 },
+                  shadowOpacity: 0.15,
+                  shadowRadius: 2,
+                  elevation: 2,
                 }}
               >
-                <Text style={{
-                  fontSize: 16,
-                  color: c.muted,
-                }}>
-                  @{userProfile.username}
-                </Text>
-                <Ionicons name="pencil" size={14} color={c.muted} />
+                <Ionicons name="pencil" size={16} color={c.primary} />
               </Pressable>
+            </View>
+            
+            {userProfile?.username && (
+              <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 6,
+                marginBottom: 6,
+              }}>
+                <Text style={{ fontSize: 16, color: c.muted }}>@{userProfile.username}</Text>
+                <Text style={{ fontSize: 12, color: c.muted }}>
+                  (Username can be changed once every 7 days)
+                </Text>
+              </View>
+            )}
+            {!canEditUsername && (
+              <Text style={{ fontSize: 12, color: '#ef4444', marginBottom: 8 }}>
+                Next edit available on {nextAllowedDate ? dayjs(nextAllowedDate).format('MMM D, YYYY') : ''}
+              </Text>
             )}
             
             {userProfile?.email && (
@@ -961,77 +1018,61 @@ export default function Profile() {
             )}
           </View>
 
-          {/* Appearance Settings */}
-          <SectionCard
-            title="Appearance"
-            subtitle="Choose your preferred theme"
-            icon="color-palette"
-          >
+          {/* Compact Appearance Toggle Row */}
+          <View style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            backgroundColor: c.card,
+            borderRadius: 14,
+            paddingHorizontal: 16,
+            paddingVertical: 10,
+            marginBottom: 20,
+          }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Ionicons name="color-palette" size={20} color={c.primary} />
+              <Text style={{ color: c.text, fontSize: 16, fontWeight: '600' }}>Appearance</Text>
+            </View>
             <View style={{
               flexDirection: 'row',
+              alignItems: 'center',
               backgroundColor: `${c.text}08`,
-              borderRadius: 12,
+              borderRadius: 30,
               padding: 4,
+              gap: 4,
             }}>
               <Pressable
-                onPress={() => {
-                  trackCTA('profile_theme_select', { value: 'light' }).catch(() => {});
-                  setScheme('light');
-                }}
+                onPress={() => { trackCTA('profile_theme_select', { value: 'light' }).catch(() => {}); setScheme('light'); }}
                 style={{
-                  flex: 1,
                   backgroundColor: scheme === 'light' ? c.primary : 'transparent',
-                  paddingVertical: 12,
-                  borderRadius: 8,
-                  alignItems: 'center',
+                  paddingVertical: 6,
+                  paddingHorizontal: 12,
+                  borderRadius: 24,
                   flexDirection: 'row',
-                  justifyContent: 'center',
-                  gap: 8,
+                  alignItems: 'center',
+                  gap: 6,
                 }}
               >
-                <Ionicons 
-                  name="sunny" 
-                  size={18} 
-                  color={scheme === 'light' ? 'white' : c.text} 
-                />
-                <Text style={{
-                  color: scheme === 'light' ? 'white' : c.text,
-                  fontWeight: '600',
-                }}>
-                  Light
-                </Text>
+                <Ionicons name="sunny" size={16} color={scheme === 'light' ? 'white' : c.text} />
+                <Text style={{ color: scheme === 'light' ? 'white' : c.text, fontWeight: '600', fontSize: 13 }}>Light</Text>
               </Pressable>
-              
               <Pressable
-                onPress={() => {
-                  trackCTA('profile_theme_select', { value: 'dark' }).catch(() => {});
-                  setScheme('dark');
-                }}
+                onPress={() => { trackCTA('profile_theme_select', { value: 'dark' }).catch(() => {}); setScheme('dark'); }}
                 style={{
-                  flex: 1,
                   backgroundColor: scheme === 'dark' ? c.primary : 'transparent',
-                  paddingVertical: 12,
-                  borderRadius: 8,
-                  alignItems: 'center',
+                  paddingVertical: 6,
+                  paddingHorizontal: 12,
+                  borderRadius: 24,
                   flexDirection: 'row',
-                  justifyContent: 'center',
-                  gap: 8,
+                  alignItems: 'center',
+                  gap: 6,
                 }}
               >
-                <Ionicons 
-                  name="moon" 
-                  size={18} 
-                  color={scheme === 'dark' ? 'white' : c.text} 
-                />
-                <Text style={{
-                  color: scheme === 'dark' ? 'white' : c.text,
-                  fontWeight: '600',
-                }}>
-                  Dark
-                </Text>
+                <Ionicons name="moon" size={16} color={scheme === 'dark' ? 'white' : c.text} />
+                <Text style={{ color: scheme === 'dark' ? 'white' : c.text, fontWeight: '600', fontSize: 13 }}>Dark</Text>
               </Pressable>
             </View>
-          </SectionCard>
+          </View>
 
           {/* Interests Section */}
           <SectionCard
@@ -1148,7 +1189,7 @@ export default function Profile() {
                         key={tag}
                         tag={tag}
                         onRemove={(t) => removeTag(t, true)}
-                        variant="secondary"
+                        variant="primary" // Match style of Your Interests
                       />
                     ))}
                   </View>
@@ -1200,11 +1241,7 @@ export default function Profile() {
           </SectionCard>
 
           {/* Sign Out */}
-          <ActionButton
-            title="Sign Out"
-            subtitle="Sign out of your account"
-            icon="log-out"
-            variant="danger"
+          <Pressable
             onPress={async () => {
               Alert.alert(
                 'Sign Out',
@@ -1222,7 +1259,33 @@ export default function Profile() {
                 ]
               );
             }}
-          />
+            style={{
+              backgroundColor: `${c.text}10`,
+              borderRadius: 12,
+              padding: 16,
+              flexDirection: 'row',
+              alignItems: 'center',
+              marginBottom: 12,
+            }}
+          >
+            <View style={{
+              backgroundColor: '#dc2626',
+              borderRadius: 10,
+              padding: 8,
+              marginRight: 12,
+            }}>
+              <Ionicons name="log-out" size={20} color={'white'} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: '#dc2626', fontSize: 16, fontWeight: '600', marginBottom: 2 }}>
+                Sign Out
+              </Text>
+              <Text style={{ color: c.muted, fontSize: 13 }}>
+                Sign out of your account
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={c.muted} />
+          </Pressable>
 
           {/* Username Edit Modal */}
           <UsernameEditModal
@@ -1230,6 +1293,8 @@ export default function Profile() {
             onClose={() => setShowUsernameEdit(false)}
             currentUsername={userProfile?.username || ''}
             onSave={handleUsernameUpdate}
+            canEditUsername={canEditUsername}
+            nextAllowedDate={nextAllowedDate}
           />
         </ScrollView>
       </AnimatedPage>

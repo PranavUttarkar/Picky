@@ -143,6 +143,7 @@ export async function updateUserProfile(updates: {
   username?: string;
   display_name?: string;
   account_type?: 'personal' | 'organization';
+  avatar_url?: string; // allow updating avatar
 }): Promise<void> {
   const user = (await supabase.auth.getUser()).data.user;
   if (!user) throw new Error('Not authenticated');
@@ -153,6 +154,20 @@ export async function updateUserProfile(updates: {
     .eq('id', user.id);
 
   if (error) throw error;
+}
+
+// Server-enforced username update with 7-day cooldown
+export async function updateUsername(newUsername: string): Promise<void> {
+  const { error } = await supabase.rpc('update_username', { p_new_username: newUsername });
+  if (error) {
+    // Map server exceptions to user-friendly messages
+    const msg = error.message || '';
+    if (/USERNAME_CHANGE_TOO_SOON/.test(msg)) throw new Error('You can only change your username once every 7 days.');
+    if (/USERNAME_TAKEN/.test(msg)) throw new Error('That username is already taken.');
+    if (/USERNAME_TOO_SHORT/.test(msg)) throw new Error('Username must be at least 3 characters.');
+    if (/USERNAME_INVALID_FORMAT/.test(msg)) throw new Error('Only letters, numbers, and underscores allowed.');
+    throw error;
+  }
 }
 
 export async function checkUsernameAvailability(username: string): Promise<boolean> {

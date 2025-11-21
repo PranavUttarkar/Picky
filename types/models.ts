@@ -8,6 +8,7 @@ export interface UserProfile {
   account_type?: 'personal' | 'organization' | null;
   avatar_url?: string | null;
   is_admin?: boolean | null;
+  username_last_changed?: string | null; // server-enforced cooldown timestamp
 }
 
 export interface Event {
