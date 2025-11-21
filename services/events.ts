@@ -98,6 +98,8 @@ export type EventInput = {
   date_time: string; // ISO
   end_time?: string | null; // ISO optional end time
   location?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
   tags?: string[] | null;
   rsvp_url?: string | null;
 };
@@ -111,7 +113,7 @@ export async function createEvent(input: EventInput): Promise<Event> {
   const { data, error } = await supabase
     .from('events')
     .insert({ ...input, image_urls, image_url, created_by: user.id })
-    .select('id,title,description,image_url,image_urls,date_time,end_time,location,tags,rsvp_url,created_by')
+    .select('id,title,description,image_url,image_urls,date_time,end_time,location,latitude,longitude,tags,rsvp_url,created_by')
     .single();
   if (error) throw error;
   return data as Event;
@@ -127,7 +129,7 @@ export async function updateEvent(eventId: number, input: Partial<EventInput>): 
     .from('events')
     .update(payload)
     .eq('id', eventId)
-    .select('id,title,description,image_url,image_urls,date_time,end_time,location,tags,rsvp_url,created_by')
+    .select('id,title,description,image_url,image_urls,date_time,end_time,location,latitude,longitude,tags,rsvp_url,created_by')
     .single();
   if (error) throw error;
   return data as Event;

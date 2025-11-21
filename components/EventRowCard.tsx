@@ -188,7 +188,7 @@ export const EventRowCard: React.FC<EventRowCardProps> = memo(
                       }}
                       style={{ paddingHorizontal: 10, paddingVertical: 6 }}
                       textStyle={{ fontSize: 12 }}
-                    />
+                    >Poll</ThreeDButton>
                   ) : null}
                   {isAdmin ? (
                     <>

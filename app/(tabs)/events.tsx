@@ -52,6 +52,7 @@ import {
 } from '@/services/events';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
+import LocationPicker from '@/components/LocationPicker';
 
 type AdminHeaderProps = {
   c: ReturnType<typeof useThemeColors>;
@@ -500,9 +501,13 @@ const AddEditEventModal = memo(function AddEditEventModal({
   const [endTimeISO, setEndTimeISO] = useState<string | null>(
     dayjs().add(2, 'day').hour(20).minute(0).second(0).millisecond(0).toISOString(),
   );
-  const [endTimeInput, setEndTimeInput] = useState<string>('20:00');
+  const [endTimeInput, setEndTimeInput] = useState<string>('8:00');
+  const [startMeridiem, setStartMeridiem] = useState<'AM' | 'PM'>(dayjs().add(2, 'day').format('A') as 'AM' | 'PM');
+  const [endMeridiem, setEndMeridiem] = useState<'AM' | 'PM'>('PM');
   const [showEndTimePicker, setShowEndTimePicker] = useState(false);
   const [location, setLocation] = useState('');
+  const [latitude, setLatitude] = useState<number | null>(null);
+  const [longitude, setLongitude] = useState<number | null>(null);
   const [tagsCsv, setTagsCsv] = useState('');
   const [rsvp, setRsvp] = useState('');
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -526,19 +531,24 @@ const AddEditEventModal = memo(function AddEditEventModal({
       setPickedUris([]);
       setDateTime(initialEvent.date_time);
       setDateInput(dayjs(initialEvent.date_time).format('YYYY-MM-DD'));
-      setTimeInput(dayjs(initialEvent.date_time).format('HH:mm'));
+      setTimeInput(dayjs(initialEvent.date_time).format('h:mm'));
+      setStartMeridiem(dayjs(initialEvent.date_time).format('A') as 'AM' | 'PM');
       if ((initialEvent as any).end_time) {
         const et = dayjs((initialEvent as any).end_time);
         setEndTimeISO(et.toISOString());
-        setEndTimeInput(et.format('HH:mm'));
+        setEndTimeInput(et.format('h:mm'));
+        setEndMeridiem(et.format('A') as 'AM' | 'PM');
       } else {
         const start = dayjs(initialEvent.date_time);
         let def = start.clone().hour(20).minute(0).second(0).millisecond(0);
         if (def.isBefore(start)) def = start.add(1, 'hour').second(0).millisecond(0);
         setEndTimeISO(def.toISOString());
-        setEndTimeInput(def.format('HH:mm'));
+        setEndTimeInput(def.format('h:mm'));
+        setEndMeridiem(def.format('A') as 'AM' | 'PM');
       }
       setLocation(initialEvent.location ?? '');
+      setLatitude(initialEvent.latitude ?? null);
+      setLongitude(initialEvent.longitude ?? null);
       setTagsCsv((initialEvent.tags ?? []).join(', '));
       setRsvp((initialEvent as any).rsvp_url ?? '');
       setShowEndTimePicker(false);
@@ -554,11 +564,15 @@ const AddEditEventModal = memo(function AddEditEventModal({
       setPickedUris([]);
       setDateTime(start.toISOString());
       setDateInput(base.format('YYYY-MM-DD'));
-      setTimeInput(start.format('HH:mm'));
+      setTimeInput(start.format('h:mm'));
       setEndTimeISO(endDefault.toISOString());
-      setEndTimeInput('20:00');
+      setEndTimeInput('8:00');
+      setStartMeridiem(start.format('A') as 'AM' | 'PM');
+      setEndMeridiem(endDefault.format('A') as 'AM' | 'PM');
       setShowEndTimePicker(false);
       setLocation('');
+      setLatitude(null);
+      setLongitude(null);
       setTagsCsv('');
       setRsvp('');
     }
@@ -572,6 +586,7 @@ const AddEditEventModal = memo(function AddEditEventModal({
   const submit = async () => {
     const titleVal = title.trim();
     if (!titleVal) {
+      setShowValidation(true);
       Alert.alert('Missing title', 'Please give your event a title.');
       return;
     }
@@ -583,6 +598,7 @@ const AddEditEventModal = memo(function AddEditEventModal({
     const hasPicked = pickedUris.length > 0;
     const hasUrl = [image1, image2, image3].some((s) => !!s && s.trim().length > 0);
     if (!hasPicked && !hasUrl) {
+      setShowValidation(true);
       Alert.alert(
         'Add an image',
         'Please add at least one image by pasting a URL or picking a photo.',
@@ -610,6 +626,13 @@ const AddEditEventModal = memo(function AddEditEventModal({
       .map((t) => t.trim().toLowerCase())
       .filter(Boolean)
       .filter((v, i, a) => a.indexOf(v) === i);
+    if (!tags.length) {
+      setShowValidation(true);
+      Alert.alert('Missing tags', 'Please add at least one tag to categorize your event.');
+      return;
+    }
+    // Passed required-field validation
+    if (showValidation) setShowValidation(false);
     const { cleaned: imageUrlsFromText, errors: imageErrors } = sanitizeEventImageUrls([
       image1,
       image2,
@@ -668,6 +691,8 @@ const AddEditEventModal = memo(function AddEditEventModal({
       date_time: dtIso,
       end_time: endTimeIso,
       location: location.trim() || null,
+      latitude: latitude,
+      longitude: longitude,
       tags,
       rsvp_url: rsvp.trim() || null,
     };
@@ -692,417 +717,394 @@ const AddEditEventModal = memo(function AddEditEventModal({
   // Keep web inputs in sync if dateTime changes from other flows
   useEffect(() => {
     setDateInput(dayjs(dateTime).format('YYYY-MM-DD'));
-    setTimeInput(dayjs(dateTime).format('HH:mm'));
+    setTimeInput(dayjs(dateTime).format('h:mm'));
+    setStartMeridiem(dayjs(dateTime).format('A') as 'AM' | 'PM');
   }, [dateTime]);
+
+  useEffect(() => {
+    if (endTimeISO) {
+      setEndTimeInput(dayjs(endTimeISO).format('h:mm'));
+      setEndMeridiem(dayjs(endTimeISO).format('A') as 'AM' | 'PM');
+    } else {
+      setEndTimeInput('');
+    }
+  }, [endTimeISO]);
+
+  // Collapsible section state (progressive disclosure)
+  const [openSections, setOpenSections] = useState<{ [k: string]: boolean }>(() => ({
+    essentials: true,
+    images: true,
+    location: true, // auto open location by default (chevron shown as up)
+  }));
+  const [showValidation, setShowValidation] = useState(false);
+  const [locationStatus, setLocationStatus] = useState<string | null>(null);
+  const prevLatRef = useRef<number | null>(null);
+  const prevLngRef = useRef<number | null>(null);
+
+  const toggleSection = (key: string) =>
+    setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
+
+  // Streamlined image URL handling: show only one empty input at a time
+  const imageUrlList = [image1, image2, image3];
+  const setImageByIndex = (i: number, v: string) => {
+    if (i === 0) setImage1(v); else if (i === 1) setImage2(v); else if (i === 2) setImage3(v);
+  };
+  const activeImageInputs = imageUrlList.filter((_, idx) => {
+    // show until first empty after a filled; ensures minimal clutter
+    const filledBefore = imageUrlList.slice(0, idx).some((s) => (s || '').trim().length > 0);
+    const currentFilled = (imageUrlList[idx] || '').trim().length > 0;
+    if (idx === 0) return true;
+    if (currentFilled) return true;
+    // show one next empty only if prior has content
+    return filledBefore && !currentFilled;
+  });
+
+  // Section component inline (small, avoids extra file)
+  const Section: React.FC<{ id: string; title: string; defaultOpen?: boolean; children: React.ReactNode }> = ({ id, title, children }) => {
+    const open = openSections[id];
+    return (
+      <View style={{ marginBottom: 14, borderRadius: 12, borderWidth: 1, borderColor: '#00000020', backgroundColor: c.card }}>
+        <Pressable
+          onPress={() => toggleSection(id)}
+          accessibilityRole="button"
+          accessibilityLabel={`${open ? 'Collapse' : 'Expand'} ${title} section`}
+          style={{ paddingHorizontal: 14, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+        >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                {id === 'images' ? <Ionicons name="image-outline" size={18} color={c.muted} /> : null}
+                {id === 'location' ? <Ionicons name="location-outline" size={18} color={c.muted} /> : null}
+                <Text style={{ color: c.text, fontWeight: '700', fontSize: 15 }}>{title}</Text>
+              </View>
+          <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={18} color={c.muted} />
+        </Pressable>
+        {open ? <View style={{ paddingHorizontal: 14, paddingBottom: 14, gap: 10 }}>{children}</View> : null}
+      </View>
+    );
+  };
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={() => !savingEvent && onClose()}>
       <SafeAreaView edges={['bottom']} style={{ flex: 1, backgroundColor: c.background }}>
         <HeaderSpacer />
-        <BlurView
-          intensity={30}
-          tint={scheme === 'dark' ? 'dark' : 'light'}
-          style={{ padding: 12 }}
-        >
-          <View
-            style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}
-          >
-            <Text style={{ color: c.text, fontSize: 18, fontWeight: '800' }}>
-              {initialEvent ? 'Edit event' : 'Add event'}
-            </Text>
+        <BlurView intensity={30} tint={scheme === 'dark' ? 'dark' : 'light'} style={{ padding: 12 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Text style={{ color: c.text, fontSize: 18, fontWeight: '800' }}>{initialEvent ? 'Edit Event' : 'Add Event'}</Text>
             <Pressable
               onPress={onClose}
-              style={{
-                backgroundColor: '#00000020',
-                paddingHorizontal: 12,
-                paddingVertical: 8,
-                borderRadius: 10,
-              }}
+              style={{ backgroundColor: '#00000020', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 }}
             >
               <Ionicons name="close" size={24} color={c.text} />
             </Pressable>
           </View>
         </BlurView>
-        <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
-          <View style={{ padding: 16 }}>
+        <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 120 }}>
+          <Section id="essentials" title="Details">
             <TextInput
               placeholder="Title"
               placeholderTextColor={c.muted}
               value={title}
               onChangeText={setTitle}
-              style={{
-                color: c.text,
-                backgroundColor: '#00000010',
-                padding: 10,
-                borderRadius: 8,
-                marginBottom: 8,
-              }}
+              style={{ color: c.text, backgroundColor: '#00000010', padding: 12, borderRadius: 10, fontSize: 15, borderWidth: 1, borderColor: showValidation && !title.trim() ? '#ff4444' : '#00000020' }}
             />
-            <TextInput
-              placeholder="Description"
-              placeholderTextColor={c.muted}
-              value={desc}
-              onChangeText={setDesc}
-              multiline
-              style={{
-                color: c.text,
-                backgroundColor: '#00000010',
-                padding: 10,
-                borderRadius: 8,
-                minHeight: 80,
-                marginBottom: 8,
-              }}
-            />
-            {[
-              { v: image1, s: setImage1, l: 'Image 1 URL (cover)' },
-              { v: image2, s: setImage2, l: 'Image 2 URL' },
-              { v: image3, s: setImage3, l: 'Image 3 URL' },
-            ].map((row, idx) => (
+            <View>
               <TextInput
-                key={idx}
-                placeholder={row.l}
+                placeholder="Description, Room Number, etc."
                 placeholderTextColor={c.muted}
-                value={row.v}
-                onChangeText={row.s as any}
+                value={desc}
+                onChangeText={setDesc}
+                multiline
+                style={{ color: c.text, backgroundColor: '#00000010', padding: 12, borderRadius: 10, minHeight: 100, fontSize: 14 }}
+              />
+              <Text style={{ color: c.muted, fontSize: 11, marginTop: 4 }}>{desc.length} chars</Text>
+            </View>
+            <View style={{ gap: 6 }}>
+              <TextInput
+                placeholder="Tags (comma seperated ex: workshop, engineering, free food)"
+                placeholderTextColor={c.muted}
+                value={tagsCsv}
+                onChangeText={setTagsCsv}
                 style={{
                   color: c.text,
                   backgroundColor: '#00000010',
-                  padding: 10,
-                  borderRadius: 8,
-                  marginBottom: 8,
+                  padding: 12,
+                  borderRadius: 10,
+                  fontSize: 14,
+                  borderWidth: 1,
+                  borderColor: showValidation && !tagsCsv.trim().length ? '#ff4444' : '#00000020',
                 }}
+                autoCapitalize="none"
               />
-            ))}
-            <View
-              style={{
-                flexDirection: 'row',
-                gap: 8,
-                marginBottom: 8,
-                flexWrap: 'wrap',
-                alignItems: 'center',
-              }}
-            >
-              {pickedUris.map((u, i) => (
-                <View key={`${u}-${i}`} style={{ position: 'relative' }}>
-                  <View
-                    style={{
-                      width: 72,
-                      height: 72,
-                      borderRadius: 8,
-                      overflow: 'hidden',
-                      backgroundColor: '#00000015',
-                    }}
-                  >
-                    <LazyImage uri={u} width={72} height={72} borderRadius={8} />
-                  </View>
-                  <Pressable
-                    onPress={() => setPickedUris((prev) => prev.filter((_, idx) => idx !== i))}
-                    accessibilityLabel={`Remove image ${i + 1}`}
-                    style={{
-                      position: 'absolute',
-                      top: -6,
-                      right: -6,
-                      backgroundColor: '#00000080',
-                      borderRadius: 999,
-                      padding: 4,
-                    }}
-                  >
-                    <Ionicons name="close" size={14} color="#fff" />
-                  </Pressable>
-                </View>
-              ))}
-              <Pressable
-                onPress={async () => {
-                  const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-                  if (status !== 'granted') {
-                    Alert.alert(
-                      'Permission needed',
-                      'Please allow photo library access to upload images.',
-                    );
-                    return;
-                  }
-                  const result = await ImagePicker.launchImageLibraryAsync({
-                    mediaTypes: ImagePicker.MediaTypeOptions.Images,
-                    allowsMultipleSelection: true,
-                    selectionLimit: 3,
-                    quality: 0.9,
-                  });
-                  if (!result.canceled) {
-                    const uris =
-                      (result.assets as ImagePicker.ImagePickerAsset[] | undefined)
-                        ?.map((a) => a.uri)
-                        .filter(Boolean) ?? [];
-                    setPickedUris((prev) => [...prev, ...uris].slice(0, 3));
-                  }
-                }}
-                style={{
-                  backgroundColor: c.primary,
-                  paddingHorizontal: 12,
-                  paddingVertical: 10,
-                  borderRadius: 10,
-                }}
-              >
-                <Text style={{ color: '#000', fontWeight: '700' }}>
-                  Choose images ({pickedUris.length}/3)
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={async () => {
-                  const { status } = await ImagePicker.requestCameraPermissionsAsync();
-                  if (status !== 'granted') {
-                    Alert.alert('Permission needed', 'Please allow camera access to take a photo.');
-                    return;
-                  }
-                  const result = await ImagePicker.launchCameraAsync({
-                    mediaTypes: ImagePicker.MediaTypeOptions.Images,
-                    quality: 0.9,
-                  });
-                  if (!result.canceled && result.assets?.[0]?.uri) {
-                    setPickedUris((prev) => [result.assets[0].uri, ...prev].slice(0, 3));
-                  }
-                }}
-                style={{
-                  backgroundColor: '#00000020',
-                  paddingHorizontal: 12,
-                  paddingVertical: 10,
-                  borderRadius: 10,
-                }}
-              >
-                <Text style={{ color: c.text, fontWeight: '700' }}>Take photo</Text>
-              </Pressable>
-              {pickedUris.length > 0 ? (
-                <Pressable
-                  onPress={() => setPickedUris([])}
-                  style={{
-                    backgroundColor: '#00000020',
-                    paddingHorizontal: 12,
-                    paddingVertical: 10,
-                    borderRadius: 10,
-                  }}
-                >
-                  <Text style={{ color: c.text, fontWeight: '700' }}>Clear picked</Text>
-                </Pressable>
-              ) : null}
-            </View>
-            {typedUrls.length ? (
-              <View style={{ gap: 6, marginBottom: 8 }}>
-                <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
-                  {typedUrls.map((u, i) => (
-                    <View key={`typed-${u}-${i}`} style={{ position: 'relative' }}>
-                      <View
-                        style={{
-                          width: 72,
-                          height: 72,
-                          borderRadius: 8,
-                          overflow: 'hidden',
-                          backgroundColor: '#00000015',
-                        }}
-                      >
-                        <LazyImage uri={u} width={72} height={72} borderRadius={8} />
-                      </View>
-                      {i === 0 ? (
-                        <Pressable
-                          onPress={() => setImage1('')}
-                          accessibilityLabel="Remove first URL"
-                          style={{
-                            position: 'absolute',
-                            top: -6,
-                            right: -6,
-                            backgroundColor: '#00000080',
-                            borderRadius: 999,
-                            padding: 4,
-                          }}
-                        >
-                          <Ionicons name="close" size={14} color="#fff" />
-                        </Pressable>
-                      ) : i === 1 ? (
-                        <Pressable
-                          onPress={() => setImage2('')}
-                          accessibilityLabel="Remove second URL"
-                          style={{
-                            position: 'absolute',
-                            top: -6,
-                            right: -6,
-                            backgroundColor: '#00000080',
-                            borderRadius: 999,
-                            padding: 4,
-                          }}
-                        >
-                          <Ionicons name="close" size={14} color="#fff" />
-                        </Pressable>
-                      ) : (
-                        <Pressable
-                          onPress={() => setImage3('')}
-                          accessibilityLabel="Remove third URL"
-                          style={{
-                            position: 'absolute',
-                            top: -6,
-                            right: -6,
-                            backgroundColor: '#00000080',
-                            borderRadius: 999,
-                            padding: 4,
-                          }}
-                        >
-                          <Ionicons name="close" size={14} color="#fff" />
-                        </Pressable>
-                      )}
+              {tagsCsv.trim().length === 0 ? (
+                showValidation ? <Text style={{ color: '#ff6666', fontSize: 11 }}>Add at least one tag.</Text> : null
+              ) : (
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                  {Array.from(new Set(tagsCsv.split(',').map(t => t.trim().toLowerCase()).filter(Boolean))).slice(0,12).map(t => (
+                    <View key={t} style={{ backgroundColor: c.primary, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999 }}>
+                      <Text style={{ color: '#000', fontSize: 11, fontWeight: '700' }}>#{t}</Text>
                     </View>
                   ))}
                 </View>
-                {typedUrls.length > 0 ? (
-                  <Pressable
-                    onPress={() => {
-                      setImage1('');
-                      setImage2('');
-                      setImage3('');
-                    }}
-                    style={{
-                      backgroundColor: '#00000020',
-                      paddingHorizontal: 12,
-                      paddingVertical: 10,
-                      borderRadius: 10,
-                      alignSelf: 'flex-start',
-                    }}
-                  >
-                    <Text style={{ color: c.text, fontWeight: '700' }}>Clear URLs</Text>
-                  </Pressable>
-                ) : null}
-              </View>
-            ) : null}
-            <Text style={{ color: c.muted, fontSize: 11, marginBottom: 8 }}>
-              Provide up to 3 images. The first is the cover. Picked photos and pasted URLs are
-              combined (no duplicates), up to 3 total.
-            </Text>
-
+              )}
+            </View>
+          </Section>
+          {/* Static When card */}
+          <View style={{ marginBottom: 14, borderRadius: 12, borderWidth: 1, borderColor: '#00000020', backgroundColor: c.card }}>
+            <View style={{ paddingHorizontal: 14, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Ionicons name="time-outline" size={18} color={c.muted} />
+              <Text style={{ color: c.text, fontWeight: '700', fontSize: 15 }}>When</Text>
+            </View>
             {Platform.OS === 'web' ? (
-              <View style={{ gap: 8, marginBottom: 8 }}>
+              <View style={{ paddingHorizontal: 14, paddingBottom: 14, gap: 10 }}>
+                <TextInput
+                  placeholder="Date (YYYY-MM-DD)"
+                  placeholderTextColor={c.muted}
+                  value={dateInput}
+                  onChangeText={(val) => {
+                    setDateInput(val);
+                    const parsed = dayjs(val, 'YYYY-MM-DD', true);
+                    if (parsed.isValid()) {
+                      const current = dayjs(dateTime);
+                      const merged = parsed
+                        .hour(current.hour())
+                        .minute(current.minute())
+                        .second(0)
+                        .millisecond(0);
+                      setDateTime(merged.toISOString());
+                      // also adjust end time date portion if exists
+                      if (endTimeISO) {
+                        const end = dayjs(endTimeISO);
+                        const endMerged = parsed
+                          .hour(end.hour())
+                          .minute(end.minute())
+                          .second(0)
+                          .millisecond(0);
+                        setEndTimeISO(endMerged.toISOString());
+                      }
+                    }
+                  }}
+                  style={{ color: c.text, backgroundColor: '#00000010', padding: 12, borderRadius: 10 }}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
                 <View style={{ flexDirection: 'row', gap: 8 }}>
-                  <TextInput
-                    placeholder="YYYY-MM-DD"
-                    placeholderTextColor={c.muted}
-                    value={dateInput}
-                    onChangeText={(val) => {
-                      setDateInput(val);
-                      if (/^\d{4}-\d{2}-\d{2}$/.test(val)) {
-                        const candidate = dayjs(`${val}T${timeInput}`);
-                        if (candidate.isValid()) setDateTime(candidate.toISOString());
+                  {/* Start time + inline AM/PM */}
+                  <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <TextInput
+                      placeholder="Start (e.g. 3:30)"
+                      placeholderTextColor={c.muted}
+                      value={timeInput}
+                      onChangeText={(val) => {
+                        setTimeInput(val);
+                        const m = val.trim().match(/^(\d{1,2})(?::(\d{2}))?$/);
+                        if (!m) return;
+                        let hour = parseInt(m[1], 10);
+                        const minute = m[2] ? parseInt(m[2], 10) : 0;
+                        if (hour < 1 || hour > 12 || minute < 0 || minute > 59) return;
+                        let h24 = hour % 12;
+                        if (startMeridiem === 'PM') h24 += 12;
+                        const baseDate = dayjs(dateInput, 'YYYY-MM-DD', true).isValid()
+                          ? dayjs(dateInput, 'YYYY-MM-DD', true)
+                          : dayjs(dateTime);
+                        const merged = baseDate.hour(h24).minute(minute).second(0).millisecond(0);
+                        setDateTime(merged.toISOString());
                         if (endTimeISO) {
-                          const endCandidate = dayjs(`${val}T${dayjs(endTimeISO).format('HH:mm')}`);
-                          if (endCandidate.isValid()) setEndTimeISO(endCandidate.toISOString());
+                          const end = dayjs(endTimeISO);
+                          if (end.isBefore(merged)) {
+                            const bumped = merged.add(1, 'hour');
+                            setEndTimeISO(bumped.toISOString());
+                            setEndTimeInput(bumped.format('h:mm'));
+                            setEndMeridiem(bumped.format('A') as 'AM' | 'PM');
+                          }
                         }
-                      }
-                    }}
-                    style={{
-                      flex: 1,
-                      color: c.text,
-                      backgroundColor: '#00000010',
-                      padding: 10,
-                      borderRadius: 8,
-                    }}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                  />
+                      }}
+                      style={{ flex: 1, color: c.text, backgroundColor: '#00000010', paddingVertical: 10, paddingHorizontal: 12, borderRadius: 10 }}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      keyboardType={Platform.OS === 'web' ? 'default' : 'numbers-and-punctuation'}
+                    />
+                    <Pressable
+                      onPress={() => {
+                        setStartMeridiem('AM');
+                        const m = timeInput.trim().match(/^(\d{1,2})(?::(\d{2}))?$/);
+                        let hour: number;
+                        let minute: number;
+                        if (m) {
+                          hour = Math.min(12, Math.max(1, parseInt(m[1], 10)));
+                          minute = m[2] ? Math.min(59, Math.max(0, parseInt(m[2], 10))) : 0;
+                        } else {
+                          const cur = dayjs(dateTime);
+                          hour = parseInt(cur.format('h'), 10);
+                          minute = cur.minute();
+                          setTimeInput(cur.format('h:mm'));
+                        }
+                        let h24 = hour % 12; // AM => keep 0-11
+                        const baseDate = dayjs(dateInput, 'YYYY-MM-DD', true).isValid()
+                          ? dayjs(dateInput, 'YYYY-MM-DD', true)
+                          : dayjs(dateTime);
+                        const merged = baseDate.hour(h24).minute(minute).second(0).millisecond(0);
+                        setDateTime(merged.toISOString());
+                      }}
+                      style={{
+                        paddingVertical: 6,
+                        paddingHorizontal: 10,
+                        borderRadius: 8,
+                        backgroundColor: startMeridiem === 'AM' ? c.primary : 'transparent',
+                        borderWidth: 1,
+                        borderColor: '#00000030',
+                        minWidth: 44,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Text style={{ color: startMeridiem === 'AM' ? '#000' : c.text, fontWeight: '700' }}>AM</Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={() => {
+                        setStartMeridiem('PM');
+                        const m = timeInput.trim().match(/^(\d{1,2})(?::(\d{2}))?$/);
+                        let hour: number;
+                        let minute: number;
+                        if (m) {
+                          hour = Math.min(12, Math.max(1, parseInt(m[1], 10)));
+                          minute = m[2] ? Math.min(59, Math.max(0, parseInt(m[2], 10))) : 0;
+                        } else {
+                          const cur = dayjs(dateTime);
+                          hour = parseInt(cur.format('h'), 10);
+                          minute = cur.minute();
+                          setTimeInput(cur.format('h:mm'));
+                        }
+                        let h24 = (hour % 12) + 12; // PM => force 12-23
+                        const baseDate = dayjs(dateInput, 'YYYY-MM-DD', true).isValid()
+                          ? dayjs(dateInput, 'YYYY-MM-DD', true)
+                          : dayjs(dateTime);
+                        const merged = baseDate.hour(h24).minute(minute).second(0).millisecond(0);
+                        setDateTime(merged.toISOString());
+                      }}
+                      style={{
+                        paddingVertical: 6,
+                        paddingHorizontal: 10,
+                        borderRadius: 8,
+                        backgroundColor: startMeridiem === 'PM' ? c.primary : 'transparent',
+                        borderWidth: 1,
+                        borderColor: '#00000030',
+                        minWidth: 44,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Text style={{ color: startMeridiem === 'PM' ? '#000' : c.text, fontWeight: '700' }}>PM</Text>
+                    </Pressable>
+                  </View>
+
+                  {/* End time + inline AM/PM */}
+                  <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <TextInput
+                      placeholder="End (optional)"
+                      placeholderTextColor={c.muted}
+                      value={endTimeInput}
+                      onChangeText={(val) => {
+                        setEndTimeInput(val);
+                        const m = val.trim().match(/^(\d{1,2})(?::(\d{2}))?$/);
+                        if (val.trim() === '') { setEndTimeISO(null); return; }
+                        if (!m) return;
+                        let hour = parseInt(m[1], 10);
+                        const minute = m[2] ? parseInt(m[2], 10) : 0;
+                        if (hour < 1 || hour > 12 || minute < 0 || minute > 59) return;
+                        let h24 = hour % 12;
+                        if (endMeridiem === 'PM') h24 += 12;
+                        const baseStart = dayjs(dateTime);
+                        let end = baseStart.hour(h24).minute(minute).second(0).millisecond(0);
+                        if (end.isBefore(baseStart)) end = end.add(1, 'hour');
+                        setEndTimeISO(end.toISOString());
+                      }}
+                      style={{ flex: 1, color: c.text, backgroundColor: '#00000010', paddingVertical: 10, paddingHorizontal: 12, borderRadius: 10 }}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      keyboardType={Platform.OS === 'web' ? 'default' : 'numbers-and-punctuation'}
+                    />
+                    <Pressable
+                      onPress={() => {
+                        setEndMeridiem('AM');
+                        const m = endTimeInput.trim().match(/^(\d{1,2})(?::(\d{2}))?$/);
+                        if (!m) return;
+                        let hour = Math.min(12, Math.max(1, parseInt(m[1], 10)));
+                        const minute = m[2] ? Math.min(59, Math.max(0, parseInt(m[2], 10))) : 0;
+                        let h24 = hour % 12; // AM => keep 0-11
+                        const baseStart = dayjs(dateTime);
+                        let end = baseStart.hour(h24).minute(minute).second(0).millisecond(0);
+                        if (end.isBefore(baseStart)) end = end.add(1, 'hour');
+                        setEndTimeISO(end.toISOString());
+                      }}
+                      style={{
+                        paddingVertical: 6,
+                        paddingHorizontal: 10,
+                        borderRadius: 8,
+                        backgroundColor: endMeridiem === 'AM' ? c.primary : 'transparent',
+                        borderWidth: 1,
+                        borderColor: '#00000030',
+                        minWidth: 44,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Text style={{ color: endMeridiem === 'AM' ? '#000' : c.text, fontWeight: '700' }}>AM</Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={() => {
+                        setEndMeridiem('PM');
+                        const m = endTimeInput.trim().match(/^(\d{1,2})(?::(\d{2}))?$/);
+                        if (!m) return;
+                        let hour = Math.min(12, Math.max(1, parseInt(m[1], 10)));
+                        const minute = m[2] ? Math.min(59, Math.max(0, parseInt(m[2], 10))) : 0;
+                        let h24 = (hour % 12) + 12; // PM => force 12-23
+                        const baseStart = dayjs(dateTime);
+                        let end = baseStart.hour(h24).minute(minute).second(0).millisecond(0);
+                        if (end.isBefore(baseStart)) end = end.add(1, 'hour');
+                        setEndTimeISO(end.toISOString());
+                      }}
+                      style={{
+                        paddingVertical: 6,
+                        paddingHorizontal: 10,
+                        borderRadius: 8,
+                        backgroundColor: endMeridiem === 'PM' ? c.primary : 'transparent',
+                        borderWidth: 1,
+                        borderColor: '#00000030',
+                        minWidth: 44,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Text style={{ color: endMeridiem === 'PM' ? '#000' : c.text, fontWeight: '700' }}>PM</Text>
+                    </Pressable>
+                  </View>
                 </View>
-                <View style={{ flexDirection: 'row', gap: 8 }}>
-                  <TextInput
-                    placeholder="HH:MM"
-                    placeholderTextColor={c.muted}
-                    value={timeInput}
-                    onChangeText={(val) => {
-                      setTimeInput(val);
-                      if (/^\d{2}:\d{2}$/.test(val)) {
-                        const candidate = dayjs(`${dateInput}T${val}`);
-                        if (candidate.isValid()) setDateTime(candidate.toISOString());
-                      }
-                    }}
-                    style={{
-                      flex: 1,
-                      color: c.text,
-                      backgroundColor: '#00000010',
-                      padding: 10,
-                      borderRadius: 8,
-                    }}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                  />
-                  <TextInput
-                    placeholder="HH:MM"
-                    placeholderTextColor={c.muted}
-                    value={endTimeInput}
-                    onChangeText={(val) => {
-                      setEndTimeInput(val);
-                      if (/^\d{2}:\d{2}$/.test(val)) {
-                        const candidate = dayjs(`${dateInput}T${val}`);
-                        if (candidate.isValid()) setEndTimeISO(candidate.toISOString());
-                      } else if (val.trim() === '') {
-                        setEndTimeISO(null);
-                      }
-                    }}
-                    style={{
-                      flex: 1,
-                      color: c.text,
-                      backgroundColor: '#00000010',
-                      padding: 10,
-                      borderRadius: 8,
-                    }}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                  />
-                </View>
-                {endTimeISO &&
-                dayjs(endTimeISO).isValid() &&
-                dayjs(endTimeISO).isBefore(dayjs(dateTime)) ? (
-                  <Text style={{ color: '#ef4444', marginTop: 4, fontSize: 12 }}>
-                    End time must be after start time.
-                  </Text>
+                {endTimeISO && dayjs(endTimeISO).isValid() && dayjs(endTimeISO).isBefore(dayjs(dateTime)) ? (
+                  <Text style={{ color: '#ef4444', fontSize: 12 }}>End time must be after start time.</Text>
                 ) : null}
+                <Text style={{ color: c.muted, fontSize: 11 }}>
+                  Start: {dayjs(dateTime).format('YYYY-MM-DD h:mm A')} {endTimeISO ? `· End: ${dayjs(endTimeISO).format('h:mm A')}` : ''}
+                </Text>
               </View>
             ) : (
-              <>
-                <View style={{ marginBottom: 8 }}>
-                  <Pressable
-                    onPress={() => setShowDatePicker(true)}
-                    style={{
-                      flex: 1,
-                      backgroundColor: '#00000010',
-                      padding: 10,
-                      borderRadius: 8,
-                      alignItems: 'center',
-                    }}
-                  >
-                    <Text style={{ color: c.text, fontWeight: '700' }}>
-                      {dayjs(dateTime).format('YYYY-MM-DD')}
-                    </Text>
-                  </Pressable>
-                </View>
-                <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
+              <View style={{ paddingHorizontal: 14, paddingBottom: 14, gap: 8 }}>
+                <Pressable
+                  onPress={() => setShowDatePicker(true)}
+                  style={{ backgroundColor: '#00000010', padding: 12, borderRadius: 10, alignItems: 'center' }}
+                >
+                  <Text style={{ color: c.text, fontWeight: '700' }}>{dayjs(dateTime).format('YYYY-MM-DD')}</Text>
+                </Pressable>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
                   <Pressable
                     onPress={() => setShowTimePicker(true)}
-                    style={{
-                      flex: 1,
-                      backgroundColor: '#00000010',
-                      padding: 10,
-                      borderRadius: 8,
-                      alignItems: 'center',
-                    }}
+                    style={{ flex: 1, backgroundColor: '#00000010', padding: 12, borderRadius: 10, alignItems: 'center' }}
                   >
-                    <Text style={{ color: c.text, fontWeight: '700' }}>
-                      {dayjs(dateTime).format('h:mm A')}
-                    </Text>
+                    <Text style={{ color: c.text, fontWeight: '700' }}>{dayjs(dateTime).format('h:mm A')}</Text>
                   </Pressable>
                   <Pressable
                     onPress={() => setShowEndTimePicker(true)}
-                    style={{
-                      flex: 1,
-                      backgroundColor: '#00000010',
-                      padding: 10,
-                      borderRadius: 8,
-                      alignItems: 'center',
-                    }}
+                    style={{ flex: 1, backgroundColor: '#00000010', padding: 12, borderRadius: 10, alignItems: 'center' }}
                   >
-                    <Text style={{ color: c.text, fontWeight: '700' }}>
-                      {endTimeISO ? dayjs(endTimeISO).format('h:mm A') : 'Add end time (optional)'}
-                    </Text>
+                    <Text style={{ color: c.text, fontWeight: '700' }}>{endTimeISO ? dayjs(endTimeISO).format('h:mm A') : 'Add end (optional)'}</Text>
                   </Pressable>
                 </View>
                 {showDatePicker ? (
@@ -1155,61 +1157,214 @@ const AddEditEventModal = memo(function AddEditEventModal({
                     }}
                   />
                 ) : null}
-              </>
+              </View>
             )}
-
-            <TextInput
-              placeholder="Location"
-              placeholderTextColor={c.muted}
+          </View>
+          <Section id="images" title="Images">
+            <View style={{ gap: 10 }}>
+              {activeImageInputs.map((v, idx) => (
+                <TextInput
+                  key={idx}
+                  placeholder={idx === 0 ? 'Cover image URL or paste' : `Image ${idx + 1} URL`}
+                  placeholderTextColor={c.muted}
+                  value={imageUrlList[idx]}
+                  onChangeText={(val) => setImageByIndex(idx, val)}
+                  style={{ color: c.text, backgroundColor: '#00000010', padding: 12, borderRadius: 10, borderWidth: 1, borderColor: showValidation && idx === 0 && pickedUris.length === 0 && [image1,image2,image3].every(s => !(s && s.trim().length)) ? '#ff4444' : '#00000020' }}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+              ))}
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                {pickedUris.map((u) => (
+                  <View key={u} style={{ position: 'relative' }}>
+                    <Image source={{ uri: u }} style={{ width: 80, height: 80, borderRadius: 10, backgroundColor: '#00000020' }} />
+                    <Pressable
+                      onPress={() => setPickedUris((prev) => prev.filter((x) => x !== u))}
+                      style={{ position: 'absolute', top: 4, right: 4, backgroundColor: '#00000080', borderRadius: 12, padding: 2 }}
+                    >
+                      <Ionicons name="close" color="#fff" size={14} />
+                    </Pressable>
+                  </View>
+                ))}
+                {typedUrls.map((u, i) => (
+                  <View key={'typed-' + u + i} style={{ position: 'relative' }}>
+                    <Image source={{ uri: u }} style={{ width: 80, height: 80, borderRadius: 10, backgroundColor: '#00000020' }} />
+                  </View>
+                ))}
+              </View>
+              <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+                <Pressable
+                  onPress={async () => {
+                    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+                    if (perm.status !== 'granted') {
+                      Alert.alert('Permission needed', 'Enable photo library access to pick images');
+                      return;
+                    }
+                    try {
+                      const result = await ImagePicker.launchImageLibraryAsync({
+                        allowsMultipleSelection: true,
+                        selectionLimit: 3,
+                        quality: 0.9,
+                        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                      });
+                      if (!result.canceled) {
+                        const uris = result.assets.map((a) => a.uri);
+                        setPickedUris((prev) => {
+                          const merged = [...prev, ...uris];
+                          const unique: string[] = [];
+                          for (const m of merged) if (!unique.includes(m)) unique.push(m);
+                          return unique.slice(0, 3);
+                        });
+                      }
+                    } catch (e: any) {
+                      Alert.alert('Pick failed', e?.message || 'Could not pick images');
+                    }
+                  }}
+                  style={{ backgroundColor: c.primary, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10, flexDirection: 'row', alignItems: 'center', gap: 6 }}
+                >
+                  <Ionicons name="image" size={16} color="#000" />
+                  <Text style={{ color: '#000', fontWeight: '700' }}>Pick Photos</Text>
+                </Pressable>
+                <Pressable
+                  onPress={async () => {
+                    if (Platform.OS === 'web') {
+                      try {
+                        const doc: any = (globalThis as any).document;
+                        if (!doc) {
+                          Alert.alert('Not supported', 'Camera/file input is not available in this environment');
+                          return;
+                        }
+                        const input: any = doc.createElement('input');
+                        input.type = 'file';
+                        input.accept = 'image/*';
+                        // Hint mobile browsers to open camera when possible
+                        (input as any).capture = 'environment';
+                        input.onchange = () => {
+                          try {
+                            const file = (input as any).files && (input as any).files[0];
+                            if (!file) return;
+                            const url = URL.createObjectURL(file);
+                            setPickedUris((prev) => {
+                              const merged = [...prev, url];
+                              const unique: string[] = [];
+                              for (const m of merged) if (!unique.includes(m)) unique.push(m);
+                              return unique.slice(0, 3);
+                            });
+                          } catch (err: any) {
+                            Alert.alert('Camera failed', err?.message || 'Could not access camera');
+                          }
+                        };
+                        input.click();
+                      } catch (err: any) {
+                        Alert.alert('Camera failed', err?.message || 'Could not access camera');
+                      }
+                      return;
+                    }
+                    // Native (iOS/Android) camera flow
+                    const perm = await ImagePicker.requestCameraPermissionsAsync();
+                    if (perm.status !== 'granted') {
+                      Alert.alert('Permission needed', 'Enable camera access to take a photo');
+                      return;
+                    }
+                    try {
+                      const result = await ImagePicker.launchCameraAsync({ quality: 0.85 });
+                      if (!result.canceled && result.assets?.length) {
+                        const uri = result.assets[0].uri;
+                        setPickedUris((prev) => {
+                          const merged = [...prev, uri];
+                          const unique: string[] = [];
+                          for (const m of merged) if (!unique.includes(m)) unique.push(m);
+                          return unique.slice(0, 3);
+                        });
+                      }
+                    } catch (e: any) {
+                      Alert.alert('Camera failed', e?.message || 'Could not take photo');
+                    }
+                  }}
+                  style={{ backgroundColor: '#00000030', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10 }}
+                >
+                  <Text style={{ color: c.text }}>Take Photo</Text>
+                </Pressable>
+                {pickedUris.length > 0 ? (
+                  <Pressable
+                    onPress={() => setPickedUris([])}
+                    style={{ backgroundColor: '#00000030', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10 }}
+                  >
+                    <Text style={{ color: c.text }}>Clear Pics</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+              <Text style={{ color: c.muted, fontSize: 11 }}>
+                First image is cover. Up to 3 images (picked + URLs combined, no duplicates).
+              </Text>
+            </View>
+          </Section>
+          <Section id="location" title="Location">
+            <LocationPicker
               value={location}
-              onChangeText={setLocation}
-              style={{
-                color: c.text,
-                backgroundColor: '#00000010',
-                padding: 10,
-                borderRadius: 8,
-                marginBottom: 8,
+              latitude={latitude}
+              longitude={longitude}
+              onLocationChange={(loc, lat, lng) => {
+                setLocation(loc);
+                setLatitude(lat);
+                setLongitude(lng);
+                if (lat != null && lng != null && prevLatRef.current == null && prevLngRef.current == null) {
+                  setLocationStatus(`Current location added: (${lat.toFixed(4)}, ${lng.toFixed(4)})`);
+                }
+                prevLatRef.current = lat;
+                prevLngRef.current = lng;
               }}
+              placeholder="Location"
+              textColor={c.text}
+              backgroundColor="#00000010"
+              placeholderColor={c.muted}
             />
-            <TextInput
-              placeholder="Tags (comma-separated)"
-              placeholderTextColor={c.muted}
-              value={tagsCsv}
-              onChangeText={setTagsCsv}
-              style={{
-                color: c.text,
-                backgroundColor: '#00000010',
-                padding: 10,
-                borderRadius: 8,
-                marginBottom: 8,
-              }}
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-            <TextInput
-              placeholder="RSVP URL (optional)"
-              placeholderTextColor={c.muted}
-              value={rsvp}
-              onChangeText={setRsvp}
-              style={{
-                color: c.text,
-                backgroundColor: '#00000010',
-                padding: 10,
-                borderRadius: 8,
-                marginBottom: 8,
-              }}
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-            <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
-              <ThreeDButton
-                title={initialEvent ? 'Update Event' : 'Create Event'}
-                onPress={submit}
+            {locationStatus ? <Text style={{ color: c.muted, fontSize: 11 }}>{locationStatus}</Text> : null}
+          </Section>
+          {/* RSVP URL card */}
+          <View style={{ marginBottom: 14, borderRadius: 12, borderWidth: 1, borderColor: '#00000020', backgroundColor: c.card }}>
+            <View style={{ paddingHorizontal: 14, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Ionicons name="link-outline" size={18} color={c.muted} />
+              <Text style={{ color: c.text, fontWeight: '700', fontSize: 15 }}>RSVP</Text>
+            </View>
+            <View style={{ paddingHorizontal: 14, paddingBottom: 14, gap: 10 }}>
+              <TextInput
+                placeholder="RSVP URL (optional)"
+                placeholderTextColor={c.muted}
+                value={rsvp}
+                onChangeText={setRsvp}
+                style={{ color: c.text, backgroundColor: '#00000010', padding: 12, borderRadius: 10 }}
+                autoCapitalize="none"
+                autoCorrect={false}
               />
-              <ThreeDButton title="Cancel" onPress={onClose} />
+              {rsvp.trim().length > 0 ? (
+                <Text style={{ color: c.muted, fontSize: 11 }}>Remember to verify the link works.</Text>
+              ) : null}
             </View>
           </View>
         </ScrollView>
+        <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: 12 }}>
+          <BlurView intensity={30} tint={scheme === 'dark' ? 'dark' : 'light'} style={{ borderRadius: 16, overflow: 'hidden' }}>
+            <View style={{ flexDirection: 'row', gap: 12, padding: 12 }}>
+              <Pressable
+                onPress={submit}
+                disabled={savingEvent}
+                style={{ flex: 1, backgroundColor: savingEvent ? c.muted : c.primary, paddingVertical: 14, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}
+              >
+                <Text style={{ color: '#000', fontWeight: '700' }}>
+                  {savingEvent ? 'Saving…' : initialEvent ? 'Update Event' : 'Create Event'}
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={onClose}
+                disabled={savingEvent}
+                style={{ flex: 1, backgroundColor: '#00000030', paddingVertical: 14, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}
+              >
+                <Text style={{ color: c.text, fontWeight: '600' }}>Cancel</Text>
+              </Pressable>
+            </View>
+          </BlurView>
+        </View>
       </SafeAreaView>
     </Modal>
   );
@@ -1221,7 +1376,11 @@ type FiltersTopBarProps = {
   setQuery: (v: string) => void;
   mode: 'all' | 'personalized';
   setMode: React.Dispatch<React.SetStateAction<'all' | 'personalized'>>;
+  viewMode: 'row' | 'grid';
+  setViewMode: React.Dispatch<React.SetStateAction<'row' | 'grid'>>;
 };
+
+import { topBarStyles } from '@/components/TopBarStyles';
 
 const FiltersTopBar = memo(function FiltersTopBar({
   c,
@@ -1229,108 +1388,75 @@ const FiltersTopBar = memo(function FiltersTopBar({
   setQuery,
   mode,
   setMode,
+  viewMode,
+  setViewMode,
   onOpenAdd,
   isAuthed,
 }: FiltersTopBarProps & { onOpenAdd: () => void; isAuthed: boolean }) {
   const inputRef = useRef<TextInput>(null);
+  const styles = topBarStyles(c);
   return (
     <View style={{ paddingBottom: 12 }}>
-      <View
-        style={{
-          backgroundColor: c.card,
-          borderRadius: 12,
-          paddingHorizontal: 12,
-          paddingVertical: 8,
-          marginBottom: 12,
-          borderWidth: 1,
-          borderColor: '#00000020',
-        }}
-      >
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 }}>
+      {/* Search bar with icon (shared style) */}
+      <View style={styles.searchContainer}>
+        <View style={styles.searchRow}>
           <Pressable
-            accessibilityRole="button"
             accessibilityLabel="Focus search"
-            // Keep simple tap area and let input hold focus
-            style={{ padding: 4 }}
-            onPress={() => {
-              inputRef.current?.focus?.();
-            }}
+            style={styles.searchIconPressable}
+            onPress={() => inputRef.current?.focus?.()}
           >
             <Ionicons name="search" size={18} color={c.muted} />
           </Pressable>
           <TextInput
             ref={inputRef}
-            placeholder="Search anything from 'free food' to 'tech'"
+            placeholder="Search events (e.g. free food, tech)"
             placeholderTextColor={c.muted}
             value={query}
             onChangeText={setQuery}
-            style={{ color: c.text, fontSize: 16, flex: 1 }}
+            style={styles.searchInput}
             autoCapitalize="none"
             autoCorrect={false}
           />
         </View>
       </View>
-      <View
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          marginBottom: 12,
-          gap: 6,
-        }}
-      >
-        <View
-          style={{
-            flexDirection: 'row',
-            gap: 6,
-            flexShrink: 1,
-            backgroundColor: c.card,
-            padding: 6,
-            borderRadius: 12,
-          }}
+      {/* Mode, view toggle, add event */}
+      <View style={styles.rowWrap}>
+        {[
+          { key: 'all', label: 'Upcoming' },
+          { key: 'personalized', label: 'Personalized' },
+        ].map((opt) => {
+          const active = mode === (opt.key as any);
+          return (
+            <Pressable
+              key={opt.key}
+              onPress={() => {
+                if (opt.key === 'personalized' && !isAuthed) {
+                  router.push('/onboarding/welcome');
+                  return;
+                }
+                setMode(opt.key as any);
+              }}
+              style={styles.modeButton(active)}
+            >
+              <Text style={styles.modeButtonText(active)}>{opt.label}</Text>
+            </Pressable>
+          );
+        })}
+        <Pressable
+          onPress={() => setViewMode((v) => (v === 'row' ? 'grid' : 'row'))}
+          style={styles.toggleButton}
+          accessibilityLabel={viewMode === 'row' ? 'Switch to grid view' : 'Switch to list view'}
         >
-          {[
-            { key: 'all', label: 'Soonest' },
-            { key: 'personalized', label: 'Personalized' },
-          ].map((opt) => {
-            const active = mode === (opt.key as any);
-            return (
-              <Pressable
-                key={opt.key}
-                onPress={() => {
-                  if (opt.key === 'personalized' && !isAuthed) {
-                    // Guests tapping 'Personalized' go to sign in
-                    router.push('/onboarding/welcome');
-                    return;
-                  }
-                  setMode(opt.key as any);
-                }}
-                style={{
-                  backgroundColor: active ? c.primary : 'transparent',
-                  paddingHorizontal: 12,
-                  paddingVertical: 8,
-                  borderRadius: 10,
-                }}
-              >
-                <Text style={{ color: active ? '#000' : c.text, fontWeight: '700' }}>
-                  {opt.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
+          <Ionicons name={viewMode === 'row' ? 'grid' : 'list'} size={18} color={c.text} />
+        </Pressable>
         <Pressable
           onPress={onOpenAdd}
-          style={{
-            backgroundColor: c.primary,
-            paddingHorizontal: 12,
-            paddingVertical: 8,
-            borderRadius: 10,
-          }}
+          style={styles.actionButton}
           accessibilityRole="link"
           accessibilityLabel={isAuthed ? 'Add Event' : 'Sign in to add event'}
         >
-          <Text style={{ color: '#000' }}>Add Event</Text>
+          <Ionicons name="add" size={16} color="#000" />
+          <Text style={styles.actionButtonText}>Add Event</Text>
         </Pressable>
       </View>
     </View>
@@ -1436,6 +1562,7 @@ const FiltersScrollable = memo(function FiltersScrollable({
             marginBottom: 12,
             borderWidth: 1,
             borderColor: '#00000020',
+            // marginHorizontal: 4,
           }}
         >
           <View
@@ -1614,6 +1741,7 @@ const FiltersScrollable = memo(function FiltersScrollable({
             marginBottom: 12,
             borderWidth: 1,
             borderColor: '#00000020',
+            // marginHorizontal: 4,
           }}
         >
           <View
@@ -1649,6 +1777,7 @@ const FiltersScrollable = memo(function FiltersScrollable({
           marginBottom: 12,
           borderWidth: 1,
           borderColor: '#00000020',
+          // marginHorizontal: 4,
         }}
       >
         <Text style={{ color: c.text, fontWeight: '800', marginBottom: 8 }}>Filter by tags</Text>
@@ -1708,8 +1837,9 @@ export default function Home() {
   const { scheme } = useTheme();
   const { width } = useWindowDimensions();
   const { triggerNotification } = useSavedNotification();
-  const isWide = width >= 900; // switch to grid on larger screens
-  const columns = width >= 1280 ? 3 : isWide ? 2 : 1;
+  const isWide = width >= 900; // switch default to grid on larger screens
+  const [viewMode, setViewMode] = useState<'row' | 'grid'>(isWide ? 'grid' : 'row');
+  const columns = viewMode === 'row' ? 1 : width >= 1280 ? 3 : isWide ? 2 : 1;
   // Grid sizing: cap total grid width, keep equal columns within that bound
   const GAP = 12;
   const MAX_COL_WIDTH = 440; // slightly larger for event cards
@@ -2282,12 +2412,6 @@ export default function Home() {
 
   // Container moved to module scope above (EventsContainer)
 
-  // TODO: Replace current vertical card layout with horizontal row cards (EventRowCard component)
-  // New layout plan:
-  //  - Left: square/16:9 thumb (first image) using EventImages with maxDisplay=1 or a dedicated thumb
-  //  - Right: title, date/time, location, tags (single-line truncated), actions row
-  //  - Keep expand for description reveal below row or in modal
-
   // Filters: top bar outside list, interests/tags/results inside list header
   // Add/Edit Event modal controller state (isolate modal to avoid parent re-renders on typing)
   const [modalOpen, setModalOpen] = useState(false);
@@ -2337,36 +2461,56 @@ export default function Home() {
   // Filters header elements (top bar + scrollable interests/tags) — define after openAddModal
   const filtersTopBar = useMemo(
     () => (
-      <FiltersTopBar
-        c={c}
-        query={query}
-        setQuery={setQuery}
-        mode={mode}
-        setMode={setMode}
-        onOpenAdd={openAddModal}
-        isAuthed={isAuthed}
-      />
+      <View
+        style={{
+          alignSelf: 'center',
+          width: '100%',
+          maxWidth: viewMode === 'grid' ? MAX_GRID_WIDTH : undefined,
+          paddingHorizontal: 16,
+        }}
+      >
+        <FiltersTopBar
+          c={c}
+          query={query}
+          setQuery={setQuery}
+          mode={mode}
+          setMode={setMode}
+          viewMode={viewMode}
+          setViewMode={setViewMode}
+          onOpenAdd={openAddModal}
+          isAuthed={isAuthed}
+        />
+      </View>
     ),
-    [c, query, mode, isAuthed],
+    [c, query, mode, isAuthed, viewMode, width],
   );
 
   const filtersScrollable = useMemo(
     () => (
-      <FiltersScrollable
-        c={c}
-        myTags={myTags}
-        activeTags={activeTags}
-        setActiveTags={setActiveTags}
-        setMyTags={setMyTags}
-        allTags={allTags}
-        query={query}
-        setQuery={setQuery}
-        filteredCount={filtered.length}
-        mode={mode}
-        isAuthed={isAuthed}
-      />
+      <View
+        style={{
+          alignSelf: 'center',
+          width: '100%',
+          maxWidth: viewMode === 'grid' ? MAX_GRID_WIDTH : undefined,
+          paddingHorizontal: 16,
+        }}
+      >
+        <FiltersScrollable
+          c={c}
+          myTags={myTags}
+          activeTags={activeTags}
+          setActiveTags={setActiveTags}
+          setMyTags={setMyTags}
+          allTags={allTags}
+          query={query}
+          setQuery={setQuery}
+          filteredCount={filtered.length}
+          mode={mode}
+          isAuthed={isAuthed}
+        />
+      </View>
     ),
-    [c, myTags, activeTags, allTags, query, filtered.length, mode, isAuthed],
+    [c, myTags, activeTags, allTags, query, filtered.length, mode, isAuthed, viewMode, width],
   );
 
   return (
@@ -2414,13 +2558,25 @@ export default function Home() {
         keyExtractor={(e: any) => String(e.id)}
         numColumns={columns}
         columnWrapperStyle={columns > 1 ? { gap: GAP } : undefined}
-        contentContainerStyle={{
-          gap: 12,
-          paddingBottom: 32,
-          alignSelf: 'center',
-          maxWidth: MAX_GRID_WIDTH,
-          width: '100%',
-        }}
+        contentContainerStyle={
+          columns > 1
+            ? {
+                gap: 12,
+                paddingBottom: 32,
+                alignSelf: 'center',
+                maxWidth: MAX_GRID_WIDTH,
+                width: '100%',
+              }
+            : {
+                gap: 12,
+                paddingBottom: 32,
+
+                marginHorizontal: 16,
+
+                // In row mode, allow full available width similar to food tab
+                // (no maxWidth constraint so cards are not overly narrow on wide screens)
+              }
+        }
         style={{ flex: 1 }}
         onLayout={(e) => {
           listViewportHeightRef.current = e.nativeEvent.layout.height;
@@ -2512,6 +2668,30 @@ export default function Home() {
           return <EventRowCard {...cardProps} />;
         }}
       />
+
+      {/* Floating Add Event Button (FAB) */}
+      <View pointerEvents="box-none" style={{ position: 'absolute', right: 16, bottom: 24 }}>
+        <Pressable
+          onPress={openAddModal}
+          accessibilityRole="button"
+          accessibilityLabel="Add Event"
+          style={{
+            width: 56,
+            height: 56,
+            borderRadius: 28,
+            backgroundColor: c.primary,
+            alignItems: 'center',
+            justifyContent: 'center',
+            shadowColor: '#000',
+            shadowOpacity: 0.25,
+            shadowRadius: 6,
+            shadowOffset: { width: 0, height: 4 },
+            elevation: 6,
+          }}
+        >
+          <Ionicons name="add" size={26} color="#000" />
+        </Pressable>
+      </View>
 
       {/* Event Details Modal */}
       <Modal

@@ -60,7 +60,6 @@ export default function HomeTab() {
           style={{ flex: 1 }}
         >
           <View style={{ padding: 16 }}>
-            <Text style={{ color: c.text, fontSize: 24, fontWeight: '900' }}>Dashboard</Text>
           </View>
 
           {/* Top Cards: Discover Events + Discover Food (side-by-side on wide, stacked on small) */}

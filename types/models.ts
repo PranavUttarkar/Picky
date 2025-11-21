@@ -15,6 +15,8 @@ export interface Event {
   date_time: string; // ISO string
   end_time?: string | null; // ISO string (optional end time)
   location?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
   tags?: string[];
   rsvp_url?: string | null;
   created_by?: string;

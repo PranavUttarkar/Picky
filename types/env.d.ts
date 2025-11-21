@@ -4,3 +4,6 @@ declare namespace NodeJS {
     EXPO_PUBLIC_SUPABASE_ANON_KEY?: string;
   }
 }
+
+// Allow dynamic import of expo-location without installing types immediately
+declare module 'expo-location';

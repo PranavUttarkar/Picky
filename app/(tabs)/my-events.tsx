@@ -26,6 +26,7 @@ import dayjs from 'dayjs';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { ThreeDButton } from '@/components/ThreeD';
 import { updateEvent, deleteEventDirect, createEvent } from '@/services/events';
+import LocationPicker from '@/components/LocationPicker';
 
 export default function MyEvents() {
   const c = useThemeColors();
@@ -99,6 +100,8 @@ export default function MyEvents() {
   const [mImage3, setMImage3] = useState('');
   const [mDateTime, setMDateTime] = useState(dayjs().add(1, 'day').toISOString());
   const [mLocation, setMLocation] = useState('');
+  const [mLatitude, setMLatitude] = useState<number | null>(null);
+  const [mLongitude, setMLongitude] = useState<number | null>(null);
   const [mTagsCsv, setMTagsCsv] = useState('');
   const [mRsvp, setMRsvp] = useState('');
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -115,6 +118,8 @@ export default function MyEvents() {
     setMImage3(imgs[2] || '');
     setMDateTime(e.date_time);
     setMLocation(e.location ?? '');
+    setMLatitude(e.latitude ?? null);
+    setMLongitude(e.longitude ?? null);
     setMTagsCsv((e.tags ?? []).join(', '));
     setMRsvp((e as any).rsvp_url ?? '');
     setEditOpen(true);
@@ -129,6 +134,8 @@ export default function MyEvents() {
     setMImage3('');
     setMDateTime(dayjs().add(2, 'day').hour(18).minute(0).second(0).toISOString());
     setMLocation('');
+    setMLatitude(null);
+    setMLongitude(null);
     setMTagsCsv('');
     setMRsvp('');
     setEditOpen(true);
@@ -163,6 +170,8 @@ export default function MyEvents() {
           image_url: imageUrls[0] || undefined,
           date_time: dtIso,
           location: mLocation.trim() || null,
+          latitude: mLatitude,
+          longitude: mLongitude,
           tags,
           rsvp_url: mRsvp.trim() || null,
         });
@@ -195,6 +204,8 @@ export default function MyEvents() {
           image_url: imageUrls[0] || null,
           date_time: dtIso,
           location: mLocation.trim() || null,
+          latitude: mLatitude,
+          longitude: mLongitude,
           tags,
           rsvp_url: mRsvp.trim() || null,
         });
@@ -452,18 +463,19 @@ export default function MyEvents() {
                 }}
               />
             ) : null}
-            <TextInput
-              placeholder="Location"
-              placeholderTextColor={c.muted}
+            <LocationPicker
               value={mLocation}
-              onChangeText={setMLocation}
-              style={{
-                color: c.text,
-                backgroundColor: '#00000010',
-                padding: 10,
-                borderRadius: 8,
-                marginBottom: 8,
+              latitude={mLatitude}
+              longitude={mLongitude}
+              onLocationChange={(loc, lat, lng) => {
+                setMLocation(loc);
+                setMLatitude(lat);
+                setMLongitude(lng);
               }}
+              placeholder="Location"
+              textColor={c.text}
+              backgroundColor="#00000010"
+              placeholderColor={c.muted}
             />
             <TextInput
               placeholder="Tags (comma-separated)"

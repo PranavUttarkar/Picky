@@ -175,7 +175,8 @@ const FoodRowCard: React.FC<FoodRowCardProps> = memo(
                         }}
                         style={{ paddingHorizontal: 10, paddingVertical: 6 }}
                       >
-                        <Ionicons name="stats-chart" size={16} color="#001219" />
+                        Poll
+                        {/* <Ionicons name="stats-chart" size={16} color="#001219" /> */}
                       </ThreeDButton>
                     )
                   ) : null}

@@ -206,7 +206,7 @@ export const EventGridCard: React.FC<EventGridCardProps> = memo(
                       onPress={onPoll}
                       style={{ paddingHorizontal: 12, paddingVertical: 8 }}
                       textStyle={{ fontSize: 12 }}
-                    />
+                    >Poll</ThreeDButton>
                   ) : null}
                 </View>
                 {isAdmin ? (

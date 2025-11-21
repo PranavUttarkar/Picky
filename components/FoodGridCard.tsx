@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 export interface FoodGridCardProps {
   item: Restaurant;
   matchPercent?: number;
+  distanceMiles?: number;
   onOpenDetails?: () => void;
   onSelect?: () => void;
   selected?: boolean;
@@ -17,7 +18,7 @@ export interface FoodGridCardProps {
 }
 
 const FoodGridCard: React.FC<FoodGridCardProps> = memo(
-  ({ item, matchPercent, onOpenDetails, onSelect, selected, isSaved = false, onToggleSave }) => {
+  ({ item, matchPercent, distanceMiles, onOpenDetails, onSelect, selected, isSaved = false, onToggleSave }) => {
     const c = useThemeColors();
     const [cardWidth, setCardWidth] = useState(0);
     const IMG_ASPECT = 16 / 9;
@@ -114,7 +115,7 @@ const FoodGridCard: React.FC<FoodGridCardProps> = memo(
                   </View>
                 ) : null}
               </View>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 <Text style={{ color: c.muted, fontSize: 12 }} numberOfLines={1}>
                   {[item.category, item.price_range].filter(Boolean).join(' • ')}
                 </Text>
@@ -123,6 +124,16 @@ const FoodGridCard: React.FC<FoodGridCardProps> = memo(
                     <Ionicons name="star" size={12} color="#fbbf24" />
                     <Text style={{ color: '#fbbf24', fontWeight: '800', fontSize: 12 }}>
                       {item.review_points}
+                    </Text>
+                  </View>
+                ) : null}
+                {typeof distanceMiles === 'number' && Number.isFinite(distanceMiles) ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <Ionicons name="location" size={12} color={c.muted} />
+                    <Text style={{ color: c.muted, fontSize: 12, fontWeight: '700' }}>
+                      {distanceMiles < 0.1
+                        ? '<0.1 mi'
+                        : `${distanceMiles.toFixed(distanceMiles < 10 ? 1 : 0)} mi`}
                     </Text>
                   </View>
                 ) : null}
@@ -190,7 +201,8 @@ const FoodGridCard: React.FC<FoodGridCardProps> = memo(
                       }}
                       style={{ paddingHorizontal: 12, paddingVertical: 8 }}
                     >
-                      <Ionicons name="stats-chart" size={16} color="#001219" />
+                      Poll
+                      {/* <Ionicons name="stats-chart" size={16} color="#001219" /> */}
                     </ThreeDButton>
                   )
                   ) : null}

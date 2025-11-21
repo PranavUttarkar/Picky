@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,7 +7,9 @@ import {
   FlatList,
   useWindowDimensions,
   Alert,
+  Platform,
 } from 'react-native';
+import Slider from '@react-native-community/slider';
 import { useThemeColors } from '@/theme/ThemeProvider';
 import GradientBackground from '@/components/GradientBackground';
 import GradientHeader from '@/components/GradientHeader';
@@ -16,6 +18,7 @@ import FoodGridCard from '@/components/FoodGridCard';
 import { listRestaurants, searchRestaurants, getTopUserRestaurantMatches } from '@/services/food';
 import type { Restaurant } from '@/types/models';
 import { router } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '@/services/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import { optimisticUpdate } from '@/utils/optimistic';
@@ -50,12 +53,102 @@ export default function FoodExplore() {
   const [newTagInput, setNewTagInput] = useState('');
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
-  // Budget slider: 4 stops (0:$1-10, 1:$10-20, 2:$20-30, 3:$30+); null = no filter
-  // priceRange is [minIndex, maxIndex] or null
-  const [priceRange, setPriceRange] = useState<[number, number] | null>(null);
+  // Budget filter: single max budget cap (inclusive). When at CAP means no filter.
+  const BUDGET_CAP = 60; // represents 60+ (uncapped)
+  const PRESETS = [10, 20, 30, 40, 50, BUDGET_CAP] as const;
+  const [maxBudget, setMaxBudget] = useState<number>(BUDGET_CAP); // committed value used for filtering
+  const [sliderValue, setSliderValue] = useState<number>(BUDGET_CAP); // live value while dragging
+  const budgetFilterActive = maxBudget < BUDGET_CAP;
+  const draggingRef = useRef(false);
+  const lastValidValueRef = useRef(BUDGET_CAP);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const PAGE_SIZE = 20;
   const endReachedDuringMomentum = useRef(true);
+
+  // Location + sorting by distance
+  const [sortMode, setSortMode] = useState<'default' | 'nearest'>('default');
+  const [userLocation, setUserLocation] = useState<{ lat: number; lon: number } | null>(null);
+  const [locAttempted, setLocAttempted] = useState(false);
+  const [locLoading, setLocLoading] = useState(false);
+
+  const toNum = (v?: string | null): number | null => {
+    if (v == null) return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
+
+  const haversineKm = (
+    lat1: number,
+    lon1: number,
+    lat2: number,
+    lon2: number,
+  ): number => {
+    const toRad = (d: number) => (d * Math.PI) / 180;
+    const R = 6371; // km
+    const dLat = toRad(lat2 - lat1);
+    const dLon = toRad(lon2 - lon1);
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  };
+
+  const ensureLocation = useCallback(async () => {
+    if (userLocation || locLoading) return;
+    setLocAttempted(true);
+    setLocLoading(true);
+    try {
+      if (
+        Platform.OS === 'web' &&
+        typeof navigator !== 'undefined' &&
+        (navigator as any).geolocation
+      ) {
+        await new Promise<void>((resolve, reject) => {
+          (navigator as any).geolocation.getCurrentPosition(
+            (pos: any) => {
+              const { latitude, longitude } = pos.coords;
+              setUserLocation({ lat: latitude, lon: longitude });
+              resolve();
+            },
+            (err: any) => {
+              reject(err);
+            },
+            { enableHighAccuracy: true, maximumAge: 300000, timeout: 10000 },
+          );
+        });
+      } else {
+        // Native: use expo-location (must be installed in the app)
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const Location: any = await import('expo-location');
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          throw new Error('Location permission denied');
+        }
+        const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        setUserLocation({ lat: pos.coords.latitude, lon: pos.coords.longitude });
+      }
+    } catch (e: any) {
+      // Only alert if user switched to nearest sort explicitly
+      if (sortMode === 'nearest') {
+        Alert.alert(
+          'Location not available',
+          'Enable location permissions to sort by nearest restaurants.',
+        );
+      }
+    } finally {
+      setLocLoading(false);
+    }
+  }, [userLocation, locLoading, sortMode]);
+
+  // Attempt to fetch location when the tab is focused (one-time)
+  useFocusEffect(
+    useCallback(() => {
+      if (!locAttempted) void ensureLocation();
+      // no cleanup needed
+    }, [locAttempted, ensureLocation]),
+  );
 
   useEffect(() => {
     (async () => {
@@ -101,6 +194,11 @@ export default function FoodExplore() {
       try {
         const top = await getTopUserRestaurantMatches(10);
         setRecommended(top as any);
+        // On web, or if content height is too small, onEndReached may not fire.
+        // Proactively load first page of the general list once recommendations arrive.
+        if (page === 0 && items.length === 0 && query.trim().length < 2) {
+          void loadPage(0);
+        }
       } catch {}
     })();
   }, []);
@@ -200,7 +298,7 @@ export default function FoodExplore() {
     });
   };
 
-  // Apply filters: tag filters (AND) and price tiers (OR)
+  // Apply filters: tag filters (AND) and max budget cap
   const filteredCombined = useMemo(() => {
     let arr = combined;
     if (activeTags.length) {
@@ -214,40 +312,59 @@ export default function FoodExplore() {
         return true;
       });
     }
-    if (priceRange != null) {
-      const bucketOf = (range?: string | null): number | null => {
+    if (budgetFilterActive) {
+      const parseUpper = (range?: string | null): number | null => {
         if (!range) return null;
-        const s = String(range)
-          .replace(/[\$\s]/g, '')
-          .replace(/[–—]/g, '-');
-        if (/[+]/.test(s)) return 3; // $30+
-        const nums = s.match(/\d+/g)?.map((n) => Number(n)) ?? [];
-        if (nums.length >= 2) {
-          const mid = (nums[0] + nums[1]) / 2;
-          if (mid < 10.5) return 0;
-          if (mid < 20.5) return 1;
-          if (mid < 30.5) return 2;
-          return 3;
-        } else if (nums.length === 1) {
-          const n = nums[0];
-          if (n <= 10) return 0;
-          if (n <= 20) return 1;
-          if (n <= 30) return 2;
-          return 3;
+        const s = String(range).replace(/[\$\s]/g, '').replace(/[–—]/g, '-');
+        if (/[+]/.test(s)) {
+          const m = s.match(/(\d+)/);
+          return m ? Number(m[1]) : null; // treat $30+ upper as base number
         }
-        // Fallback: also support legacy dollar signs like '$$'
+        const nums = s.match(/\d+/g)?.map((n) => Number(n)) ?? [];
+        if (nums.length >= 2) return nums[1];
+        if (nums.length === 1) return nums[0];
         const dollarCount = (String(range).match(/\$/g) || []).length;
-        if (dollarCount) return Math.max(0, Math.min(3, dollarCount - 1));
+        if (dollarCount) return dollarCount * 10; // $ => 10, $$ => 20 etc.
         return null;
       };
-      const [minIdx, maxIdx] = priceRange;
       arr = arr.filter((r) => {
-        const b = bucketOf(r.price_range);
-        return b !== null && b >= minIdx && b <= maxIdx;
+        const upper = parseUpper(r.price_range);
+        if (upper == null) return true; // keep items with unknown price
+        return upper <= maxBudget;
       });
     }
     return arr;
-  }, [combined, activeTags, priceRange]);
+  }, [combined, activeTags, budgetFilterActive, maxBudget]);
+
+  // Distance-sorted list when enabled and we have a location
+  const visibleData = useMemo(() => {
+    if (sortMode !== 'nearest' || !userLocation) return filteredCombined;
+    const { lat, lon } = userLocation;
+    const withDist = filteredCombined.map((r) => {
+      const rLat = toNum(r.latitude);
+      const rLon = toNum(r.longitude);
+      const dist = rLat != null && rLon != null ? haversineKm(lat, lon, rLat, rLon) : Infinity;
+      return { r, dist } as const;
+    });
+    withDist.sort((a, b) => a.dist - b.dist);
+    return withDist.map(({ r }) => r);
+  }, [filteredCombined, sortMode, userLocation]);
+
+  // Map of restaurant id to distance in miles for display on cards
+  const distanceById = useMemo(() => {
+    if (!userLocation) return {} as Record<string, number>;
+    const { lat, lon } = userLocation;
+    const m: Record<string, number> = {};
+    for (const r of filteredCombined) {
+      const rLat = toNum(r.latitude);
+      const rLon = toNum(r.longitude);
+      if (rLat != null && rLon != null) {
+        const km = haversineKm(lat, lon, rLat, rLon);
+        m[r.id] = km * 0.621371; // miles
+      }
+    }
+    return m;
+  }, [filteredCombined, userLocation]);
 
   const normalize = (arr: string[]) =>
     arr
@@ -289,34 +406,11 @@ export default function FoodExplore() {
     setSaving(false);
   };
 
-  // Budget labels and helpers for two-thumb discrete range selection
-  const PRICE_LABELS = ['$1-10', '$10-20', '$20-30', '$30+'] as const;
-  const setRangeOnPress = (index: number) => {
-    if (!priceRange) {
-      setPriceRange([index, index]);
-      return;
-    }
-    const [minIdx, maxIdx] = priceRange;
-    if (index < minIdx) {
-      setPriceRange([index, maxIdx]);
-      return;
-    }
-    if (index > maxIdx) {
-      setPriceRange([minIdx, index]);
-      return;
-    }
-    // index is within current range: move the closer thumb
-    const distToMin = index - minIdx;
-    const distToMax = maxIdx - index;
-    if (distToMin <= distToMax) setPriceRange([index, maxIdx]);
-    else setPriceRange([minIdx, index]);
-  };
-
   // (Removed quick-add from event interests by request)
 
   const ListHeader = () => (
     <View>
-      {/* Budget slider (4 stops) */}
+      {/* Budget (max cap) slider */}
       <View
         style={{
           backgroundColor: c.card,
@@ -325,87 +419,77 @@ export default function FoodExplore() {
           marginTop: 10,
           borderWidth: 1,
           borderColor: '#00000020',
+          gap: 12,
         }}
       >
-        <View
-          style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
-        >
-          <Text style={{ color: c.text, fontWeight: '800' }}>Budget</Text>
-          {priceRange != null ? (
-            <Pressable onPress={() => setPriceRange(null)} accessibilityLabel="Clear budget filter">
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Text style={{ color: c.text, fontWeight: '800' }}>Budget (Max)</Text>
+          {budgetFilterActive ? (
+            <Pressable
+              onPress={() => setMaxBudget(BUDGET_CAP)}
+              accessibilityLabel="Clear budget filter"
+            >
               <Text style={{ color: c.muted }}>Clear</Text>
             </Pressable>
           ) : null}
         </View>
-        <View style={{ marginTop: 10 }}>
-          {/* Track */}
-          <View style={{ height: 24, justifyContent: 'center' }}>
-            <View style={{ height: 4, backgroundColor: '#00000030', borderRadius: 999 }} />
-            {/* Stops */}
-            <View
-              style={{
-                position: 'absolute',
-                left: 0,
-                right: 0,
-                flexDirection: 'row',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                paddingHorizontal: 2,
-              }}
-            >
-              {[0, 1, 2, 3].map((i) => {
-                const active = priceRange != null && i >= priceRange[0] && i <= priceRange[1];
-                return (
-                  <Pressable
-                    key={i}
-                    onPress={() => setRangeOnPress(i)}
-                    accessibilityLabel={`Select budget ${
-                      i === 0 ? '$1-10' : i === 1 ? '$10-20' : i === 2 ? '$20-30' : '$30+'
-                    }`}
-                    style={{
-                      width: 28,
-                      height: 28,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      marginHorizontal: -2,
-                    }}
-                  >
-                    <View
-                      style={{
-                        width: active ? 14 : 10,
-                        height: active ? 14 : 10,
-                        borderRadius: 999,
-                        backgroundColor: active ? c.primary : '#00000060',
-                        borderWidth: active ? 2 : 0,
-                        borderColor: active ? '#00000080' : 'transparent',
-                      }}
-                    />
-                  </Pressable>
-                );
-              })}
-            </View>
-          </View>
-          {/* Labels */}
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 }}>
-            {PRICE_LABELS.map((label, idx) => (
-              <Text
-                key={label}
+        <Text style={{ color: c.muted, fontSize: 13 }}>
+          {sliderValue >= BUDGET_CAP ? 'Any price' : `Up to $${sliderValue}`}
+        </Text>
+        <Slider
+          style={{ width: '100%', height: 40 }}
+          minimumValue={0}
+          maximumValue={BUDGET_CAP}
+          step={10}
+          value={sliderValue}
+          onSlidingStart={() => {
+            draggingRef.current = true;
+          }}
+          onValueChange={(v) => {
+            const raw = typeof v === 'number' ? v : sliderValue;
+            let snapped = Math.min(BUDGET_CAP, Math.max(0, Math.round(raw / 10) * 10));
+            // Glitch guard: ignore a solitary 0 emitted at drag start when previous value is high
+            if (draggingRef.current && snapped === 0 && lastValidValueRef.current >= 20) {
+              return; // ignore spurious zero
+            }
+            if (snapped !== sliderValue) {
+              setSliderValue(snapped);
+            }
+          }}
+          onSlidingComplete={(v) => {
+            draggingRef.current = false;
+            const snapped = Math.min(BUDGET_CAP, Math.max(0, Math.round(v / 10) * 10));
+            setSliderValue(snapped);
+            setMaxBudget(snapped);
+            lastValidValueRef.current = snapped;
+          }}
+          minimumTrackTintColor={c.primary}
+          maximumTrackTintColor="#00000030"
+          thumbTintColor={c.primary}
+        />
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+          {PRESETS.map((p) => {
+            const active = sliderValue === p && maxBudget === p;
+            const label = p === BUDGET_CAP ? 'Any' : `$${p}`;
+            return (
+              <Pressable
+                key={p}
+                onPress={() => {
+                  setSliderValue(p);
+                  setMaxBudget(p);
+                }}
+                accessibilityLabel={`Set max budget ${label}`}
                 style={{
-                  color:
-                    priceRange != null && idx >= priceRange[0] && idx <= priceRange[1]
-                      ? c.text
-                      : c.muted,
-                  fontSize: 12,
-                  fontWeight:
-                    priceRange != null && idx >= priceRange[0] && idx <= priceRange[1]
-                      ? '800'
-                      : '600',
+                  backgroundColor: active ? c.primary : '#00000020',
+                  paddingHorizontal: 10,
+                  paddingVertical: 6,
+                  borderRadius: 999,
                 }}
               >
-                {label}
-              </Text>
-            ))}
-          </View>
+                <Text style={{ color: active ? '#000' : c.text, fontSize: 12, fontWeight: '700' }}>{label}</Text>
+              </Pressable>
+            );
+          })}
         </View>
       </View>
 
@@ -622,6 +706,32 @@ export default function FoodExplore() {
             </Text>
           </Pressable>
           <Pressable
+            onPress={() => {
+              const next = sortMode === 'nearest' ? 'default' : 'nearest';
+              setSortMode(next);
+              if (next === 'nearest' && !userLocation) void ensureLocation();
+            }}
+            style={{
+              backgroundColor: sortMode === 'nearest' ? c.primary : c.background,
+              paddingVertical: 6,
+              paddingHorizontal: 10,
+              borderRadius: 8,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 6,
+            }}
+            accessibilityLabel={
+              sortMode === 'nearest' ? 'Disable sorting by nearest' : 'Sort by nearest'
+            }
+          >
+            <Ionicons name="locate" size={16} color={c.text} />
+            <Text
+              style={{ color: sortMode === 'nearest' ? '#000' : c.text, fontWeight: '700' }}
+            >
+              Nearest
+            </Text>
+          </Pressable>
+          <Pressable
             onPress={() => setView((v) => (v === 'row' ? 'grid' : 'row'))}
             style={{
               backgroundColor: c.background,
@@ -651,7 +761,7 @@ export default function FoodExplore() {
 
         {view === 'row' ? (
           <FlatList
-            data={filteredCombined}
+            data={visibleData}
             key={'row'}
             keyExtractor={(i) => i.id}
             ListHeaderComponent={ListHeader}
@@ -683,15 +793,16 @@ export default function FoodExplore() {
               endReachedDuringMomentum.current = false;
             }}
             onEndReached={() => {
-              if (!endReachedDuringMomentum.current) {
+              const allow = Platform.OS === 'web' || !endReachedDuringMomentum.current;
+              if (allow) {
                 endReachedDuringMomentum.current = true;
-                if (!loading && hasMore && query.trim().length < 2) loadPage(page);
+                if (!loading && hasMore && query.trim().length < 2) void loadPage(page);
               }
             }}
           />
         ) : (
           <FlatList
-            data={filteredCombined}
+            data={visibleData}
             key={`grid-${columns}`}
             keyExtractor={(i) => i.id}
             numColumns={columns}
@@ -708,7 +819,7 @@ export default function FoodExplore() {
             style={{ flex: 1 }}
             renderItem={({ item, index }) => {
               const sel = selected.has(item.id);
-              const total = filteredCombined.length;
+              const total = visibleData.length;
               const rem = total % columns;
               const isLastPartialRow = columns > 1 && rem !== 0 && index >= total - rem;
               return (
@@ -722,6 +833,7 @@ export default function FoodExplore() {
                   <FoodGridCard
                     item={item}
                     matchPercent={(item as any).match_percent}
+                    distanceMiles={distanceById[item.id]}
                     onOpenDetails={() => router.push(`/foods/${encodeURIComponent(item.id)}`)}
                     onSelect={() =>
                       setSelected((prev) => {
@@ -743,9 +855,10 @@ export default function FoodExplore() {
               endReachedDuringMomentum.current = false;
             }}
             onEndReached={() => {
-              if (!endReachedDuringMomentum.current) {
+              const allow = Platform.OS === 'web' || !endReachedDuringMomentum.current;
+              if (allow) {
                 endReachedDuringMomentum.current = true;
-                if (!loading && hasMore && query.trim().length < 2) loadPage(page);
+                if (!loading && hasMore && query.trim().length < 2) void loadPage(page);
               }
             }}
           />
