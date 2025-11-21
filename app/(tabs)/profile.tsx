@@ -527,6 +527,57 @@ export default function Profile() {
   // Server timestamp drives cooldown logic; stored in userProfile.username_last_changed
 
   // Load user profile and data
+  const loadUserData = async () => {
+    try {
+      setLoadingProfile(true);
+      const user = (await supabase.auth.getUser()).data.user;
+      if (!user) {
+        setAuthed(false);
+        return;
+      }
+
+      setAuthed(true);
+
+      // Load user profile
+      const { data: profile } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+
+      if (profile) {
+        setUserProfile(profile);
+        setIsAdmin(!!profile.is_admin);
+        setAvatarUrl(profile.avatar_url);
+      }
+
+      // Load interests
+      setLoadingInterests(true);
+      const { data: interests } = await supabase
+        .from('user_interests_temp')
+        .select('names')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      const interestNames: string[] = ((interests?.names as any) ?? []).map((n: string) => n.toLowerCase());
+      setTags(interestNames);
+      setLoadingInterests(false);
+
+      // Load food interests
+      setLoadingFoodInterests(true);
+      const { data: foodInterests } = await supabase
+        .from('user_food_interests')
+        .select('names')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      const foodNames: string[] = ((foodInterests?.names as any) ?? []).map((n: string) => n.toLowerCase());
+      setFoodTags(foodNames);
+      setLoadingFoodInterests(false);
+    } catch (error) {
+      console.error('Error loading user data:', error);
+    } finally {
+      setLoadingProfile(false);
+    }
+  };
   useEffect(() => {
     loadUserData();
     
@@ -544,63 +595,50 @@ export default function Profile() {
     return () => sub.subscription.unsubscribe();
   }, []);
 
-  const loadUserData = async () => {
+  const uploadAvatar = async (uri: string) => {
     try {
-      setLoadingProfile(true);
+      setUploadingAvatar(true);
       const user = (await supabase.auth.getUser()).data.user;
-      if (!user) {
-        setAuthed(false);
-        return;
+      if (!user) return;
+
+      // Storage policy requires first path segment = user id
+      const filePath = `${user.id}/avatar-${Date.now()}.jpg`;
+
+      // Fetch file data; prefer blob but fall back to arrayBuffer
+      let fileData: Blob | ArrayBuffer | Uint8Array;
+      try {
+        const response = await fetch(uri);
+        fileData = await response.blob();
+      } catch {
+        const response = await fetch(uri);
+        const ab = await response.arrayBuffer();
+        fileData = new Uint8Array(ab);
       }
-      
-      setAuthed(true);
-      
-      // Load user profile
-      const { data: profile } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', user.id)
-        .single();
-      
-      if (profile) {
-        setUserProfile(profile);
-        setIsAdmin(!!profile.is_admin);
-        setAvatarUrl(profile.avatar_url);
-      }
-      
-      // Load interests
-      setLoadingInterests(true);
-      const { data: interests } = await supabase
-        .from('user_interests_temp')
-        .select('names')
-        .eq('user_id', user.id)
-        .maybeSingle();
-      
-      const interestNames: string[] = ((interests?.names as any) ?? [])
-        .map((n: string) => n.toLowerCase());
-      setTags(interestNames);
-      setLoadingInterests(false);
-      
-      // Load food interests
-      setLoadingFoodInterests(true);
-      const { data: foodInterests } = await supabase
-        .from('user_food_interests')
-        .select('names')
-        .eq('user_id', user.id)
-        .maybeSingle();
-      
-      const foodNames: string[] = ((foodInterests?.names as any) ?? [])
-        .map((n: string) => n.toLowerCase());
-      setFoodTags(foodNames);
-      setLoadingFoodInterests(false);
-      
-    } catch (error) {
-      console.error('Error loading user data:', error);
+
+      const { error } = await supabase.storage
+        .from('avatars')
+        .upload(filePath, fileData, {
+          upsert: true,
+          contentType: 'image/jpeg',
+          cacheControl: '3600',
+        });
+
+      if (error) throw error;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(filePath);
+
+      await updateUserProfile({ avatar_url: publicUrl });
+      setAvatarUrl(publicUrl);
+      Alert.alert('Success', 'Avatar updated successfully!');
+    } catch (error: any) {
+      console.error('Error uploading avatar:', error);
+      Alert.alert('Error', error.message || 'Failed to upload avatar');
     } finally {
-      setLoadingProfile(false);
+      setUploadingAvatar(false);
     }
   };
-
   // Avatar functions
   const pickImage = async () => {
     try {
@@ -627,48 +665,7 @@ export default function Profile() {
     }
   };
 
-  const uploadAvatar = async (uri: string) => {
-    try {
-      setUploadingAvatar(true);
-      const user = (await supabase.auth.getUser()).data.user;
-      if (!user) return;
-
-      // Create form data for upload
-      const formData = new FormData();
-      formData.append('file', {
-        uri,
-        type: 'image/jpeg',
-        name: `avatar-${user.id}.jpg`,
-      } as any);
-
-      // Upload to Supabase storage
-      const fileName = `avatar-${user.id}-${Date.now()}.jpg`;
-      const { data, error } = await supabase.storage
-        .from('avatars')
-        .upload(fileName, formData, {
-          cacheControl: '3600',
-          upsert: true,
-        });
-
-      if (error) throw error;
-
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('avatars')
-        .getPublicUrl(fileName);
-
-      // Update user profile
-      await updateUserProfile({ avatar_url: publicUrl });
-      setAvatarUrl(publicUrl);
-      
-      Alert.alert('Success', 'Avatar updated successfully!');
-    } catch (error) {
-      console.error('Error uploading avatar:', error);
-      Alert.alert('Error', 'Failed to upload avatar');
-    } finally {
-      setUploadingAvatar(false);
-    }
-  };
+  
 
   // Username functions
   const handleUsernameUpdate = async (newUsername: string) => {
