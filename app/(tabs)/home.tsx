@@ -8,6 +8,7 @@ import {
   ScrollView,
   Linking,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import GradientBackground from '@/components/GradientBackground';
 import AnimatedPage from '@/components/AnimatedPage';
 import { useThemeColors } from '@/theme/ThemeProvider';
@@ -89,7 +90,7 @@ export default function HomeTab() {
             </View>
           </View>
 
-          {/* Second Row: Group Decide (do not scale up on wide) */}
+          {/* Second Row: Group Decide + Add Friends */}
           <View
             style={[
               styles.cardsContainer,
@@ -111,8 +112,55 @@ export default function HomeTab() {
                 accessibilityLabel="Start a new decision"
               />
             </View>
-            {/* Spacer to preserve 2-col grid on wide, avoid third element scaling */}
-            {isWide ? <View style={{ width: COL_WIDTH }} /> : null}
+            {signedIn && (
+              <View style={isWide ? { width: COL_WIDTH } : undefined}>
+                <Pressable
+                  onPress={() => router.push('/search-users')}
+                  style={{
+                    backgroundColor: c.primary,
+                    marginHorizontal: 16,
+                    marginVertical: isWide ? 0 : 12,
+                    padding: 20,
+                    borderRadius: 16,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    minHeight: 120,
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.1,
+                    shadowRadius: 8,
+                    elevation: 4,
+                  }}
+                >
+                  <View style={{
+                    backgroundColor: 'rgba(255,255,255,0.2)',
+                    borderRadius: 50,
+                    padding: 16,
+                    marginBottom: 12,
+                  }}>
+                    <Text style={{ fontSize: 32 }}>👥</Text>
+                  </View>
+                  <Text style={{
+                    color: 'white',
+                    fontSize: 18,
+                    fontWeight: '700',
+                    textAlign: 'center',
+                  }}>
+                    Add Friends
+                  </Text>
+                  <Text style={{
+                    color: 'rgba(255,255,255,0.9)',
+                    fontSize: 14,
+                    textAlign: 'center',
+                    marginTop: 4,
+                  }}>
+                    See what your friends are up to
+                  </Text>
+                </Pressable>
+              </View>
+            )}
+            {/* Spacer to preserve 2-col grid on wide when not signed in */}
+            {isWide && !signedIn ? <View style={{ width: COL_WIDTH }} /> : null}
           </View>
 
           {/* Cartoon-style persuasive blurb */}

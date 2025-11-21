@@ -71,8 +71,8 @@ export default function TabsLayout() {
     [hasNewSavedItems],
   );
 
-  // Custom groups tab icon with notification dot
-  const GroupsTabIcon = useCallback(
+  // Custom social tab icon with notification dot
+  const SocialTabIcon = useCallback(
     ({ color, size }: { color: string; size: number }) => {
       return (
         <View style={{ position: 'relative' }}>
@@ -198,7 +198,7 @@ export default function TabsLayout() {
         name="groups"
         options={{
           title: '',
-          tabBarIcon: GroupsTabIcon,
+          tabBarIcon: SocialTabIcon,
         }}
       />
       <Tabs.Screen name="groups/[id]" options={{ href: null }} />

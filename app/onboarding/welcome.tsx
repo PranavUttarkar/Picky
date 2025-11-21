@@ -77,7 +77,7 @@ export default function Welcome() {
             const names = (uit?.names as string[] | null) ?? [];
             needsOnboarding = !Array.isArray(names) || names.length < 2;
           }
-          router.replace(needsOnboarding ? '/onboarding/interests' : '/(tabs)/home');
+          router.replace(needsOnboarding ? '/onboarding/profile-setup' : '/(tabs)/home');
         } else {
           // Rare: no session; show fallback message
           setInfo("Signed in. If you aren't redirected, please try again.");
@@ -97,8 +97,8 @@ export default function Welcome() {
         } else if (data.session) {
           // Email confirmations disabled -> session immediately available
           await ensureProfile();
-          // New user won't have interests yet; send to interests
-          router.replace('/onboarding/interests');
+          // New user needs to set up profile first
+          router.replace('/onboarding/profile-setup');
         } else {
           // Email confirmations enabled
           setInfo(

@@ -3,6 +3,10 @@
 export interface UserProfile {
   id: string;
   email: string;
+  username?: string | null;
+  display_name?: string | null;
+  account_type?: 'personal' | 'organization' | null;
+  avatar_url?: string | null;
   is_admin?: boolean | null;
 }
 
@@ -80,3 +84,51 @@ export interface Restaurant {
 }
 
 export type ScoredRestaurant = Restaurant & { match_percent?: number };
+
+// Friends system interfaces
+export interface Friendship {
+  id: number;
+  requester_id: string;
+  addressee_id: string;
+  status: 'pending' | 'accepted' | 'declined';
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UserFollow {
+  id: number;
+  follower_id: string;
+  followed_id: string;
+  created_at: string;
+}
+
+export interface BlockedUser {
+  id: number;
+  blocker_id: string;
+  blocked_id: string;
+  created_at: string;
+}
+
+export interface UserSettings {
+  user_id: string;
+  show_activity_to_friends: boolean;
+  show_activity_to_followers: boolean;
+  allow_friend_requests: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FriendSearchResult {
+  id: string;
+  username: string;
+  display_name?: string | null;
+  avatar_url?: string | null;
+  account_type: 'personal' | 'organization';
+  is_friend: boolean;
+  is_blocked: boolean;
+}
+
+export interface FriendActivityResult {
+  friend_count: number;
+  friend_names: string[];
+}

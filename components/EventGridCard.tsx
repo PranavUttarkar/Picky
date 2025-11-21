@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import type { Event } from '@/types/models';
 import { shareEvent } from '@/utils/share';
+import FriendActivityIndicator from '@/components/FriendActivityIndicator';
 
 export interface EventGridCardProps {
   event: Event;
@@ -171,6 +172,12 @@ export const EventGridCard: React.FC<EventGridCardProps> = memo(
                   ))}
                 </View>
               ) : null}
+
+              {/* Friend Activity */}
+              <FriendActivityIndicator 
+                itemId={event.id} 
+                itemType="event" 
+              />
 
               {/* Actions */}
               <View

@@ -1,692 +1,1238 @@
-import { View, Text, Pressable, TextInput, ActivityIndicator } from 'react-native';
+import { 
+  View, 
+  Text, 
+  Pressable, 
+  TextInput, 
+  ActivityIndicator, 
+  ScrollView,
+  Image,
+  Alert,
+  useWindowDimensions,
+  Platform,
+  KeyboardAvoidingView,
+  Modal,
+} from 'react-native';
 import { useTheme, useThemeColors } from '@/theme/ThemeProvider';
 import GradientBackground from '@/components/GradientBackground';
 import AnimatedPage from '@/components/AnimatedPage';
-import GradientHeader from '@/components/GradientHeader';
 import { supabase } from '@/services/supabase';
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useState, useCallback, memo, useRef } from 'react';
+import { useEffect, useState, useCallback, memo } from 'react';
 import { router } from 'expo-router';
 import { trackCTA, trackEvent } from '@/utils/analytics';
+import { LinearGradient } from 'expo-linear-gradient';
+import * as ImagePicker from 'expo-image-picker';
+import { updateUserProfile, checkUsernameAvailability } from '@/services/friends';
+import { checkProfanity } from '@/utils/profanity';
+import Avatar from '@/components/Avatar';
+import type { UserProfile } from '@/types/models';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-// Hoisted components to avoid remounting on each keystroke
-function Container({ children }: { children: React.ReactNode }) {
-  return (
-    <GradientBackground contentContainerStyle={{ flex: 1, padding: 16 }}>
-      <AnimatedPage variant="pop" style={{ flex: 1 }}>
-        {children}
-      </AnimatedPage>
-    </GradientBackground>
-  );
-}
-
-const TagList = memo(function TagList({
-  tags,
-  onRemove,
-}: {
-  tags: string[];
-  onRemove: (t: string) => void;
+// Modern Tag Component
+const ModernTag = memo(function ModernTag({ 
+  tag, 
+  onRemove, 
+  variant = 'primary' 
+}: { 
+  tag: string; 
+  onRemove: (tag: string) => void;
+  variant?: 'primary' | 'secondary';
 }) {
   const c = useThemeColors();
+  
   return (
-    <View
+    <View style={{
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: variant === 'primary' ? `${c.primary}20` : `${c.accent}20`,
+      borderWidth: 1,
+      borderColor: variant === 'primary' ? `${c.primary}40` : `${c.accent}40`,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 20,
+      gap: 6,
+    }}>
+      <Text style={{ 
+        color: variant === 'primary' ? c.primary : c.accent, 
+        fontSize: 13, 
+        fontWeight: '600' 
+      }}>
+        {tag}
+      </Text>
+      <Pressable
+        onPress={() => onRemove(tag)}
+        hitSlop={8}
+        style={{
+          backgroundColor: variant === 'primary' ? `${c.primary}30` : `${c.accent}30`,
+          borderRadius: 10,
+          width: 20,
+          height: 20,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <Ionicons 
+          name="close" 
+          size={12} 
+          color={variant === 'primary' ? c.primary : c.accent} 
+        />
+      </Pressable>
+    </View>
+  );
+});
+
+// Modern Section Card
+const SectionCard = memo(function SectionCard({ 
+  children, 
+  title, 
+  subtitle,
+  icon 
+}: { 
+  children: React.ReactNode; 
+  title: string;
+  subtitle?: string;
+  icon?: string;
+}) {
+  const c = useThemeColors();
+  
+  return (
+    <View style={{
+      backgroundColor: c.card,
+      borderRadius: 16,
+      padding: 20,
+      marginBottom: 16,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.05,
+      shadowRadius: 8,
+      elevation: 2,
+    }}>
+      <View style={{ 
+        flexDirection: 'row', 
+        alignItems: 'center', 
+        marginBottom: subtitle ? 8 : 16 
+      }}>
+        {icon && (
+          <View style={{
+            backgroundColor: `${c.primary}15`,
+            borderRadius: 10,
+            padding: 8,
+            marginRight: 12,
+          }}>
+            <Ionicons name={icon as any} size={20} color={c.primary} />
+          </View>
+        )}
+        <Text style={{ 
+          color: c.text, 
+          fontSize: 18, 
+          fontWeight: '700',
+          flex: 1,
+        }}>
+          {title}
+        </Text>
+      </View>
+      {subtitle && (
+        <Text style={{ 
+          color: c.muted, 
+          fontSize: 14, 
+          marginBottom: 16,
+          lineHeight: 20,
+        }}>
+          {subtitle}
+        </Text>
+      )}
+      {children}
+    </View>
+  );
+});
+
+// Action Button Component
+const ActionButton = memo(function ActionButton({
+  title,
+  subtitle,
+  icon,
+  onPress,
+  variant = 'default',
+  disabled = false,
+}: {
+  title: string;
+  subtitle?: string;
+  icon: string;
+  onPress: () => void;
+  variant?: 'default' | 'primary' | 'danger';
+  disabled?: boolean;
+}) {
+  const c = useThemeColors();
+  
+  const getColors = () => {
+    if (disabled) return { bg: c.muted, text: '#fff', icon: '#fff' };
+    switch (variant) {
+      case 'primary':
+        return { bg: c.primary, text: '#fff', icon: '#fff' };
+      case 'danger':
+        return { bg: '#ef4444', text: '#fff', icon: '#fff' };
+      default:
+        return { bg: `${c.text}10`, text: c.text, icon: c.text };
+    }
+  };
+  
+  const colors = getColors();
+  
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
       style={{
+        backgroundColor: colors.bg,
+        borderRadius: 12,
+        padding: 16,
         flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 6,
-        marginBottom: 10,
+        alignItems: 'center',
+        marginBottom: 12,
+        opacity: disabled ? 0.6 : 1,
       }}
     >
-      {tags.map((tag) => (
-        <View
-          key={tag}
-          style={{
+      <View style={{
+        backgroundColor: variant === 'default' ? `${c.primary}20` : 'rgba(255,255,255,0.2)',
+        borderRadius: 10,
+        padding: 8,
+        marginRight: 12,
+      }}>
+        <Ionicons 
+          name={icon as any} 
+          size={20} 
+          color={variant === 'default' ? c.primary : colors.icon} 
+        />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={{ 
+          color: colors.text, 
+          fontSize: 16, 
+          fontWeight: '600',
+          marginBottom: subtitle ? 2 : 0,
+        }}>
+          {title}
+        </Text>
+        {subtitle && (
+          <Text style={{ 
+            color: variant === 'default' ? c.muted : 'rgba(255,255,255,0.8)', 
+            fontSize: 13 
+          }}>
+            {subtitle}
+          </Text>
+        )}
+      </View>
+      <Ionicons 
+        name="chevron-forward" 
+        size={20} 
+        color={variant === 'default' ? c.muted : 'rgba(255,255,255,0.6)'} 
+      />
+    </Pressable>
+  );
+});
+
+// Username Edit Modal
+const UsernameEditModal = memo(function UsernameEditModal({
+  visible,
+  onClose,
+  currentUsername,
+  onSave,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  currentUsername: string;
+  onSave: (newUsername: string) => Promise<void>;
+}) {
+  const c = useThemeColors();
+  const [newUsername, setNewUsername] = useState(currentUsername);
+  const [checking, setChecking] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isAvailable, setIsAvailable] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (visible) {
+      setNewUsername(currentUsername);
+      setError(null);
+      setIsAvailable(null);
+    }
+  }, [visible, currentUsername]);
+
+  // Check username availability with debounce
+  useEffect(() => {
+    if (!newUsername.trim() || newUsername === currentUsername) {
+      setIsAvailable(null);
+      return;
+    }
+
+    if (newUsername.length < 3) {
+      setError('Username must be at least 3 characters');
+      setIsAvailable(false);
+      return;
+    }
+
+    if (!/^[a-zA-Z0-9_]+$/.test(newUsername)) {
+      setError('Username can only contain letters, numbers, and underscores');
+      setIsAvailable(false);
+      return;
+    }
+
+    // Check for profanity
+    const profanityCheck = checkProfanity(newUsername);
+    if (!profanityCheck.isClean) {
+      setError('Username contains inappropriate content');
+      setIsAvailable(false);
+      return;
+    }
+
+    setError(null);
+    const timer = setTimeout(async () => {
+      setChecking(true);
+      try {
+        const available = await checkUsernameAvailability(newUsername.toLowerCase());
+        setIsAvailable(available);
+        if (!available) {
+          setError('Username is already taken');
+        }
+      } catch (error) {
+        console.error('Error checking username:', error);
+        setError('Error checking username availability');
+        setIsAvailable(false);
+      } finally {
+        setChecking(false);
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [newUsername, currentUsername]);
+
+  const handleSave = async () => {
+    if (!newUsername.trim() || !isAvailable || saving) return;
+
+    setSaving(true);
+    try {
+      await onSave(newUsername.toLowerCase());
+      onClose();
+    } catch (error: any) {
+      setError(error.message || 'Failed to update username');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const canSave = newUsername.trim() && 
+                  newUsername !== currentUsername && 
+                  isAvailable === true && 
+                  !error && 
+                  !checking && 
+                  !saving;
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+    >
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{
+          flex: 1,
+          backgroundColor: 'rgba(0,0,0,0.5)',
+          justifyContent: 'center',
+          alignItems: 'center',
+        }}
+      >
+        <View style={{
+          backgroundColor: c.background,
+          margin: 20,
+          padding: 24,
+          borderRadius: 16,
+          width: '90%',
+          maxWidth: 400,
+        }}>
+          <View style={{
             flexDirection: 'row',
             alignItems: 'center',
-            paddingHorizontal: 10,
-            paddingVertical: 4,
-            backgroundColor: c.primary,
-            borderRadius: 999,
-            gap: 4,
-          }}
-        >
-          <Text style={{ color: '#000', fontSize: 12, fontWeight: '700' }}>{tag}</Text>
-          <Pressable
-            onPress={() => onRemove(tag)}
-            accessibilityLabel={`Remove ${tag}`}
-            style={{ paddingHorizontal: 4, paddingVertical: 2 }}
-          >
-            <Text style={{ color: '#000', fontWeight: '700' }}>×</Text>
-          </Pressable>
+            marginBottom: 20,
+          }}>
+            <Text style={{
+              fontSize: 20,
+              fontWeight: '700',
+              color: c.text,
+              flex: 1,
+            }}>
+              Change Username
+            </Text>
+            <Pressable
+              onPress={onClose}
+              style={{ padding: 8 }}
+            >
+              <Ionicons name="close" size={24} color={c.text} />
+            </Pressable>
+          </View>
+
+          <Text style={{
+            fontSize: 14,
+            color: c.muted,
+            marginBottom: 16,
+            lineHeight: 20,
+          }}>
+            Choose a unique username. It can only contain letters, numbers, and underscores.
+          </Text>
+
+          <View style={{ position: 'relative', marginBottom: 16 }}>
+            <TextInput
+              value={newUsername}
+              onChangeText={setNewUsername}
+              placeholder="Enter new username"
+              placeholderTextColor={c.muted}
+              autoCapitalize="none"
+              autoCorrect={false}
+              style={{
+                backgroundColor: c.card,
+                padding: 16,
+                borderRadius: 12,
+                color: c.text,
+                fontSize: 16,
+                paddingRight: 50,
+                borderWidth: 2,
+                borderColor: error ? '#ef4444' : 
+                           isAvailable === true ? '#10b981' : 
+                           isAvailable === false ? '#ef4444' : c.muted,
+              }}
+            />
+            <View style={{
+              position: 'absolute',
+              right: 16,
+              top: 16,
+              bottom: 16,
+              justifyContent: 'center',
+            }}>
+              {checking ? (
+                <ActivityIndicator size="small" color={c.primary} />
+              ) : isAvailable === true ? (
+                <Ionicons name="checkmark-circle" size={20} color="#10b981" />
+              ) : isAvailable === false ? (
+                <Ionicons name="close-circle" size={20} color="#ef4444" />
+              ) : null}
+            </View>
+          </View>
+
+          {error && (
+            <Text style={{ 
+              color: '#ef4444', 
+              fontSize: 14, 
+              marginBottom: 16 
+            }}>
+              {error}
+            </Text>
+          )}
+
+          {isAvailable === true && (
+            <Text style={{ 
+              color: '#10b981', 
+              fontSize: 14, 
+              marginBottom: 16 
+            }}>
+              Username is available!
+            </Text>
+          )}
+
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <Pressable
+              onPress={onClose}
+              style={{
+                flex: 1,
+                backgroundColor: c.card,
+                paddingVertical: 16,
+                borderRadius: 12,
+                alignItems: 'center',
+              }}
+            >
+              <Text style={{ color: c.text, fontWeight: '600' }}>Cancel</Text>
+            </Pressable>
+            
+            <Pressable
+              onPress={handleSave}
+              disabled={!canSave}
+              style={{
+                flex: 1,
+                backgroundColor: canSave ? c.primary : c.muted,
+                paddingVertical: 16,
+                borderRadius: 12,
+                alignItems: 'center',
+              }}
+            >
+              <Text style={{ color: 'white', fontWeight: '600' }}>
+                {saving ? 'Saving...' : 'Save'}
+              </Text>
+            </Pressable>
+          </View>
         </View>
-      ))}
-    </View>
+      </KeyboardAvoidingView>
+    </Modal>
   );
 });
 
 export default function Profile() {
   const c = useThemeColors();
   const { scheme, setScheme } = useTheme();
+  const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const isWide = width >= 768;
+  
+  // Auth & User State
   const [authed, setAuthed] = useState<boolean | null>(null);
-  const [email, setEmail] = useState<string | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
-  // Legacy CSV representation kept for backwards compat (used only when loading)
-  const [interestsCsv, setInterestsCsv] = useState('');
-  // Normalized tag list state
+  
+  // Avatar State
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  
+  // Username Edit State
+  const [showUsernameEdit, setShowUsernameEdit] = useState(false);
+  
+  // Interests State
   const [tags, setTags] = useState<string[]>([]);
   const [newTagInput, setNewTagInput] = useState('');
-  // Food interests (separate from generic interests)
   const [foodTags, setFoodTags] = useState<string[]>([]);
   const [foodNewInput, setFoodNewInput] = useState('');
+  
+  // Loading States
+  const [loadingProfile, setLoadingProfile] = useState(true);
   const [loadingInterests, setLoadingInterests] = useState(false);
   const [loadingFoodInterests, setLoadingFoodInterests] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savingFood, setSavingFood] = useState(false);
-  const [saveMsg, setSaveMsg] = useState<string | null>(null);
-  const [saveFoodMsg, setSaveFoodMsg] = useState<string | null>(null);
-  const lastSavedRef = useRef<string[]>([]);
-  const lastSavedFoodRef = useRef<string[]>([]);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const debounceFoodRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Load user profile and data
   useEffect(() => {
-    let mounted = true;
-    (async () => {
-      const user = (await supabase.auth.getUser()).data.user;
-      if (!mounted) return;
-      setAuthed(!!user);
-      setEmail(user?.email ?? null);
-      if (user) {
-        try {
-          const { data: u } = await supabase
-            .from('users')
-            .select('is_admin')
-            .eq('id', user.id)
-            .single();
-          setIsAdmin(!!(u as any)?.is_admin);
-        } catch {}
-        // Load interests
-        setLoadingInterests(true);
-        const { data } = await supabase
-          .from('user_interests_temp')
-          .select('names')
-          .eq('user_id', user.id)
-          .maybeSingle();
-        const names: string[] = ((data?.names as any) ?? []).map((n: string) => n.toLowerCase());
-        setInterestsCsv(names.join(', '));
-        setTags(names);
-        lastSavedRef.current = names;
-        setLoadingInterests(false);
-
-        // Load food interests
-        setLoadingFoodInterests(true);
-        const { data: fdata } = await supabase
-          .from('user_food_interests')
-          .select('names')
-          .eq('user_id', user.id)
-          .maybeSingle();
-        const fnames: string[] = ((fdata?.names as any) ?? []).map((n: string) => n.toLowerCase());
-        setFoodTags(fnames);
-        lastSavedFoodRef.current = fnames;
-        setLoadingFoodInterests(false);
-      }
-    })();
+    loadUserData();
+    
     const { data: sub } = supabase.auth.onAuthStateChange((_evt, sess) => {
       setAuthed(!!sess);
-      setEmail(sess?.user?.email ?? null);
       if (sess?.user) {
-        (async () => {
-          try {
-            const { data: u } = await supabase
-              .from('users')
-              .select('is_admin')
-              .eq('id', sess.user!.id)
-              .single();
-            setIsAdmin(!!(u as any)?.is_admin);
-          } catch {}
-          setLoadingInterests(true);
-          const { data } = await supabase
-            .from('user_interests_temp')
-            .select('names')
-            .eq('user_id', sess.user!.id)
-            .maybeSingle();
-          const names: string[] = ((data?.names as any) ?? []).map((n: string) => n.toLowerCase());
-          setInterestsCsv(names.join(', '));
-          setTags(names);
-          lastSavedRef.current = names;
-          setLoadingInterests(false);
-
-          setLoadingFoodInterests(true);
-          const { data: fdata } = await supabase
-            .from('user_food_interests')
-            .select('names')
-            .eq('user_id', sess.user!.id)
-            .maybeSingle();
-          const fnames: string[] = ((fdata?.names as any) ?? []).map((n: string) =>
-            n.toLowerCase(),
-          );
-          setFoodTags(fnames);
-          lastSavedFoodRef.current = fnames;
-          setLoadingFoodInterests(false);
-        })();
+        loadUserData();
       } else {
-        setInterestsCsv('');
+        setUserProfile(null);
+        setTags([]);
+        setFoodTags([]);
       }
     });
-    return () => {
-      mounted = false;
-      sub.subscription.unsubscribe();
-    };
-  }, []);
-  // (Container hoisted to top-level to avoid remount on local state changes)
-
-  // Ensure tag list uniqueness & cap
-  const normalized = useCallback(
-    (items: string[]) =>
-      items
-        .map((s) => s.trim().toLowerCase())
-        .filter(Boolean)
-        .filter((v, i, a) => a.indexOf(v) === i)
-        .slice(0, 24),
-    [],
-  );
-
-  const addTagsFromInput = useCallback(
-    (raw: string) => {
-      if (!raw) return;
-      const split = raw
-        .split(/[\n,]/)
-        .map((s) => s.trim().toLowerCase())
-        .filter(Boolean);
-      if (!split.length) return;
-      setTags((prev) => normalized([...prev, ...split]));
-    },
-    [normalized],
-  );
-
-  const removeTag = useCallback((t: string) => {
-    setTags((prev) => prev.filter((x) => x !== t));
+    
+    return () => sub.subscription.unsubscribe();
   }, []);
 
-  const addFoodTagsFromInput = useCallback(
-    (raw: string) => {
-      if (!raw) return;
-      const split = raw
-        .split(/[\n,]/)
-        .map((s) => s.trim().toLowerCase())
-        .filter(Boolean);
-      if (!split.length) return;
-      setFoodTags((prev) => normalized([...prev, ...split]));
-    },
-    [normalized],
-  );
-
-  const removeFoodTag = useCallback((t: string) => {
-    setFoodTags((prev) => prev.filter((x) => x !== t));
-  }, []);
-
-  const saveInterests = useCallback(async () => {
-    const user = (await supabase.auth.getUser()).data.user;
-    if (!user) {
-      router.push('/onboarding/welcome');
-      return;
+  const loadUserData = async () => {
+    try {
+      setLoadingProfile(true);
+      const user = (await supabase.auth.getUser()).data.user;
+      if (!user) {
+        setAuthed(false);
+        return;
+      }
+      
+      setAuthed(true);
+      
+      // Load user profile
+      const { data: profile } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+      
+      if (profile) {
+        setUserProfile(profile);
+        setIsAdmin(!!profile.is_admin);
+        setAvatarUrl(profile.avatar_url);
+      }
+      
+      // Load interests
+      setLoadingInterests(true);
+      const { data: interests } = await supabase
+        .from('user_interests_temp')
+        .select('names')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      
+      const interestNames: string[] = ((interests?.names as any) ?? [])
+        .map((n: string) => n.toLowerCase());
+      setTags(interestNames);
+      setLoadingInterests(false);
+      
+      // Load food interests
+      setLoadingFoodInterests(true);
+      const { data: foodInterests } = await supabase
+        .from('user_food_interests')
+        .select('names')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      
+      const foodNames: string[] = ((foodInterests?.names as any) ?? [])
+        .map((n: string) => n.toLowerCase());
+      setFoodTags(foodNames);
+      setLoadingFoodInterests(false);
+      
+    } catch (error) {
+      console.error('Error loading user data:', error);
+    } finally {
+      setLoadingProfile(false);
     }
-    const arr = normalized(tags);
-    setSaving(true);
-    setSaveMsg(null);
-    const { error } = await supabase
-      .from('user_interests_temp')
-      .upsert({ user_id: user.id, names: arr });
-    if (error) {
-      setSaveMsg(error.message);
+  };
+
+  // Avatar functions
+  const pickImage = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission needed', 'Please grant camera roll permissions to upload an avatar.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+        base64: false,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        await uploadAvatar(result.assets[0].uri);
+      }
+    } catch (error) {
+      console.error('Error picking image:', error);
+      Alert.alert('Error', 'Failed to pick image');
+    }
+  };
+
+  const uploadAvatar = async (uri: string) => {
+    try {
+      setUploadingAvatar(true);
+      const user = (await supabase.auth.getUser()).data.user;
+      if (!user) return;
+
+      // Create form data for upload
+      const formData = new FormData();
+      formData.append('file', {
+        uri,
+        type: 'image/jpeg',
+        name: `avatar-${user.id}.jpg`,
+      } as any);
+
+      // Upload to Supabase storage
+      const fileName = `avatar-${user.id}-${Date.now()}.jpg`;
+      const { data, error } = await supabase.storage
+        .from('avatars')
+        .upload(fileName, formData, {
+          cacheControl: '3600',
+          upsert: true,
+        });
+
+      if (error) throw error;
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(fileName);
+
+      // Update user profile
+      await updateUserProfile({ avatar_url: publicUrl });
+      setAvatarUrl(publicUrl);
+      
+      Alert.alert('Success', 'Avatar updated successfully!');
+    } catch (error) {
+      console.error('Error uploading avatar:', error);
+      Alert.alert('Error', 'Failed to upload avatar');
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
+  // Username functions
+  const handleUsernameUpdate = async (newUsername: string) => {
+    try {
+      await updateUserProfile({ username: newUsername });
+      setUserProfile(prev => prev ? { ...prev, username: newUsername } : null);
+      Alert.alert('Success', 'Username updated successfully!');
+    } catch (error: any) {
+      throw new Error(error.message || 'Failed to update username');
+    }
+  };
+
+  // Tag management functions
+  const addTag = (input: string, isFood: boolean = false) => {
+    if (!input.trim()) return;
+    
+    const newTags = input
+      .split(/[\n,]/)
+      .map(s => s.trim().toLowerCase())
+      .filter(Boolean)
+      .filter((v, i, a) => a.indexOf(v) === i)
+      .slice(0, 24);
+    
+    if (isFood) {
+      setFoodTags(prev => [...new Set([...prev, ...newTags])].slice(0, 24));
     } else {
-      setSaveMsg(`Saved ${arr.length} interest${arr.length === 1 ? '' : 's'}.`);
-      lastSavedRef.current = arr;
+      setTags(prev => [...new Set([...prev, ...newTags])].slice(0, 24));
     }
-    setSaving(false);
-  }, [normalized, tags]);
+  };
 
-  const saveFoodInterests = useCallback(async () => {
-    const user = (await supabase.auth.getUser()).data.user;
-    if (!user) {
-      router.push('/onboarding/welcome');
-      return;
-    }
-    const arr = normalized(foodTags);
-    setSavingFood(true);
-    setSaveFoodMsg(null);
-    const { error } = await supabase
-      .from('user_food_interests')
-      .upsert({ user_id: user.id, names: arr });
-    if (error) {
-      setSaveFoodMsg(error.message);
+  const removeTag = (tag: string, isFood: boolean = false) => {
+    if (isFood) {
+      setFoodTags(prev => prev.filter(t => t !== tag));
     } else {
-      setSaveFoodMsg(`Saved ${arr.length} interest${arr.length === 1 ? '' : 's'}.`);
-      lastSavedFoodRef.current = arr;
+      setTags(prev => prev.filter(t => t !== tag));
     }
-    setSavingFood(false);
-  }, [normalized, foodTags]);
+  };
 
-  // Debounced autosave when tags change, avoiding initial hydration saves
+  const saveInterests = async (isFood: boolean = false) => {
+    try {
+      const user = (await supabase.auth.getUser()).data.user;
+      if (!user) return;
+
+      if (isFood) {
+        setSavingFood(true);
+        await supabase
+          .from('user_food_interests')
+          .upsert({ user_id: user.id, names: foodTags });
+      } else {
+        setSaving(true);
+        await supabase
+          .from('user_interests_temp')
+          .upsert({ user_id: user.id, names: tags });
+      }
+    } catch (error) {
+      console.error('Error saving interests:', error);
+    } finally {
+      if (isFood) {
+        setSavingFood(false);
+      } else {
+        setSaving(false);
+      }
+    }
+  };
+
+  // Auto-save interests with debounce
   useEffect(() => {
-    // Skip while loading initial interests
     if (loadingInterests) return;
+    const timer = setTimeout(() => saveInterests(false), 1000);
+    return () => clearTimeout(timer);
+  }, [tags, loadingInterests]);
 
-    const current = normalized(tags);
-    const prev = lastSavedRef.current;
-    const equal = current.length === prev.length && current.every((v, i) => v === prev[i]);
-    if (equal) return;
-
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      void saveInterests();
-    }, 700);
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-  }, [tags, loadingInterests, normalized, saveInterests]);
-
-  // Debounced autosave for food interests
   useEffect(() => {
     if (loadingFoodInterests) return;
-    const current = normalized(foodTags);
-    const prev = lastSavedFoodRef.current;
-    const equal = current.length === prev.length && current.every((v, i) => v === prev[i]);
-    if (equal) return;
-    if (debounceFoodRef.current) clearTimeout(debounceFoodRef.current);
-    debounceFoodRef.current = setTimeout(() => {
-      void saveFoodInterests();
-    }, 700);
-    return () => {
-      if (debounceFoodRef.current) clearTimeout(debounceFoodRef.current);
-    };
-  }, [foodTags, loadingFoodInterests, normalized, saveFoodInterests]);
+    const timer = setTimeout(() => saveInterests(true), 1000);
+    return () => clearTimeout(timer);
+  }, [foodTags, loadingFoodInterests]);
 
-  // Memoized handlers to keep TextInput from causing broad re-renders
-  const handleChangeText = useCallback(
-    (val: string) => {
-      if (/\[\n,\]/.test(val)) {
-        addTagsFromInput(val);
-        setNewTagInput('');
-      } else {
-        setNewTagInput(val);
-      }
-    },
-    [addTagsFromInput],
-  );
+  if (loadingProfile) {
+    return (
+      <GradientBackground>
+        <AnimatedPage>
+          <View style={{ 
+            flex: 1, 
+            alignItems: 'center', 
+            justifyContent: 'center' 
+          }}>
+            <ActivityIndicator size="large" color={c.primary} />
+            <Text style={{ 
+              color: c.text, 
+              fontSize: 16, 
+              marginTop: 16 
+            }}>
+              Loading profile...
+            </Text>
+          </View>
+        </AnimatedPage>
+      </GradientBackground>
+    );
+  }
 
-  const handleSubmitEditing = useCallback(
-    (e: any) => {
-      const text = e?.nativeEvent?.text ?? newTagInput;
-      if (text) {
-        addTagsFromInput(text);
-        setNewTagInput('');
-      }
-    },
-    [addTagsFromInput, newTagInput],
-  );
-
-  // (TagList hoisted to top-level to avoid remount on local state changes)
+  if (!authed) {
+    return (
+      <GradientBackground>
+        <AnimatedPage>
+          <ScrollView 
+            style={{ flex: 1 }}
+            contentContainerStyle={{ 
+              flexGrow: 1,
+              justifyContent: 'center',
+              paddingHorizontal: 20,
+              paddingTop: insets.top + 20,
+              paddingBottom: Math.max(insets.bottom, 20),
+            }}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={{ 
+              alignItems: 'center',
+              maxWidth: 400,
+              alignSelf: 'center',
+              width: '100%',
+            }}>
+              <View style={{
+                backgroundColor: c.primary,
+                borderRadius: 50,
+                padding: 20,
+                marginBottom: 24,
+              }}>
+                <Ionicons name="person" size={32} color="white" />
+              </View>
+              
+              <Text style={{
+                fontSize: 28,
+                fontWeight: '700',
+                color: c.text,
+                textAlign: 'center',
+                marginBottom: 12,
+              }}>
+                Welcome to Picky
+              </Text>
+              
+              <Text style={{
+                fontSize: 16,
+                color: c.muted,
+                textAlign: 'center',
+                marginBottom: 32,
+                lineHeight: 24,
+              }}>
+                Sign in to personalize your experience and connect with friends
+              </Text>
+              
+              <Pressable
+                onPress={() => {
+                  trackCTA('profile_sign_in_press').catch(() => {});
+                  router.push('/onboarding/welcome');
+                }}
+                style={{
+                  backgroundColor: c.primary,
+                  paddingVertical: 16,
+                  paddingHorizontal: 32,
+                  borderRadius: 12,
+                  width: '100%',
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={{ 
+                  color: 'white', 
+                  fontSize: 16,
+                  fontWeight: '600' 
+                }}>
+                  Sign In or Sign Up
+                </Text>
+              </Pressable>
+            </View>
+          </ScrollView>
+        </AnimatedPage>
+      </GradientBackground>
+    );
+  }
 
   return (
-    <Container>
-      <GradientHeader title="Your Profile" />
-      {authed === false && (
-        <>
-          <Text style={{ color: c.muted, marginBottom: 12 }}>You’re not signed in.</Text>
-          <Pressable
-            onPress={() => {
-              trackCTA('profile_sign_in_press').catch(() => {});
-              router.push('/onboarding/welcome');
-            }}
-            style={{
-              backgroundColor: c.primary,
-              padding: 12,
-              borderRadius: 12,
-              alignItems: 'center',
-            }}
-            accessibilityRole="button"
-            accessibilityLabel="Sign up or sign in"
-          >
-            <Text style={{ color: '#000', fontWeight: '700' }}>Sign up or sign in</Text>
-          </Pressable>
-          {isAdmin && (
-            <Pressable
-              onPress={() => router.push('/admin/analytics')}
-              style={{
-                marginTop: 10,
-                backgroundColor: '#1f2937',
-                padding: 12,
-                borderRadius: 12,
-                alignItems: 'center',
-              }}
-              accessibilityRole="button"
-              accessibilityLabel="Open admin analytics"
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Ionicons name="stats-chart" size={18} color={c.text} />
-                <Text style={{ color: c.text, fontWeight: '700' }}>Admin Analytics</Text>
-              </View>
-            </Pressable>
-          )}
-        </>
-      )}
+    <GradientBackground>
+      <AnimatedPage>
+        <ScrollView 
+          style={{ flex: 1 }}
+          contentContainerStyle={{ 
+            paddingHorizontal: 20,
+            paddingTop: insets.top + 20,
+            paddingBottom: Math.max(insets.bottom, 40),
+          }}
+          showsVerticalScrollIndicator={false}
+          bounces={true}
+          alwaysBounceVertical={true}
+        >
+          {/* Profile Header */}
+          <View style={{
+            alignItems: 'center',
+            marginBottom: 32,
+          }}>
+            {/* Avatar */}
+            <View style={{ position: 'relative', marginBottom: 16 }}>
+              <Avatar
+                uri={avatarUrl}
+                size={100}
+                onPress={pickImage}
+                showEditIcon={true}
+                disabled={uploadingAvatar}
+              />
+              
+              {uploadingAvatar && (
+                <View style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  backgroundColor: 'rgba(0,0,0,0.5)',
+                  borderRadius: 50,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}>
+                  <ActivityIndicator color="white" />
+                </View>
+              )}
+            </View>
+            
+            {/* User Info */}
+            <Text style={{
+              fontSize: 24,
+              fontWeight: '700',
+              color: c.text,
+              marginBottom: 4,
+            }}>
+              {userProfile?.display_name || userProfile?.username || 'User'}
+            </Text>
+            
+            {userProfile?.username && (
+              <Pressable
+                onPress={() => setShowUsernameEdit(true)}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 4,
+                  marginBottom: 8,
+                  paddingHorizontal: 8,
+                  paddingVertical: 4,
+                  borderRadius: 8,
+                }}
+              >
+                <Text style={{
+                  fontSize: 16,
+                  color: c.muted,
+                }}>
+                  @{userProfile.username}
+                </Text>
+                <Ionicons name="pencil" size={14} color={c.muted} />
+              </Pressable>
+            )}
+            
+            {userProfile?.email && (
+              <Text style={{
+                fontSize: 14,
+                color: c.muted,
+              }}>
+                {userProfile.email}
+              </Text>
+            )}
+          </View>
 
-      {authed && (
-        <>
-          {email ? (
-            <Text style={{ color: c.muted, marginBottom: 12 }}>Signed in as {email}</Text>
-          ) : null}
-          {isAdmin && (
-            <Pressable
-              onPress={() => router.push('/admin/analytics')}
-              style={{
-                backgroundColor: '#1f2937',
-                padding: 12,
-                borderRadius: 12,
-                alignItems: 'center',
-                marginBottom: 12,
+          {/* Quick Actions */}
+          <View style={{ marginBottom: 24 }}>
+            <ActionButton
+              title="View Saved"
+              subtitle="Events and restaurants you've saved"
+              icon="heart"
+              onPress={() => {
+                trackCTA('profile_view_saved_press').catch(() => {});
+                router.push('/(tabs)/saved');
               }}
-              accessibilityRole="button"
-              accessibilityLabel="Open admin analytics"
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Ionicons name="stats-chart" size={18} color={c.text} />
-                <Text style={{ color: c.text, fontWeight: '700' }}>Admin Analytics</Text>
-              </View>
-            </Pressable>
-          )}
-          {/* Appearance / Theme */}
-          <View
-            style={{
-              backgroundColor: c.card,
-              padding: 12,
-              borderRadius: 12,
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              marginBottom: 12,
-            }}
+            />
+            
+            <ActionButton
+              title="My Events"
+              subtitle="Events you've created"
+              icon="create"
+              onPress={() => {
+                trackCTA('profile_view_my_events_press').catch(() => {});
+                router.push('/(tabs)/my-events');
+              }}
+            />
+            
+            <ActionButton
+              title="Privacy Settings"
+              subtitle="Control your privacy and activity visibility"
+              icon="shield-checkmark"
+              onPress={() => {
+                trackCTA('profile_privacy_settings_press').catch(() => {});
+                router.push('/privacy-settings');
+              }}
+            />
+            
+            {isAdmin && (
+              <ActionButton
+                title="Admin Analytics"
+                subtitle="View app analytics and insights"
+                icon="stats-chart"
+                onPress={() => router.push('/admin/analytics')}
+              />
+            )}
+          </View>
+
+          {/* Appearance Settings */}
+          <SectionCard
+            title="Appearance"
+            subtitle="Choose your preferred theme"
+            icon="color-palette"
           >
-            <Text style={{ color: c.text, fontWeight: '700' }}>Appearance</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <View style={{
+              flexDirection: 'row',
+              backgroundColor: `${c.text}08`,
+              borderRadius: 12,
+              padding: 4,
+            }}>
               <Pressable
                 onPress={() => {
                   trackCTA('profile_theme_select', { value: 'light' }).catch(() => {});
                   setScheme('light');
                 }}
-                accessibilityLabel="Switch to light mode"
                 style={{
-                  backgroundColor: scheme === 'light' ? c.primary : c.background,
-                  paddingVertical: 8,
-                  paddingHorizontal: 10,
-                  borderRadius: 10,
+                  flex: 1,
+                  backgroundColor: scheme === 'light' ? c.primary : 'transparent',
+                  paddingVertical: 12,
+                  borderRadius: 8,
+                  alignItems: 'center',
+                  flexDirection: 'row',
+                  justifyContent: 'center',
+                  gap: 8,
                 }}
               >
-                <Ionicons name="sunny-outline" size={18} color={c.text} />
+                <Ionicons 
+                  name="sunny" 
+                  size={18} 
+                  color={scheme === 'light' ? 'white' : c.text} 
+                />
+                <Text style={{
+                  color: scheme === 'light' ? 'white' : c.text,
+                  fontWeight: '600',
+                }}>
+                  Light
+                </Text>
               </Pressable>
+              
               <Pressable
                 onPress={() => {
                   trackCTA('profile_theme_select', { value: 'dark' }).catch(() => {});
                   setScheme('dark');
                 }}
-                accessibilityLabel="Switch to dark mode"
                 style={{
-                  backgroundColor: scheme === 'dark' ? c.primary : c.background,
-                  paddingVertical: 8,
-                  paddingHorizontal: 10,
-                  borderRadius: 10,
-                }}
-              >
-                <Ionicons
-                  name="moon-outline"
-                  size={18}
-                  color={scheme === 'dark' ? c.background : c.text}
-                />
-              </Pressable>
-            </View>
-          </View>
-          {/* Saved events button moved below interests section */}
-          <Pressable
-            onPress={async () => {
-              trackCTA('profile_sign_out_press').catch(() => {});
-              await supabase.auth.signOut();
-            }}
-            style={{
-              backgroundColor: c.primary,
-              padding: 12,
-              borderRadius: 12,
-              alignItems: 'center',
-            }}
-            accessibilityRole="button"
-            accessibilityLabel="Sign out"
-          >
-            <Text style={{ color: '#000', fontWeight: '700' }}>Sign out</Text>
-          </Pressable>
-          {/* Interests Editor (inline tags) */}
-          <View style={{ marginTop: 28 }}>
-            <Text style={{ color: c.text, fontSize: 18, fontWeight: '700', marginBottom: 6 }}>
-              Your interests
-            </Text>
-            <Text style={{ color: c.muted, fontSize: 12, marginBottom: 8 }}>
-              Add interests separated by commas. Press Enter or type a comma to turn text into a
-              tag. Tap a tagʼs × to remove it. Up to 24.
-            </Text>
-            {loadingInterests ? (
-              <View
-                style={{
-                  backgroundColor: '#00000015',
-                  padding: 16,
-                  borderRadius: 12,
-                  flexDirection: 'row',
+                  flex: 1,
+                  backgroundColor: scheme === 'dark' ? c.primary : 'transparent',
+                  paddingVertical: 12,
+                  borderRadius: 8,
                   alignItems: 'center',
+                  flexDirection: 'row',
+                  justifyContent: 'center',
                   gap: 8,
                 }}
               >
-                <ActivityIndicator />
-                <Text style={{ color: c.muted }}>Loading interests…</Text>
+                <Ionicons 
+                  name="moon" 
+                  size={18} 
+                  color={scheme === 'dark' ? 'white' : c.text} 
+                />
+                <Text style={{
+                  color: scheme === 'dark' ? 'white' : c.text,
+                  fontWeight: '600',
+                }}>
+                  Dark
+                </Text>
+              </Pressable>
+            </View>
+          </SectionCard>
+
+          {/* Interests Section */}
+          <SectionCard
+            title="Your Interests"
+            subtitle="Add interests to get personalized recommendations"
+            icon="heart"
+          >
+            {loadingInterests ? (
+              <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 12,
+                padding: 16,
+                backgroundColor: `${c.text}05`,
+                borderRadius: 12,
+              }}>
+                <ActivityIndicator size="small" color={c.primary} />
+                <Text style={{ color: c.muted }}>Loading interests...</Text>
               </View>
             ) : (
-              <View>
-                <TagList tags={tags} onRemove={removeTag} />
+              <>
+                {tags.length > 0 && (
+                  <View style={{
+                    flexDirection: 'row',
+                    flexWrap: 'wrap',
+                    gap: 8,
+                    marginBottom: 16,
+                  }}>
+                    {tags.map((tag) => (
+                      <ModernTag
+                        key={tag}
+                        tag={tag}
+                        onRemove={(t) => removeTag(t, false)}
+                        variant="primary"
+                      />
+                    ))}
+                  </View>
+                )}
+                
                 <TextInput
                   value={newTagInput}
-                  onChangeText={handleChangeText}
-                  onSubmitEditing={handleSubmitEditing}
-                  placeholder={tags.length ? 'Add another interest' : 'Add an interest'}
+                  onChangeText={(val) => {
+                    if (/[\n,]/.test(val)) {
+                      addTag(val, false);
+                      setNewTagInput('');
+                    } else {
+                      setNewTagInput(val);
+                    }
+                  }}
+                  onSubmitEditing={() => {
+                    if (newTagInput.trim()) {
+                      addTag(newTagInput, false);
+                      setNewTagInput('');
+                    }
+                  }}
+                  placeholder={tags.length ? 'Add another interest...' : 'Add interests (e.g., music, sports)'}
                   placeholderTextColor={c.muted}
                   style={{
-                    backgroundColor: '#00000015',
-                    color: c.text,
+                    backgroundColor: `${c.text}08`,
                     borderRadius: 12,
-                    padding: 12,
-                    fontSize: 14,
+                    padding: 16,
+                    color: c.text,
+                    fontSize: 16,
                   }}
                   autoCapitalize="none"
                   autoCorrect={false}
-                  blurOnSubmit={false}
                   returnKeyType="done"
                 />
-                {tags.length ? (
-                  <Pressable
-                    onPress={() => {
-                      trackCTA('profile_clear_interests').catch(() => {});
-                      setTags([]);
-                    }}
-                    style={{ marginTop: 8, alignSelf: 'flex-start', padding: 4 }}
-                    accessibilityLabel="Clear all interests"
-                  >
-                    <Text style={{ color: c.muted, fontSize: 12 }}>Clear all</Text>
-                  </Pressable>
-                ) : null}
-              </View>
-            )}
-
-            {saveMsg ? (
-              <Text
-                style={{ color: saveMsg.startsWith('Saved') ? c.muted : '#ff6666', marginTop: 8 }}
-              >
-                {saveMsg}
-              </Text>
-            ) : null}
-            {saving ? (
-              <View
-                style={{
-                  marginTop: 10,
-                  backgroundColor: '#00000015',
-                  paddingVertical: 8,
-                  paddingHorizontal: 12,
-                  borderRadius: 10,
-                  alignSelf: 'flex-start',
-                }}
-              >
-                <Text style={{ color: c.muted }}>Saving…</Text>
-              </View>
-            ) : null}
-
-            {/* Food Interests Editor */}
-            <View style={{ marginTop: 24 }}>
-              <Text style={{ color: c.text, fontSize: 18, fontWeight: '700', marginBottom: 6 }}>
-                Your food interests
-              </Text>
-              <Text style={{ color: c.muted, fontSize: 12, marginBottom: 8 }}>
-                Add cuisines or food tags separated by commas. Press Enter or type a comma to make a
-                tag.
-              </Text>
-              {loadingFoodInterests ? (
-                <View
-                  style={{
-                    backgroundColor: '#00000015',
-                    padding: 16,
-                    borderRadius: 12,
+                
+                {saving && (
+                  <View style={{
                     flexDirection: 'row',
                     alignItems: 'center',
                     gap: 8,
-                  }}
-                >
-                  <ActivityIndicator />
-                  <Text style={{ color: c.muted }}>Loading food interests…</Text>
-                </View>
-              ) : (
-                <View>
-                  <TagList tags={foodTags} onRemove={removeFoodTag} />
-                  <TextInput
-                    value={foodNewInput}
-                    onChangeText={(val) => {
-                      if (/[\n,]/.test(val)) {
-                        addFoodTagsFromInput(val);
-                        setFoodNewInput('');
-                      } else setFoodNewInput(val);
-                    }}
-                    onSubmitEditing={(e: any) => {
-                      const text = e?.nativeEvent?.text ?? foodNewInput;
-                      if (text) {
-                        addFoodTagsFromInput(text);
-                        setFoodNewInput('');
-                      }
-                    }}
-                    placeholder={
-                      foodTags.length ? 'Add another cuisine' : 'Add a cuisine (e.g. mexican)'
+                    marginTop: 12,
+                  }}>
+                    <ActivityIndicator size="small" color={c.primary} />
+                    <Text style={{ color: c.muted, fontSize: 14 }}>Saving...</Text>
+                  </View>
+                )}
+              </>
+            )}
+          </SectionCard>
+
+          {/* Food Interests Section */}
+          <SectionCard
+            title="Food Preferences"
+            subtitle="Tell us about your favorite cuisines and foods"
+            icon="restaurant"
+          >
+            {loadingFoodInterests ? (
+              <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 12,
+                padding: 16,
+                backgroundColor: `${c.text}05`,
+                borderRadius: 12,
+              }}>
+                <ActivityIndicator size="small" color={c.accent} />
+                <Text style={{ color: c.muted }}>Loading food preferences...</Text>
+              </View>
+            ) : (
+              <>
+                {foodTags.length > 0 && (
+                  <View style={{
+                    flexDirection: 'row',
+                    flexWrap: 'wrap',
+                    gap: 8,
+                    marginBottom: 16,
+                  }}>
+                    {foodTags.map((tag) => (
+                      <ModernTag
+                        key={tag}
+                        tag={tag}
+                        onRemove={(t) => removeTag(t, true)}
+                        variant="secondary"
+                      />
+                    ))}
+                  </View>
+                )}
+                
+                <TextInput
+                  value={foodNewInput}
+                  onChangeText={(val) => {
+                    if (/[\n,]/.test(val)) {
+                      addTag(val, true);
+                      setFoodNewInput('');
+                    } else {
+                      setFoodNewInput(val);
                     }
-                    placeholderTextColor={c.muted}
-                    style={{
-                      backgroundColor: '#00000015',
-                      color: c.text,
-                      borderRadius: 12,
-                      padding: 12,
-                      fontSize: 14,
-                    }}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    blurOnSubmit={false}
-                    returnKeyType="done"
-                  />
-                  {foodTags.length ? (
-                    <Pressable
-                      onPress={() => {
-                        trackCTA('profile_clear_food_interests').catch(() => {});
-                        setFoodTags([]);
-                      }}
-                      style={{ marginTop: 8, alignSelf: 'flex-start', padding: 4 }}
-                      accessibilityLabel="Clear all food interests"
-                    >
-                      <Text style={{ color: c.muted, fontSize: 12 }}>Clear all</Text>
-                    </Pressable>
-                  ) : null}
-                </View>
-              )}
-              {saveFoodMsg ? (
-                <Text
-                  style={{
-                    color: saveFoodMsg.startsWith('Saved') ? c.muted : '#ff6666',
-                    marginTop: 8,
                   }}
-                >
-                  {saveFoodMsg}
-                </Text>
-              ) : null}
-              {savingFood ? (
-                <View
-                  style={{
-                    marginTop: 10,
-                    backgroundColor: '#00000015',
-                    paddingVertical: 8,
-                    paddingHorizontal: 12,
-                    borderRadius: 10,
-                    alignSelf: 'flex-start',
+                  onSubmitEditing={() => {
+                    if (foodNewInput.trim()) {
+                      addTag(foodNewInput, true);
+                      setFoodNewInput('');
+                    }
                   }}
-                >
-                  <Text style={{ color: c.muted }}>Saving…</Text>
-                </View>
-              ) : null}
-            </View>
+                  placeholder={foodTags.length ? 'Add another cuisine...' : 'Add cuisines (e.g., italian, mexican)'}
+                  placeholderTextColor={c.muted}
+                  style={{
+                    backgroundColor: `${c.text}08`,
+                    borderRadius: 12,
+                    padding: 16,
+                    color: c.text,
+                    fontSize: 16,
+                  }}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  returnKeyType="done"
+                />
+                
+                {savingFood && (
+                  <View style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 8,
+                    marginTop: 12,
+                  }}>
+                    <ActivityIndicator size="small" color={c.accent} />
+                    <Text style={{ color: c.muted, fontSize: 14 }}>Saving...</Text>
+                  </View>
+                )}
+              </>
+            )}
+          </SectionCard>
 
-            {/* Saved events link lives here now */}
-            <Pressable
-              onPress={() => {
-                trackCTA('profile_view_saved_press').catch(() => {});
-                router.push('/(tabs)/saved');
-              }}
-              style={{
-                marginTop: 14,
-                backgroundColor: c.accent,
+          {/* Sign Out */}
+          <ActionButton
+            title="Sign Out"
+            subtitle="Sign out of your account"
+            icon="log-out"
+            variant="danger"
+            onPress={async () => {
+              Alert.alert(
+                'Sign Out',
+                'Are you sure you want to sign out?',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  {
+                    text: 'Sign Out',
+                    style: 'destructive',
+                    onPress: async () => {
+                      trackCTA('profile_sign_out_press').catch(() => {});
+                      await supabase.auth.signOut();
+                    }
+                  }
+                ]
+              );
+            }}
+          />
 
-                padding: 12,
-                borderRadius: 12,
-                alignItems: 'center',
-              }}
-              accessibilityRole="button"
-              accessibilityLabel="Open saved events"
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Ionicons name="heart" size={18} color={c.text} />
-                <Text style={{ color: c.text, fontWeight: '700' }}>View Saved</Text>
-              </View>
-            </Pressable>
-            {/* My Events (created by me) */}
-            <Pressable
-              onPress={() => {
-                trackCTA('profile_view_my_events_press').catch(() => {});
-                router.push('/(tabs)/my-events');
-              }}
-              style={{
-                marginTop: 10,
-                backgroundColor: '#00000030',
-                padding: 12,
-                borderRadius: 12,
-                alignItems: 'center',
-              }}
-              accessibilityRole="button"
-              accessibilityLabel="View events you've created"
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Ionicons name="create" size={18} color={c.text} />
-                <Text style={{ color: c.text, fontWeight: '700' }}>My Events</Text>
-              </View>
-            </Pressable>
-          </View>
-        </>
-      )}
-    </Container>
+          {/* Username Edit Modal */}
+          <UsernameEditModal
+            visible={showUsernameEdit}
+            onClose={() => setShowUsernameEdit(false)}
+            currentUsername={userProfile?.username || ''}
+            onSave={handleUsernameUpdate}
+          />
+        </ScrollView>
+      </AnimatedPage>
+    </GradientBackground>
   );
 }

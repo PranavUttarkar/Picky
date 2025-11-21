@@ -5,6 +5,7 @@ import ImageGallery from '@/components/ImageGallery';
 import { useThemeColors } from '@/theme/ThemeProvider';
 import type { Restaurant } from '@/types/models';
 import { Ionicons } from '@expo/vector-icons';
+import FriendActivityIndicator from '@/components/FriendActivityIndicator';
 
 export interface FoodGridCardProps {
   item: Restaurant;
@@ -144,6 +145,12 @@ const FoodGridCard: React.FC<FoodGridCardProps> = memo(
                   {item.city ? `, ${item.city}` : ''}
                 </Text>
               ) : null}
+
+              {/* Friend Activity */}
+              <FriendActivityIndicator 
+                itemId={item.id} 
+                itemType="restaurant" 
+              />
 
               <View
                 style={{
