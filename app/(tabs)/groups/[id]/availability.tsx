@@ -1,9 +1,18 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, Pressable, Alert, ActivityIndicator } from 'react-native';
+import { 
+  View, 
+  Text, 
+  Pressable, 
+  Alert, 
+  ActivityIndicator, 
+  ScrollView,
+  Animated,
+  Easing 
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, router } from 'expo-router';
 import GradientBackground from '@/components/GradientBackground';
-import GradientHeader from '@/components/GradientHeader';
+import AnimatedPage from '@/components/AnimatedPage';
 import AvailabilityGrid from '@/components/AvailabilityGrid';
 import AvailabilityGridMobile from '@/components/AvailabilityGridMobile';
 import { useThemeColors } from '@/theme/ThemeProvider';
@@ -15,6 +24,7 @@ import {
 } from '@/services/availability';
 import { useWindowDimensions, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import dayjs from 'dayjs';
 
 export default function GroupAvailabilityScreen() {
   const c = useThemeColors();
@@ -35,6 +45,9 @@ export default function GroupAvailabilityScreen() {
   const { width } = useWindowDimensions();
   const isMobileLayout = Platform.OS !== 'web' || width < 720;
   const insets = useSafeAreaInsets();
+  
+  // Animation for saved banner
+  const savedBannerOpacity = useState(new Animated.Value(0))[0];
 
   const window = useMemo(() => computeWindow(now, 30, 7), [now]);
 
@@ -64,6 +77,27 @@ export default function GroupAvailabilityScreen() {
     refresh();
   }, [groupId, window.startIso, window.endIso]);
 
+  // Animate saved banner
+  useEffect(() => {
+    if (savedBanner) {
+      Animated.sequence([
+        Animated.timing(savedBannerOpacity, {
+          toValue: 1,
+          duration: 300,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.delay(2000),
+        Animated.timing(savedBannerOpacity, {
+          toValue: 0,
+          duration: 300,
+          easing: Easing.in(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ]).start(() => setSavedBanner(false));
+    }
+  }, [savedBanner]);
+
   const onToggle = (iso: string) => {
     setSelected((prev) => {
       const next = new Set(prev);
@@ -79,7 +113,6 @@ export default function GroupAvailabilityScreen() {
       await replaceMyAvailability(groupId, window, Array.from(selected.values()));
       await refresh();
       setSavedBanner(true);
-      setTimeout(() => setSavedBanner(false), 1500);
     } catch (e: any) {
       Alert.alert('Save failed', e?.message ?? String(e));
     } finally {
@@ -87,142 +120,435 @@ export default function GroupAvailabilityScreen() {
     }
   };
 
+  // Quick selection helpers
+  const selectTimeRange = (startHour: number, endHour: number, days: number[]) => {
+    const newSelected = new Set(selected);
+    days.forEach(dayOffset => {
+      const day = new Date(now);
+      day.setDate(day.getDate() + dayOffset);
+      day.setHours(0, 0, 0, 0);
+      
+      for (let hour = startHour; hour < endHour; hour++) {
+        [0, 30].forEach(minutes => {
+          const slotTime = new Date(day);
+          slotTime.setHours(hour, minutes, 0, 0);
+          const iso = slotTime.toISOString();
+          if (slotTime >= window.startIso && slotTime < window.endIso) {
+            newSelected.add(iso);
+          }
+        });
+      }
+    });
+    setSelected(newSelected);
+  };
+
+  const clearAll = () => {
+    setSelected(new Set());
+  };
+
+  const selectedCount = selected.size;
+
   return (
     <GradientBackground variant="dim">
-      <View style={{ flex: 1, padding: 16, paddingBottom: 16 + Math.max(0, insets.bottom) + 24 }}>
-        <GradientHeader
-          title="Find common times"
-          onBack={() => router.push(`/(tabs)/groups/${groupId}`)}
-          backLabel="Back to group"
-        />
-        <Text style={{ color: c.muted, marginBottom: 8 }}>
-          Drag or tap to mark your availability over the next 7 days starting now. We'll show how
-          many group members can make each slot.
-        </Text>
-        {summary.top ? (
-          <View
-            style={{
-              backgroundColor: c.card,
-              padding: 10,
-              borderRadius: 10,
-              borderWidth: 1,
-              borderColor: '#00000020',
-              marginBottom: 8,
-            }}
-          >
-            <Text style={{ color: c.text, fontWeight: '700' }}>
-              Best overlap: {new Date(summary.top.iso).toLocaleString()} – {summary.top.count}/
-              {summary.total}
-            </Text>
-            {summary.pending > 0 ? (
-              <Text style={{ color: c.muted, marginTop: 4 }}>{summary.pending} pending</Text>
-            ) : summary.total > 0 && summary.top.count === summary.total ? (
-              <Text style={{ color: c.text, marginTop: 4, fontWeight: '700' }}>
-                Winner found 🎉
-              </Text>
-            ) : null}
-          </View>
-        ) : null}
-        <View
-          style={{
-            flexDirection: 'row',
-            gap: 8,
-            marginBottom: 10,
-            flexWrap: 'wrap',
-            alignItems: 'center',
+      <AnimatedPage>
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{
+            paddingHorizontal: 20,
+            paddingTop: insets.top + 20,
+            paddingBottom: Math.max(insets.bottom, 40),
           }}
+          showsVerticalScrollIndicator={false}
         >
-          <Pressable
-            onPress={() => setNow(new Date())}
-            style={{
+          {/* Header */}
+          <View style={{ marginBottom: 24 }}>
+            <Pressable
+              onPress={() => router.push(`/(tabs)/groups/${groupId}`)}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                marginBottom: 16,
+                alignSelf: 'flex-start',
+              }}
+            >
+              <Ionicons name="arrow-back" size={24} color={c.text} />
+              <Text style={{ 
+                color: c.text, 
+                fontSize: 16, 
+                marginLeft: 8,
+                fontWeight: '600',
+              }}>
+                Back to Group
+              </Text>
+            </Pressable>
+            
+            <Text style={{
+              fontSize: 32,
+              fontWeight: '700',
+              color: c.text,
+              marginBottom: 8,
+            }}>
+              Find Common Times
+            </Text>
+            
+            <Text style={{
+              fontSize: 16,
+              color: c.muted,
+              lineHeight: 24,
+            }}>
+              Select your available times. We'll show where everyone overlaps so you can find the best meeting time.
+            </Text>
+          </View>
+
+          {/* Enhanced Summary Card */}
+          {summary.top && (
+            <View style={{
               backgroundColor: c.card,
-              paddingVertical: 8,
-              paddingHorizontal: 12,
-              borderRadius: 10,
-            }}
-            accessibilityRole="button"
-            accessibilityLabel="Jump to now"
-          >
-            <Text style={{ color: c.text, fontWeight: '700' }}>Now</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => setNow(new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000))}
-            style={{
+              borderRadius: 16,
+              padding: 20,
+              marginBottom: 24,
+              borderWidth: 2,
+              borderColor: summary.top.count === summary.total 
+                ? '#10b981' 
+                : summary.top.count >= summary.total * 0.8
+                ? '#3b82f6'
+                : c.primary,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.1,
+              shadowRadius: 12,
+              elevation: 4,
+            }}>
+              <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                marginBottom: 12,
+              }}>
+                <View style={{
+                  backgroundColor: summary.top.count === summary.total 
+                    ? '#10b981' 
+                    : '#3b82f6',
+                  borderRadius: 10,
+                  padding: 8,
+                  marginRight: 12,
+                }}>
+                  <Ionicons 
+                    name={summary.top.count === summary.total ? "checkmark-circle" : "time"} 
+                    size={24} 
+                    color="white" 
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{
+                    fontSize: 18,
+                    fontWeight: '700',
+                    color: c.text,
+                    marginBottom: 4,
+                  }}>
+                    {summary.top.count === summary.total 
+                      ? 'Perfect Match! 🎉' 
+                      : `Best Time: ${summary.top.count}/${summary.total} available`}
+                  </Text>
+                  <Text style={{
+                    fontSize: 14,
+                    color: c.muted,
+                  }}>
+                    {dayjs(summary.top.iso).format('dddd, MMM D [at] h:mm A')}
+                  </Text>
+                </View>
+              </View>
+              
+              {summary.pending > 0 && (
+                <View style={{
+                  backgroundColor: summary.top.count === summary.total 
+                    ? 'rgba(16, 185, 129, 0.1)' 
+                    : 'rgba(59, 130, 246, 0.1)',
+                  borderRadius: 8,
+                  padding: 12,
+                  marginTop: 12,
+                }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Ionicons 
+                      name="information-circle" 
+                      size={16} 
+                      color={summary.top.count === summary.total ? '#10b981' : '#3b82f6'} 
+                    />
+                    <Text style={{
+                      color: c.text,
+                      fontSize: 13,
+                      marginLeft: 8,
+                      flex: 1,
+                    }}>
+                      {summary.pending} {summary.pending === 1 ? 'member' : 'members'} still need to respond
+                    </Text>
+                  </View>
+                </View>
+              )}
+              
+              {summary.total > 0 && summary.top.count === summary.total && (
+                <View style={{
+                  backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                  borderRadius: 8,
+                  padding: 12,
+                  marginTop: 12,
+                }}>
+                  <Text style={{
+                    color: '#10b981',
+                    fontSize: 14,
+                    fontWeight: '600',
+                  }}>
+                    ✨ Everyone is available at this time!
+                  </Text>
+                </View>
+              )}
+            </View>
+          )}
+
+          {/* Quick Actions */}
+          <View style={{
+            backgroundColor: c.card,
+            borderRadius: 16,
+            padding: 16,
+            marginBottom: 24,
+          }}>
+            <Text style={{
+              fontSize: 16,
+              fontWeight: '700',
+              color: c.text,
+              marginBottom: 12,
+            }}>
+              Quick Actions
+            </Text>
+            
+            <View style={{
+              flexDirection: isMobileLayout ? 'column' : 'row',
+              gap: 8,
+              marginBottom: 12,
+            }}>
+              <Pressable
+                onPress={() => selectTimeRange(9, 17, [0, 1, 2, 3, 4])}
+                style={{
+                  flex: 1,
+                  backgroundColor: `${c.primary}15`,
+                  borderRadius: 12,
+                  padding: 12,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                }}
+              >
+                <Ionicons name="sunny" size={18} color={c.primary} />
+                <Text style={{ color: c.primary, fontWeight: '600', fontSize: 14 }}>
+                  Weekdays 9AM-5PM
+                </Text>
+              </Pressable>
+              
+              <Pressable
+                onPress={() => selectTimeRange(10, 22, [5, 6])}
+                style={{
+                  flex: 1,
+                  backgroundColor: `${c.primary}15`,
+                  borderRadius: 12,
+                  padding: 12,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                }}
+              >
+                <Ionicons name="calendar" size={18} color={c.primary} />
+                <Text style={{ color: c.primary, fontWeight: '600', fontSize: 14 }}>
+                  Weekends 10AM-10PM
+                </Text>
+              </Pressable>
+            </View>
+            
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <Pressable
+                onPress={clearAll}
+                style={{
+                  flex: 1,
+                  backgroundColor: `${c.muted}20`,
+                  borderRadius: 12,
+                  padding: 12,
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={{ color: c.text, fontWeight: '600', fontSize: 14 }}>
+                  Clear All
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+
+          {/* Week Navigation & Save */}
+          <View style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            marginBottom: 16,
+            gap: 8,
+            flexWrap: 'wrap',
+          }}>
+            <Pressable
+              onPress={() => setNow(new Date())}
+              style={{
+                backgroundColor: c.card,
+                paddingVertical: 12,
+                paddingHorizontal: 16,
+                borderRadius: 12,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 6,
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Jump to now"
+            >
+              <Ionicons name="time" size={18} color={c.primary} />
+              <Text style={{ color: c.text, fontWeight: '600', fontSize: 14 }}>
+                Now
+              </Text>
+            </Pressable>
+            
+            <Pressable
+              onPress={() => setNow(new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000))}
+              style={{
+                backgroundColor: c.card,
+                padding: 12,
+                borderRadius: 12,
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Previous week"
+            >
+              <Ionicons name="chevron-back" size={18} color={c.text} />
+            </Pressable>
+            
+            <Pressable
+              onPress={() => setNow(new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000))}
+              style={{
+                backgroundColor: c.card,
+                padding: 12,
+                borderRadius: 12,
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Next week"
+            >
+              <Ionicons name="chevron-forward" size={18} color={c.text} />
+            </Pressable>
+            
+            <View style={{ flex: 1 }} />
+            
+            <View style={{
               backgroundColor: c.card,
+              paddingHorizontal: 16,
               paddingVertical: 8,
-              paddingHorizontal: 12,
-              borderRadius: 10,
-            }}
-            accessibilityRole="button"
-            accessibilityLabel="Previous week"
-          >
-            <Ionicons name="chevron-back" size={18} color={c.text} />
-          </Pressable>
-          <Pressable
-            onPress={() => setNow(new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000))}
-            style={{
-              backgroundColor: c.card,
-              paddingVertical: 8,
-              paddingHorizontal: 12,
-              borderRadius: 10,
-            }}
-            accessibilityRole="button"
-            accessibilityLabel="Next week"
-          >
-            <Ionicons name="chevron-forward" size={18} color={c.text} />
-          </Pressable>
-          <View style={{ flex: 1 }} />
-          <Pressable
-            onPress={saving ? undefined : onSave}
-            disabled={saving}
-            style={{
-              backgroundColor: c.primary,
-              paddingVertical: 10,
-              paddingHorizontal: 14,
               borderRadius: 12,
-              opacity: saving ? 0.7 : 1,
-            }}
-            accessibilityRole="button"
-            accessibilityLabel="Save availability"
-          >
-            <Text style={{ color: c.text, fontWeight: '800' }}>{saving ? 'Saving…' : 'Save'}</Text>
-          </Pressable>
-        </View>
-
-        {savedBanner ? (
-          <View style={{ alignItems: 'center', marginBottom: 8 }}>
-            <Text style={{ color: c.text, fontWeight: '700' }}>Availability saved ✓</Text>
+              marginRight: 8,
+            }}>
+              <Text style={{ color: c.muted, fontSize: 12 }}>
+                {selectedCount} {selectedCount === 1 ? 'slot' : 'slots'} selected
+              </Text>
+            </View>
+            
+            <Pressable
+              onPress={saving ? undefined : onSave}
+              disabled={saving}
+              style={{
+                backgroundColor: c.primary,
+                paddingVertical: 12,
+                paddingHorizontal: 24,
+                borderRadius: 12,
+                opacity: saving ? 0.7 : 1,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 8,
+                shadowColor: c.primary,
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.3,
+                shadowRadius: 8,
+                elevation: 4,
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Save availability"
+            >
+              {saving ? (
+                <ActivityIndicator size="small" color="white" />
+              ) : (
+                <Ionicons name="checkmark-circle" size={20} color="white" />
+              )}
+              <Text style={{ color: 'white', fontWeight: '700', fontSize: 16 }}>
+                {saving ? 'Saving…' : 'Save'}
+              </Text>
+            </Pressable>
           </View>
-        ) : null}
 
-        {loading ? (
-          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-            <ActivityIndicator color={c.primary} />
-          </View>
-        ) : isMobileLayout ? (
-          <AvailabilityGridMobile
-            start={new Date(window.startIso)}
-            days={7}
-            slotMinutes={30}
-            selected={selected}
-            onToggle={onToggle}
-            counts={counts}
-            memberCount={memberCount}
-            initialHour={8}
-          />
-        ) : (
-          <AvailabilityGrid
-            start={new Date(window.startIso)}
-            days={7}
-            slotMinutes={30}
-            selected={selected}
-            onToggle={onToggle}
-            counts={counts}
-            memberCount={memberCount}
-            initialHour={8}
-          />
-        )}
-      </View>
+          {/* Saved Banner */}
+          {savedBanner && (
+            <Animated.View
+              style={{
+                opacity: savedBannerOpacity,
+                backgroundColor: '#10b981',
+                borderRadius: 12,
+                padding: 16,
+                marginBottom: 16,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 8,
+              }}
+            >
+              <Ionicons name="checkmark-circle" size={24} color="white" />
+              <Text style={{ color: 'white', fontWeight: '700', fontSize: 16, flex: 1 }}>
+                Availability saved successfully!
+              </Text>
+            </Animated.View>
+          )}
+
+          {/* Grid */}
+          {loading ? (
+            <View style={{ 
+              flex: 1, 
+              alignItems: 'center', 
+              justifyContent: 'center',
+              minHeight: 400,
+            }}>
+              <ActivityIndicator size="large" color={c.primary} />
+              <Text style={{ 
+                color: c.muted, 
+                marginTop: 16,
+                fontSize: 16,
+              }}>
+                Loading availability...
+              </Text>
+            </View>
+          ) : (
+            <View style={{ minHeight: isMobileLayout ? 600 : 500 }}>
+              {isMobileLayout ? (
+                <AvailabilityGridMobile
+                  start={new Date(window.startIso)}
+                  days={7}
+                  slotMinutes={30}
+                  selected={selected}
+                  onToggle={onToggle}
+                  counts={counts}
+                  memberCount={memberCount}
+                  initialHour={8}
+                />
+              ) : (
+                <AvailabilityGrid
+                  start={new Date(window.startIso)}
+                  days={7}
+                  slotMinutes={30}
+                  selected={selected}
+                  onToggle={onToggle}
+                  counts={counts}
+                  memberCount={memberCount}
+                  initialHour={8}
+                />
+              )}
+            </View>
+          )}
+        </ScrollView>
+      </AnimatedPage>
     </GradientBackground>
   );
 }
