@@ -38,7 +38,8 @@ export default function Groups() {
   const { hasNewGroupDecisions } = useGroupDecisionNotification();
   
   // Tab state
-  const [activeTab, setActiveTab] = useState<TabType>('friends');
+  // Default to groups tab instead of friends
+  const [activeTab, setActiveTab] = useState<TabType>('groups');
   
   // Friends state
   const [friends, setFriends] = useState<UserProfile[]>([]);

@@ -9,7 +9,7 @@ export const topBarStyles = (c: { card: string; text: string; muted: string; bac
       paddingHorizontal: 10,
       paddingVertical: 8,
       marginTop: 12,
-      marginHorizontal: 16, // unified horizontal margin
+      // Horizontal spacing now handled by outer tab container (padding:16)
     } as ViewStyle,
     searchRow: {
       flexDirection: 'row',

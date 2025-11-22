@@ -27,6 +27,7 @@ import EventImages from '@/components/EventImages';
 import ImageGallery from '@/components/ImageGallery';
 import { useTheme, useThemeColors } from '@/theme/ThemeProvider';
 import GradientBackground from '@/components/GradientBackground';
+import GradientHeader from '@/components/GradientHeader';
 import AnimatedPage from '@/components/AnimatedPage';
 import { LinearGradient } from 'expo-linear-gradient';
 import HeaderSpacer from '@/components/HeaderSpacer';
@@ -2461,97 +2462,82 @@ export default function Home() {
   // Filters header elements (top bar + scrollable interests/tags) — define after openAddModal
   const filtersTopBar = useMemo(
     () => (
-      <View
-        style={{
-          alignSelf: 'center',
-          width: '100%',
-          maxWidth: viewMode === 'grid' ? MAX_GRID_WIDTH : undefined,
-          paddingHorizontal: 16,
-        }}
-      >
-        <FiltersTopBar
-          c={c}
-          query={query}
-          setQuery={setQuery}
-          mode={mode}
-          setMode={setMode}
-          viewMode={viewMode}
-          setViewMode={setViewMode}
-          onOpenAdd={openAddModal}
-          isAuthed={isAuthed}
-        />
-      </View>
+      <FiltersTopBar
+        c={c}
+        query={query}
+        setQuery={setQuery}
+        mode={mode}
+        setMode={setMode}
+        viewMode={viewMode}
+        setViewMode={setViewMode}
+        onOpenAdd={openAddModal}
+        isAuthed={isAuthed}
+      />
     ),
     [c, query, mode, isAuthed, viewMode, width],
   );
 
   const filtersScrollable = useMemo(
     () => (
-      <View
-        style={{
-          alignSelf: 'center',
-          width: '100%',
-          maxWidth: viewMode === 'grid' ? MAX_GRID_WIDTH : undefined,
-          paddingHorizontal: 16,
-        }}
-      >
-        <FiltersScrollable
-          c={c}
-          myTags={myTags}
-          activeTags={activeTags}
-          setActiveTags={setActiveTags}
-          setMyTags={setMyTags}
-          allTags={allTags}
-          query={query}
-          setQuery={setQuery}
-          filteredCount={filtered.length}
-          mode={mode}
-          isAuthed={isAuthed}
-        />
-      </View>
+      <FiltersScrollable
+        c={c}
+        myTags={myTags}
+        activeTags={activeTags}
+        setActiveTags={setActiveTags}
+        setMyTags={setMyTags}
+        allTags={allTags}
+        query={query}
+        setQuery={setQuery}
+        filteredCount={filtered.length}
+        mode={mode}
+        isAuthed={isAuthed}
+      />
     ),
     [c, myTags, activeTags, allTags, query, filtered.length, mode, isAuthed, viewMode, width],
   );
 
   return (
     <SafeAreaView edges={['bottom']} style={{ flex: 1, backgroundColor: c.background }}>
-      {isAdmin ? (
-        <AdminHeader
-          c={c}
-          isAdmin={isAdmin}
-          adminOpen={adminOpen}
-          setAdminOpen={setAdminOpen}
-          editingId={editingId}
-          fTitle={fTitle}
-          setFTitle={setFTitle}
-          fDesc={fDesc}
-          setFDesc={setFDesc}
-          fImage1={fImage1}
-          setFImage1={setFImage1}
-          fImage2={fImage2}
-          setFImage2={setFImage2}
-          fImage3={fImage3}
-          setFImage3={setFImage3}
-          fDateTime={fDateTime}
-          setFDateTime={setFDateTime}
-          fLocation={fLocation}
-          setFLocation={setFLocation}
-          fTagsCsv={fTagsCsv}
-          setFTagsCsv={setFTagsCsv}
-          fRsvp={fRsvp}
-          setFRsvp={setFRsvp}
-          showDatePicker={showDatePicker}
-          setShowDatePicker={setShowDatePicker}
-          showTimePicker={showTimePicker}
-          setShowTimePicker={setShowTimePicker}
-          upsertEvent={upsertEvent}
-          resetForm={resetForm}
-          events={events}
-          deleteEvent={deleteEvent}
-        />
-      ) : null}
-      {filtersTopBar}
-      <FlatList
+      <GradientBackground variant="dim">
+        <View style={{ flex: 1, padding: 16 }}>
+          <GradientHeader title="Events" />
+          {isAdmin ? (
+            <AdminHeader
+              c={c}
+              isAdmin={isAdmin}
+              adminOpen={adminOpen}
+              setAdminOpen={setAdminOpen}
+              editingId={editingId}
+              fTitle={fTitle}
+              setFTitle={setFTitle}
+              fDesc={fDesc}
+              setFDesc={setFDesc}
+              fImage1={fImage1}
+              setFImage1={setFImage1}
+              fImage2={fImage2}
+              setFImage2={setFImage2}
+              fImage3={fImage3}
+              setFImage3={setFImage3}
+              fDateTime={fDateTime}
+              setFDateTime={setFDateTime}
+              fLocation={fLocation}
+              setFLocation={setFLocation}
+              fTagsCsv={fTagsCsv}
+              setFTagsCsv={setFTagsCsv}
+              fRsvp={fRsvp}
+              setFRsvp={setFRsvp}
+              showDatePicker={showDatePicker}
+              setShowDatePicker={setShowDatePicker}
+              showTimePicker={showTimePicker}
+              setShowTimePicker={setShowTimePicker}
+              upsertEvent={upsertEvent}
+              resetForm={resetForm}
+              events={events}
+              deleteEvent={deleteEvent}
+            />
+          ) : null}
+          {filtersTopBar}
+          <FlatList
         ref={listRef}
         data={filtered}
         key={`layout-${columns}`}
@@ -2571,7 +2557,7 @@ export default function Home() {
                 gap: 12,
                 paddingBottom: 32,
 
-                marginHorizontal: 16,
+                /* horizontal padding provided by outer container */
 
                 // In row mode, allow full available width similar to food tab
                 // (no maxWidth constraint so cards are not overly narrow on wide screens)
@@ -2667,10 +2653,10 @@ export default function Home() {
           }
           return <EventRowCard {...cardProps} />;
         }}
-      />
+          />
 
       {/* Floating Add Event Button (FAB) */}
-      <View pointerEvents="box-none" style={{ position: 'absolute', right: 16, bottom: 24 }}>
+          <View pointerEvents="box-none" style={{ position: 'absolute', right: 16, bottom: 24 }}>
         <Pressable
           onPress={openAddModal}
           accessibilityRole="button"
@@ -2691,7 +2677,9 @@ export default function Home() {
         >
           <Ionicons name="add" size={26} color="#000" />
         </Pressable>
-      </View>
+          </View>
+        </View>
+      </GradientBackground>
 
       {/* Event Details Modal */}
       <Modal
