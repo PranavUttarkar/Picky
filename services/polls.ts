@@ -92,7 +92,7 @@ export async function closePoll(pollId: number): Promise<void> {
   if (error) throw error;
 }
 
-export async function getPoll(pollId: number): Promise<{ poll: any; options: PollOptionView[]; myVote?: number | null; myRatings?: Record<number, number>; totalMembers: number; respondedCount: number; waiting?: Array<{ id: string; name?: string | null }>; commitments?: string[]; finalEvent?: any; }> {
+export async function getPoll(pollId: number): Promise<{ poll: any; options: PollOptionView[]; myVote?: number | null; myRatings?: Record<number, number>; totalMembers: number; respondedCount: number; waiting?: Array<{ id: string; name?: string | null }>; commitments?: string[]; finalEvent?: any; foodDetails?: Record<number, any>; }> {
   const user = (await supabase.auth.getUser()).data.user;
   const [
     { data: poll },
@@ -244,6 +244,54 @@ export async function getPoll(pollId: number): Promise<{ poll: any; options: Pol
     text: String(t.text ?? ''),
   }));
   const unifiedOptions: PollOptionView[] = [...normalizedEventOptions, ...normalizedTextOptions];
+
+  // Server-side prefetch of FOOD|<place_id> text options to avoid client churn.
+  let foodDetails: Record<number, any> | undefined = undefined;
+  try {
+    const placeIdMap: Record<string, number[]> = {}; // place_id -> [textOptionIds]
+    const parseFoodToken = (t: string): string | null => {
+      const s = (t || '').trim();
+      if (!s.startsWith('FOOD|')) return null;
+      const parts = s.split('|');
+      if (parts.length < 2) return null;
+      const pid = parts[1]?.trim();
+      return pid || null;
+    };
+    for (const opt of normalizedTextOptions) {
+      const pid = parseFoodToken((opt as any).text);
+      if (!pid) continue;
+      (placeIdMap[pid] = placeIdMap[pid] || []).push(opt.id);
+    }
+    const placeIds = Object.keys(placeIdMap);
+    if (placeIds.length) {
+      // Lightweight select (subset of columns) to reduce payload
+      const { data: rows } = await supabase
+        .from('restaurants')
+        .select('place_id, restaurant_name, description, address, city, category, price_range, review_points, main_image, image_1, image_2, image_3')
+        .in('place_id', placeIds);
+      foodDetails = {};
+      for (const r of (rows as any[]) ?? []) {
+        const pid = String(r.place_id);
+        const images = [r.main_image, r.image_1, r.image_2, r.image_3].filter(Boolean);
+        const payload = {
+          place_id: pid,
+          restaurant_name: r.restaurant_name ?? 'Restaurant',
+          description: r.description ?? null,
+          address: r.address ?? null,
+          city: r.city ?? null,
+          category: r.category ?? null,
+          price_range: r.price_range ?? null,
+          review_points: r.review_points != null ? String(r.review_points) : null,
+          images,
+        };
+        for (const textOptionId of placeIdMap[pid] || []) {
+          foodDetails[textOptionId] = payload;
+        }
+      }
+    }
+  } catch {
+    // Silent failure; client will fallback to lazy fetch.
+  }
   // myVote: prefer whichever exists
   const myUnifiedVote = (myVote as any)?.event_id ?? (myTextVote as any)?.text_option_id ?? null;
   return {
@@ -256,6 +304,7 @@ export async function getPoll(pollId: number): Promise<{ poll: any; options: Pol
     waiting,
     commitments: commitmentIds,
     finalEvent: resolvedFinalEvent,
+    foodDetails,
   };
 }
 

@@ -79,6 +79,8 @@ export default function PollDetails() {
   const [mode, setMode] = useState<'list' | 'swipe'>('swipe');
   // Map text option id -> restaurant details (for FOOD|<place_id> encoded options)
   const [foodOptions, setFoodOptions] = useState<Record<number, Restaurant | null>>({});
+  // Separate lightweight thumb cache to force LazyImage remount when available
+  const [foodThumbs, setFoodThumbs] = useState<Record<number, string | null>>({});
   // When mode switches to swipe or poll id changes, set stableOptions from current options
   useEffect(() => {
     if (mode === 'swipe') {
@@ -168,6 +170,7 @@ export default function PollDetails() {
       waiting,
       commitments,
       finalEvent,
+      foodDetails,
     } = await getPoll(pollId);
     setPoll(poll);
     setOptions(options);
@@ -179,6 +182,39 @@ export default function PollDetails() {
       return [...prev, ...appended];
     });
     setMyVote(myVote);
+    // Apply server-side preloaded food details (if present) before stable snapshot lock-in
+    if (foodDetails) {
+      setFoodOptions((prev) => {
+        const merged = { ...prev };
+        Object.entries(foodDetails).forEach(([idStr, data]) => {
+          const id = Number(idStr);
+          merged[id] = {
+            restaurant_name: (data as any).restaurant_name,
+            description: (data as any).description,
+            address: (data as any).address,
+            city: (data as any).city,
+            category: (data as any).category,
+            price_range: (data as any).price_range,
+            review_points: (data as any).review_points,
+            main_image: (data as any).images?.[0] ?? null,
+            image_1: (data as any).images?.[1] ?? null,
+            image_2: (data as any).images?.[2] ?? null,
+            image_3: (data as any).images?.[3] ?? null,
+            place_id: (data as any).place_id,
+          } as any; // partial Restaurant
+        });
+        return merged;
+      });
+      setFoodThumbs((prev) => {
+        const merged = { ...prev };
+        Object.entries(foodDetails).forEach(([idStr, data]) => {
+          const id = Number(idStr);
+          const imgs = (data as any).images as string[] | undefined;
+          merged[id] = imgs?.[0] || null;
+        });
+        return merged;
+      });
+    }
     // Merge server myRatings with recent optimistic entries to avoid temporary drops
     const merged: Record<number, number> = {};
     for (const k of Object.keys(myRatings || {})) merged[Number(k)] = (myRatings as any)[k];
@@ -278,8 +314,11 @@ export default function PollDetails() {
             try {
               const r = await getRestaurantById(pid);
               setFoodOptions((prev) => ({ ...prev, [o.id]: r ?? null }));
+              const imgs = r ? restaurantImages(r) : [];
+              setFoodThumbs((prev) => ({ ...prev, [o.id]: imgs[0] || null }));
             } catch {
               setFoodOptions((prev) => ({ ...prev, [o.id]: null }));
+              setFoodThumbs((prev) => ({ ...prev, [o.id]: null }));
             }
           })(),
         );
@@ -636,6 +675,7 @@ export default function PollDetails() {
                             const thumb = imgs[0];
                             return thumb ? (
                               <LazyImage
+                                key={`event-${item.id}-${!!thumb}`}
                                 uri={thumb}
                                 width={'100%'}
                                 height={'100%'}
@@ -657,10 +697,10 @@ export default function PollDetails() {
                         : item.kind === 'text' && parseFoodToken((item as any).text)
                         ? (() => {
                             const rest = foodOptions[item.id];
-                            const imgs = rest ? restaurantImages(rest) : [];
-                            const thumb = imgs[0];
+                            const thumb = foodThumbs[item.id];
                             return thumb ? (
                               <LazyImage
+                                key={`food-${item.id}-${!!thumb}`}
                                 uri={thumb}
                                 width={'100%'}
                                 height={'100%'}
@@ -690,101 +730,84 @@ export default function PollDetails() {
                         gap: 6,
                       }}
                     >
-                      {item.kind === 'event' ? (
-                        <>
-                          <Text style={{ color: c.text, fontWeight: '800', fontSize: 18 }}>
-                            {item.event?.title ?? `Event #${item.id}`}
-                          </Text>
-                          <Text style={{ color: c.muted }}>
-                            {(() => {
-                              const ev = (item as any).event || {};
-                              const start = ev?.date_time ? dayjs(ev.date_time) : null;
-                              const end = ev?.end_time ? dayjs(ev.end_time) : null;
-                              if (start) {
-                                const sameDay = end ? start.isSame(end, 'day') : true;
-                                const timePart = end
-                                  ? sameDay
-                                    ? `${start.format('MMM D • h:mm')}–${end.format('h:mm A')}`
-                                    : `${start.format('MMM D • h:mm A')} → ${end.format(
-                                        'MMM D h:mm A',
-                                      )}`
-                                  : `${start.format('MMM D • h:mm A')}`;
-                                return `${timePart}${ev.location ? ' • ' + ev.location : ''}`;
-                              }
-                              return ev?.location ?? '';
-                            })()}
-                          </Text>
-                          {(() => {
-                            const desc = (item as any).event?.description ?? '';
-                            const snippet = desc.trim().split(/\s+/).slice(0, 24).join(' ');
-                            return snippet ? (
+                      {(() => {
+                        const isFood = item.kind === 'text' && parseFoodToken((item as any).text);
+                        // Normalize data shape so food options render exactly like events.
+                        const ev = (item as any).event || {};
+                        const rest = isFood ? foodOptions[item.id] : null;
+                        const title = isFood
+                          ? rest?.restaurant_name ?? 'Restaurant'
+                          : ev.title ?? `Event #${item.id}`;
+                        const description = isFood
+                          ? rest?.description ?? ''
+                          : ev.description ?? '';
+                        const rawTags: string[] = isFood
+                          ? (rest?.category
+                              ? String(rest.category)
+                                  .split(',')
+                                  .map((t) => t.trim())
+                                  .filter(Boolean)
+                              : [])
+                          : Array.isArray(ev.tags)
+                          ? (ev.tags as string[])
+                          : [];
+                        const tags = rawTags.slice(0, 6);
+                        const matchPercent = (item as any).match_percent; // may be undefined for food
+                        // Build meta line (time/location or address for food)
+                        const metaLine = (() => {
+                          if (isFood) {
+                            const parts = [rest?.address, rest?.city].filter(Boolean);
+                            return parts.join(' • ');
+                          }
+                          const start = ev?.date_time ? dayjs(ev.date_time) : null;
+                          const end = ev?.end_time ? dayjs(ev.end_time) : null;
+                          if (start) {
+                            const sameDay = end ? start.isSame(end, 'day') : true;
+                            const timePart = end
+                              ? sameDay
+                                ? `${start.format('MMM D • h:mm')}–${end.format('h:mm A')}`
+                                : `${start.format('MMM D • h:mm A')} → ${end.format('MMM D h:mm A')}`
+                              : `${start.format('MMM D • h:mm A')}`;
+                            return `${timePart}${ev.location ? ' • ' + ev.location : ''}`;
+                          }
+                          return ev?.location ?? '';
+                        })();
+                        // Truncate description similar to event logic
+                        const snippet = description.trim().split(/\s+/).slice(0, 24).join(' ');
+                        return (
+                          <>
+                            <Text style={{ color: c.text, fontWeight: '800', fontSize: 18 }}>
+                              {title}
+                            </Text>
+                            {metaLine ? (
+                              <Text style={{ color: c.muted }}>{metaLine}</Text>
+                            ) : null}
+                            {snippet ? (
                               <Text style={{ color: c.muted }} numberOfLines={3}>
                                 {snippet}
-                                {desc.trim().split(/\s+/).length > 24 ? '…' : ''}
+                                {description.trim().split(/\s+/).length > 24 ? '…' : ''}
                               </Text>
-                            ) : null;
-                          })()}
-                          {/* Tags */}
-                          {Array.isArray((item as any).event?.tags) &&
-                          (item as any).event.tags.length ? (
-                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-                              {((item as any).event.tags as string[]).slice(0, 6).map((t) => (
-                                <Chip key={t} label={t} />
-                              ))}
-                            </View>
-                          ) : null}
-                          {/* Match percent */}
-                          {(item as any).match_percent != null ? (
-                            <Text style={{ color: c.muted }}>
-                              {(item as any).match_percent}% match for group
-                            </Text>
-                          ) : null}
-                        </>
-                      ) : item.kind === 'text' && parseFoodToken((item as any).text) ? (
-                        (() => {
-                          const rest = foodOptions[item.id];
-                          return (
-                            <>
-                              <Text style={{ color: c.text, fontWeight: '800', fontSize: 18 }}>
-                                {rest?.restaurant_name ?? 'Restaurant'}
-                              </Text>
-                              <Text style={{ color: c.muted }}>
-                                {rest?.address}
-                                {rest?.city ? ` • ${rest.city}` : ''}
-                              </Text>
-                              {rest?.description ? (
-                                <Text style={{ color: c.muted }} numberOfLines={3}>
-                                  {rest.description}
-                                </Text>
-                              ) : null}
-                              {rest?.category ? (
-                                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-                                  {String(rest.category)
-                                    .split(',')
-                                    .map((t) => t.trim())
-                                    .filter(Boolean)
-                                    .slice(0, 6)
-                                    .map((t) => (
-                                      <Chip key={t} label={t} />
-                                    ))}
-                                </View>
-                              ) : null}
-                              {rest?.price_range || rest?.review_points ? (
-                                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-                                  {rest.price_range ? <Chip label={rest.price_range} /> : null}
-                                  {rest.review_points ? (
-                                    <Chip label={`${rest.review_points}★`} />
-                                  ) : null}
-                                </View>
-                              ) : null}
-                            </>
-                          );
-                        })()
-                      ) : (
-                        <Text style={{ color: c.text, fontWeight: '800', fontSize: 18 }}>
-                          {('text' in item && (item as any).text) || 'Option'}
-                        </Text>
-                      )}
+                            ) : null}
+                            {tags.length ? (
+                              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                                {tags.map((t) => (
+                                  <Chip key={t} label={t} />
+                                ))}
+                              </View>
+                            ) : null}
+                            {matchPercent != null ? (
+                              <Text style={{ color: c.muted }}>{matchPercent}% match for group</Text>
+                            ) : null}
+                            {/* Additional restaurant-specific chips to mimic tag placement */}
+                            {isFood && (rest?.price_range || rest?.review_points) ? (
+                              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                                {rest?.price_range ? <Chip label={rest.price_range} /> : null}
+                                {rest?.review_points ? <Chip label={`${rest.review_points}★`} /> : null}
+                              </View>
+                            ) : null}
+                          </>
+                        );
+                      })()}
                     </View>
                   </View>
                 )}
@@ -847,10 +870,9 @@ export default function PollDetails() {
                       Current leader
                     </Text>
                     {(() => {
-                      const lo = options.find(
-                        (o) => o.kind === 'event' && o.id === leader.id,
-                      ) as any;
-                      const ev = (lo as any)?.event;
+                      const lo = options.find((o) => o.id === leader.id) as any;
+                      if (!lo) return null;
+                      const isFood = lo.kind === 'text' && parseFoodToken((lo as any).text);
                       return (
                         <View style={{ position: 'relative' }}>
                           <View
@@ -871,19 +893,110 @@ export default function PollDetails() {
                           >
                             <Text style={{ fontSize: 34 }}>👑</Text>
                           </View>
-                          <EventRowCard
-                            event={
-                              (ev ?? {
-                                id: leader.id,
-                                title: `Event #${leader.id}`,
-                                date_time: new Date().toISOString(),
-                              }) as any
-                            }
-                            isSaved={false}
-                            onToggleSave={() => {}}
-                            onOpenDetails={() => router.push(`/events/${leader.id}`)}
-                            matchPercent={(lo as any)?.match_percent}
-                          />
+                          {lo.kind === 'event' ? (
+                            <EventRowCard
+                              event={
+                                (lo.event ?? {
+                                  id: leader.id,
+                                  title: `Event #${leader.id}`,
+                                  date_time: new Date().toISOString(),
+                                }) as any
+                              }
+                              isSaved={false}
+                              onToggleSave={() => {}}
+                              onOpenDetails={() => router.push(`/events/${leader.id}`)}
+                              matchPercent={(lo as any)?.match_percent}
+                            />
+                          ) : isFood ? (
+                            (() => {
+                              const rest = foodOptions[lo.id];
+                              const thumb = foodThumbs[lo.id];
+                              return (
+                                <View
+                                  style={{
+                                    backgroundColor: c.card,
+                                    borderRadius: 12,
+                                    padding: 10,
+                                    gap: 8,
+                                  }}
+                                >
+                                  {/* Image */}
+                                  <View
+                                    style={{
+                                      width: '100%',
+                                      aspectRatio: 1.4,
+                                      borderRadius: 12,
+                                      overflow: 'hidden',
+                                      backgroundColor: '#00000015',
+                                    }}
+                                  >
+                                    {thumb ? (
+                                      <LazyImage
+                                        key={`leader-food-${lo.id}-${!!thumb}`}
+                                        uri={thumb}
+                                        width={'100%'}
+                                        height={'100%'}
+                                        borderRadius={12}
+                                        accessibilityLabel={`Image for ${rest?.restaurant_name ?? 'place'}`}
+                                      />
+                                    ) : (
+                                      <View
+                                        style={{
+                                          flex: 1,
+                                          alignItems: 'center',
+                                          justifyContent: 'center',
+                                        }}
+                                      >
+                                        <Text style={{ color: c.muted, fontSize: 12 }}>No Image</Text>
+                                      </View>
+                                    )}
+                                  </View>
+                                  <Text style={{ color: c.text, fontWeight: '800', fontSize: 16 }}>
+                                    {rest?.restaurant_name ?? 'Restaurant'}
+                                  </Text>
+                                  {rest?.address || rest?.city ? (
+                                    <Text style={{ color: c.muted }}>
+                                      {[rest?.address, rest?.city].filter(Boolean).join(' • ')}
+                                    </Text>
+                                  ) : null}
+                                  {rest?.description ? (
+                                    <Text style={{ color: c.muted }} numberOfLines={3}>
+                                      {rest.description}
+                                    </Text>
+                                  ) : null}
+                                  {rest?.category ? (
+                                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                                      {String(rest.category)
+                                        .split(',')
+                                        .map((t) => t.trim())
+                                        .filter(Boolean)
+                                        .slice(0, 6)
+                                        .map((t) => (
+                                          <Chip key={t} label={t} />
+                                        ))}
+                                    </View>
+                                  ) : null}
+                                  {rest?.price_range || rest?.review_points ? (
+                                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                                      {rest?.price_range ? <Chip label={rest.price_range} /> : null}
+                                      {rest?.review_points ? <Chip label={`${rest.review_points}★`} /> : null}
+                                    </View>
+                                  ) : null}
+                                  {(lo as any)?.match_percent != null ? (
+                                    <Text style={{ color: c.muted }}>
+                                      {(lo as any).match_percent}% match for group
+                                    </Text>
+                                  ) : null}
+                                </View>
+                              );
+                            })()
+                          ) : (
+                            <View style={{ backgroundColor: c.card, padding: 12, borderRadius: 12 }}>
+                              <Text style={{ color: c.text, fontWeight: '800' }}>
+                                {(lo as any).text || 'Option'}
+                              </Text>
+                            </View>
+                          )}
                         </View>
                       );
                     })()}
