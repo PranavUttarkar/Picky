@@ -35,6 +35,7 @@ import type { Event } from '@/types/models';
 import { optimisticUpdate } from '@/utils/optimistic';
 import { getTopGroupMatches, getTopUserMatches } from '@/services/events';
 import SwipeDeck from '@/components/SwipeDeck';
+import PollCard from '@/components/PollCard';
 import * as Haptics from 'expo-haptics';
 import EventRowCard from '@/components/EventRowCard';
 import LazyImage from '@/components/LazyImage';
@@ -42,6 +43,7 @@ import Chip from '@/components/Chip';
 import dayjs from 'dayjs';
 import type { Restaurant } from '@/types/models';
 import { getRestaurantById, restaurantImages } from '@/services/food';
+import FoodRowCard from '@/components/FoodRowCard';
 import { Ionicons } from '@expo/vector-icons';
 
 export default function PollDetails() {
@@ -77,6 +79,7 @@ export default function PollDetails() {
   const [closing, setClosing] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
   const [mode, setMode] = useState<'list' | 'swipe'>('swipe');
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   // Map text option id -> restaurant details (for FOOD|<place_id> encoded options)
   const [foodOptions, setFoodOptions] = useState<Record<number, Restaurant | null>>({});
   // Separate lightweight thumb cache to force LazyImage remount when available
@@ -167,7 +170,7 @@ export default function PollDetails() {
       myRatings,
       totalMembers,
       respondedCount,
-      waiting,
+      waiting: serverWaiting,
       commitments,
       finalEvent,
       foodDetails,
@@ -231,10 +234,32 @@ export default function PollDetails() {
     }
     setMyRatings(merged);
     setTotalMembers(totalMembers);
-    setResponded(respondedCount);
-    setWaiting(waiting);
     setCommitments(commitments);
     setFinalEvent(finalEvent);
+
+    // Calculate if I am done based on NEW data
+    const newTotalOptions = options.length;
+    const newMyRatedCount = merged ? Object.keys(merged).length : 0;
+    const newIAmDone =
+      poll?.mode === 'rating' && newTotalOptions > 0 && newMyRatedCount >= newTotalOptions;
+
+    // Also check deckFinished state (which persists across loads)
+    const effectivelyDone = deckFinished || newIAmDone;
+
+    let finalWaiting = serverWaiting;
+    let finalResponded = respondedCount;
+
+    if (effectivelyDone && currentUserId && finalWaiting) {
+      const amIWaiting = finalWaiting.some((u) => u.id === currentUserId);
+      if (amIWaiting) {
+        finalWaiting = finalWaiting.filter((u) => u.id !== currentUserId);
+        finalResponded = respondedCount + 1;
+      }
+    }
+
+    setResponded(finalResponded);
+    setWaiting(finalWaiting);
+
     // Load fallback suggestions if no options yet
     if ((options?.length ?? 0) === 0 && poll) {
       try {
@@ -255,6 +280,7 @@ export default function PollDetails() {
     let mounted = true;
     (async () => {
       const user = (await supabase.auth.getUser()).data.user;
+      if (mounted) setCurrentUserId(user?.id ?? null);
       if (!user) {
         router.replace('/onboarding/welcome');
         return;
@@ -342,6 +368,25 @@ export default function PollDetails() {
     () => poll?.mode === 'rating' && totalOptionsCount > 0 && myRatedCount >= totalOptionsCount,
     [poll?.mode, myRatedCount, totalOptionsCount],
   );
+  // Track completion of swipe deck for non-rating polls (esp. food-only polls)
+  const [deckFinished, setDeckFinished] = useState(false);
+  const allFoodOnly = useMemo(
+    () => options.length > 0 && options.every((o) => o.kind === 'text' && parseFoodToken((o as any).text)),
+    [options],
+  );
+  // Auto-close food-only poll on completion to surface winner in group feed
+  useEffect(() => {
+    (async () => {
+      if (!poll?.is_active) return;
+      if (poll?.mode === 'rating') return; // rating already auto commits
+      if (!deckFinished) return;
+      if (!allFoodOnly) return;
+      try {
+        await closePoll(pollId);
+        await load();
+      } catch {}
+    })();
+  }, [deckFinished, allFoodOnly, poll?.is_active, poll?.mode]);
 
   // When poll is committed (finalEvent set), ensure winner is saved for all members
   useEffect(() => {
@@ -453,6 +498,31 @@ export default function PollDetails() {
       } catch {}
     })();
   }, [poll?.is_active, poll?.mode, totalMembers, options]);
+
+  const handleDeckComplete = async () => {
+    setDeckFinished(true);
+
+    // Optimistic update: if I am in the waiting list, remove me and increment responded
+    if (currentUserId && waiting) {
+      const amIWaiting = waiting.some((u) => u.id === currentUserId);
+      if (amIWaiting) {
+        setWaiting((prev) => prev?.filter((u) => u.id !== currentUserId));
+        setResponded((prev) => prev + 1);
+      }
+    }
+
+    // If non-rating poll and I haven't voted (myVote is null), record participation
+    if (poll?.mode !== 'rating' && !myVote) {
+      try {
+        await recordNoVote(pollId);
+      } catch (e) {
+        console.error('Failed to record no vote', e);
+      }
+    }
+
+    // Refresh to ensure server state is consistent and trigger any server-side checks
+    scheduleRefresh(500);
+  };
 
   const onDeletePoll = async () => {
     try {
@@ -616,7 +686,7 @@ export default function PollDetails() {
               </Text>
             ) : null}
             {/* Tips moved to header subtitle/task bar to keep swipe area clean */}
-            {!iAmDone ? (
+            {!(iAmDone || deckFinished) ? (
               <SwipeDeck
                 data={stableOptions ?? options}
                 keyExtractor={(o) => String(o.id)}
@@ -632,183 +702,14 @@ export default function PollDetails() {
                       maxWidth: 480,
                     }}
                   >
-                    {/* Crown for leader: tilted top-right overlay */}
-                    {leader && leader.id === item.id ? (
-                      <View
-                        style={{
-                          position: 'absolute',
-                          top: 8,
-                          right: 8,
-                          transform: [{ rotate: '45deg' }],
-                          backgroundColor: 'transparent',
-                          paddingHorizontal: 8,
-                          paddingVertical: 4,
-                          borderRadius: 999,
-                          zIndex: 5,
-                        }}
-                        pointerEvents="none"
-                        accessibilityElementsHidden
-                        importantForAccessibility="no-hide-descendants"
-                      >
-                        <Text style={{ fontSize: 34 }}>👑</Text>
-                      </View>
-                    ) : null}
-
-                    {/* Top square: image */}
-                    <View
-                      style={{
-                        width: '100%',
-                        aspectRatio: 1.1,
-                        borderRadius: 12,
-                        overflow: 'hidden',
-                        backgroundColor: '#00000015',
-                      }}
-                    >
-                      {item.kind === 'event'
-                        ? (() => {
-                            const ev = (item as any).event || {};
-                            const imgs: string[] = ev.image_urls?.length
-                              ? ev.image_urls
-                              : ev.image_url
-                              ? [ev.image_url]
-                              : [];
-                            const thumb = imgs[0];
-                            return thumb ? (
-                              <LazyImage
-                                key={`event-${item.id}-${!!thumb}`}
-                                uri={thumb}
-                                width={'100%'}
-                                height={'100%'}
-                                borderRadius={12}
-                                accessibilityLabel={`Image for ${ev.title ?? 'event'}`}
-                              />
-                            ) : (
-                              <View
-                                style={{
-                                  flex: 1,
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                }}
-                              >
-                                <Text style={{ color: c.muted, fontSize: 12 }}>No Image</Text>
-                              </View>
-                            );
-                          })()
-                        : item.kind === 'text' && parseFoodToken((item as any).text)
-                        ? (() => {
-                            const rest = foodOptions[item.id];
-                            const thumb = foodThumbs[item.id];
-                            return thumb ? (
-                              <LazyImage
-                                key={`food-${item.id}-${!!thumb}`}
-                                uri={thumb}
-                                width={'100%'}
-                                height={'100%'}
-                                borderRadius={12}
-                                accessibilityLabel={`Image for ${rest?.restaurant_name ?? 'place'}`}
-                              />
-                            ) : (
-                              <View
-                                style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}
-                              >
-                                <Text style={{ color: c.muted, fontSize: 12 }}>No Image</Text>
-                              </View>
-                            );
-                          })()
-                        : null}
-                    </View>
-
-                    {/* Bottom square: info */}
-                    <View
-                      style={{
-                        width: '100%',
-                        aspectRatio: 1.1,
-                        marginTop: 8,
-                        backgroundColor: c.background,
-                        borderRadius: 12,
-                        padding: 10,
-                        gap: 6,
-                      }}
-                    >
-                      {(() => {
-                        const isFood = item.kind === 'text' && parseFoodToken((item as any).text);
-                        // Normalize data shape so food options render exactly like events.
-                        const ev = (item as any).event || {};
-                        const rest = isFood ? foodOptions[item.id] : null;
-                        const title = isFood
-                          ? rest?.restaurant_name ?? 'Restaurant'
-                          : ev.title ?? `Event #${item.id}`;
-                        const description = isFood
-                          ? rest?.description ?? ''
-                          : ev.description ?? '';
-                        const rawTags: string[] = isFood
-                          ? (rest?.category
-                              ? String(rest.category)
-                                  .split(',')
-                                  .map((t) => t.trim())
-                                  .filter(Boolean)
-                              : [])
-                          : Array.isArray(ev.tags)
-                          ? (ev.tags as string[])
-                          : [];
-                        const tags = rawTags.slice(0, 6);
-                        const matchPercent = (item as any).match_percent; // may be undefined for food
-                        // Build meta line (time/location or address for food)
-                        const metaLine = (() => {
-                          if (isFood) {
-                            const parts = [rest?.address, rest?.city].filter(Boolean);
-                            return parts.join(' • ');
-                          }
-                          const start = ev?.date_time ? dayjs(ev.date_time) : null;
-                          const end = ev?.end_time ? dayjs(ev.end_time) : null;
-                          if (start) {
-                            const sameDay = end ? start.isSame(end, 'day') : true;
-                            const timePart = end
-                              ? sameDay
-                                ? `${start.format('MMM D • h:mm')}–${end.format('h:mm A')}`
-                                : `${start.format('MMM D • h:mm A')} → ${end.format('MMM D h:mm A')}`
-                              : `${start.format('MMM D • h:mm A')}`;
-                            return `${timePart}${ev.location ? ' • ' + ev.location : ''}`;
-                          }
-                          return ev?.location ?? '';
-                        })();
-                        // Truncate description similar to event logic
-                        const snippet = description.trim().split(/\s+/).slice(0, 24).join(' ');
-                        return (
-                          <>
-                            <Text style={{ color: c.text, fontWeight: '800', fontSize: 18 }}>
-                              {title}
-                            </Text>
-                            {metaLine ? (
-                              <Text style={{ color: c.muted }}>{metaLine}</Text>
-                            ) : null}
-                            {snippet ? (
-                              <Text style={{ color: c.muted }} numberOfLines={3}>
-                                {snippet}
-                                {description.trim().split(/\s+/).length > 24 ? '…' : ''}
-                              </Text>
-                            ) : null}
-                            {tags.length ? (
-                              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-                                {tags.map((t) => (
-                                  <Chip key={t} label={t} />
-                                ))}
-                              </View>
-                            ) : null}
-                            {matchPercent != null ? (
-                              <Text style={{ color: c.muted }}>{matchPercent}% match for group</Text>
-                            ) : null}
-                            {/* Additional restaurant-specific chips to mimic tag placement */}
-                            {isFood && (rest?.price_range || rest?.review_points) ? (
-                              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-                                {rest?.price_range ? <Chip label={rest.price_range} /> : null}
-                                {rest?.review_points ? <Chip label={`${rest.review_points}★`} /> : null}
-                              </View>
-                            ) : null}
-                          </>
-                        );
-                      })()}
-                    </View>
+                    <PollCard
+                      option={item}
+                      isLeader={!!leader && leader.id === item.id}
+                      variant="swipe"
+                      foodDetails={foodOptions[item.id] as any}
+                      foodThumb={foodThumbs[item.id]}
+                      colors={c}
+                    />
                   </View>
                 )}
                 onSwipeRight={async (item) => {
@@ -838,6 +739,7 @@ export default function PollDetails() {
                     await onVote(item as any);
                   }
                 }}
+                onComplete={handleDeckComplete}
                 overlayLabels={{
                   like: { text: 'YES', color: '#22c55e' },
                   nope: { text: 'NOPE', color: '#ef4444' },
@@ -855,7 +757,11 @@ export default function PollDetails() {
                 }}
               >
                 <Text style={{ color: c.text, fontWeight: '800' }}>You’re done 🎉</Text>
-                <Text style={{ color: c.muted, marginTop: 6 }}>Waiting on the group…</Text>
+                {poll?.mode === 'rating' ? (
+                  <Text style={{ color: c.muted, marginTop: 6 }}>Waiting on the group…</Text>
+                ) : allFoodOnly ? (
+                  <Text style={{ color: c.muted, marginTop: 6 }}>Food poll complete.</Text>
+                ) : null}
                 {leader ? (
                   <View
                     style={{
@@ -867,7 +773,7 @@ export default function PollDetails() {
                     }}
                   >
                     <Text style={{ color: c.text, fontWeight: '800', marginBottom: 6 }}>
-                      Current leader
+                      {poll?.mode === 'rating' ? 'Current leader' : 'Winner'}
                     </Text>
                     {(() => {
                       const lo = options.find((o) => o.id === leader.id) as any;
@@ -910,84 +816,25 @@ export default function PollDetails() {
                           ) : isFood ? (
                             (() => {
                               const rest = foodOptions[lo.id];
-                              const thumb = foodThumbs[lo.id];
+                              if (rest) {
+                                return (
+                                  <FoodRowCard
+                                    item={rest as any}
+                                    matchPercent={(lo as any)?.match_percent}
+                                  />
+                                );
+                              }
                               return (
-                                <View
-                                  style={{
-                                    backgroundColor: c.card,
-                                    borderRadius: 12,
-                                    padding: 10,
-                                    gap: 8,
-                                  }}
-                                >
-                                  {/* Image */}
-                                  <View
-                                    style={{
-                                      width: '100%',
-                                      aspectRatio: 1.4,
-                                      borderRadius: 12,
-                                      overflow: 'hidden',
-                                      backgroundColor: '#00000015',
-                                    }}
-                                  >
-                                    {thumb ? (
-                                      <LazyImage
-                                        key={`leader-food-${lo.id}-${!!thumb}`}
-                                        uri={thumb}
-                                        width={'100%'}
-                                        height={'100%'}
-                                        borderRadius={12}
-                                        accessibilityLabel={`Image for ${rest?.restaurant_name ?? 'place'}`}
-                                      />
-                                    ) : (
-                                      <View
-                                        style={{
-                                          flex: 1,
-                                          alignItems: 'center',
-                                          justifyContent: 'center',
-                                        }}
-                                      >
-                                        <Text style={{ color: c.muted, fontSize: 12 }}>No Image</Text>
-                                      </View>
-                                    )}
-                                  </View>
-                                  <Text style={{ color: c.text, fontWeight: '800', fontSize: 16 }}>
-                                    {rest?.restaurant_name ?? 'Restaurant'}
-                                  </Text>
-                                  {rest?.address || rest?.city ? (
-                                    <Text style={{ color: c.muted }}>
-                                      {[rest?.address, rest?.city].filter(Boolean).join(' • ')}
-                                    </Text>
-                                  ) : null}
-                                  {rest?.description ? (
-                                    <Text style={{ color: c.muted }} numberOfLines={3}>
-                                      {rest.description}
-                                    </Text>
-                                  ) : null}
-                                  {rest?.category ? (
-                                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-                                      {String(rest.category)
-                                        .split(',')
-                                        .map((t) => t.trim())
-                                        .filter(Boolean)
-                                        .slice(0, 6)
-                                        .map((t) => (
-                                          <Chip key={t} label={t} />
-                                        ))}
-                                    </View>
-                                  ) : null}
-                                  {rest?.price_range || rest?.review_points ? (
-                                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-                                      {rest?.price_range ? <Chip label={rest.price_range} /> : null}
-                                      {rest?.review_points ? <Chip label={`${rest.review_points}★`} /> : null}
-                                    </View>
-                                  ) : null}
-                                  {(lo as any)?.match_percent != null ? (
-                                    <Text style={{ color: c.muted }}>
-                                      {(lo as any).match_percent}% match for group
-                                    </Text>
-                                  ) : null}
-                                </View>
+                                <PollCard
+                                  option={lo}
+                                  isLeader
+                                  variant="leader"
+                                  foodDetails={foodOptions[lo.id] as any}
+                                  foodThumb={foodThumbs[lo.id]}
+                                  colors={c}
+                                  pollMode={poll?.mode as any}
+                                  showDistance={false}
+                                />
                               );
                             })()
                           ) : (
@@ -1008,400 +855,121 @@ export default function PollDetails() {
         ) : null}
 
         {mode === 'list' ? (
-          options.length === 1 && poll?.mode !== 'rating' ? (
-            <View style={{ marginTop: 20 }}>
-              {options[0].kind === 'event' ? (
-                <>
-                  <EventRowCard
-                    event={
-                      (options[0].event ?? {
-                        id: options[0].id,
-                        title: `Event #${options[0].id}`,
-                        date_time: new Date().toISOString(),
-                      }) as any
-                    }
-                    isSaved={false}
-                    onToggleSave={() => {}}
-                    onOpenDetails={() => router.push(`/events/${options[0].id}`)}
-                    matchPercent={(options[0] as any).match_percent}
-                  />
-                  <Text
-                    style={{ color: c.text, fontWeight: '700', marginBottom: 12, marginTop: 12 }}
-                  >
-                    Do you want to attend?
-                  </Text>
-                  <View style={{ flexDirection: 'row', gap: 12 }}>
-                    <Pressable
-                      onPress={() => onVote(options[0])}
-                      disabled={!poll?.is_active}
-                      style={{
-                        flex: 1,
-                        backgroundColor: myVote === options[0].id ? c.primary : c.card,
-                        padding: 14,
-                        borderRadius: 12,
-                        alignItems: 'center',
-                      }}
-                    >
-                      <Text style={{ color: c.text, fontWeight: '700' }}>Yes</Text>
-                    </Pressable>
-                    <Pressable
-                      onPress={async () => {
-                        if (!poll?.is_active) return;
-                        try {
-                          await recordNoVote(pollId);
-                          await load();
-                          Alert.alert('Recorded', 'You responded No');
-                        } catch (e: any) {
-                          Alert.alert('Update failed', e.message ?? String(e));
-                        }
-                      }}
-                      disabled={!poll?.is_active}
-                      style={{
-                        flex: 1,
-                        backgroundColor: myVote == null ? c.accent : c.background,
-                        padding: 14,
-                        borderRadius: 12,
-                        alignItems: 'center',
-                      }}
-                    >
-                      <Text style={{ color: c.text, fontWeight: '700' }}>No</Text>
-                    </Pressable>
-                  </View>
-                </>
-              ) : (
-                <>
-                  <View
-                    style={{
-                      backgroundColor: c.card,
-                      padding: 12,
-                      borderRadius: 12,
-                    }}
-                  >
-                    <Text style={{ color: c.text, fontWeight: '800', fontSize: 16 }}>
-                      {(options[0] as any).text}
-                    </Text>
-                  </View>
-                  <View style={{ flexDirection: 'row', gap: 12, marginTop: 12 }}>
-                    <Pressable
-                      onPress={() => onVote(options[0])}
-                      disabled={!poll?.is_active}
-                      style={{
-                        flex: 1,
-                        backgroundColor: myVote === options[0].id ? c.primary : c.card,
-                        padding: 14,
-                        borderRadius: 12,
-                        alignItems: 'center',
-                      }}
-                    >
-                      <Text style={{ color: c.text, fontWeight: '700' }}>Vote</Text>
-                    </Pressable>
-                  </View>
-                </>
-              )}
-              <View
-                style={{ backgroundColor: c.card, padding: 12, borderRadius: 12, marginTop: 12 }}
-              >
-                <Text style={{ color: c.muted }}>Yes votes: {totalVotes}</Text>
-                <Text style={{ color: c.muted, marginTop: 4 }}>
-                  (No responses are counted as participation but not shown in the bar.)
+          <View style={{ marginTop: 20 }}>
+            {options.length === 0 ? (
+              <View>
+                <Text style={{ color: c.muted, marginBottom: 12 }}>
+                  No options yet. Add some events to get started.
                 </Text>
-                {options[0].kind === 'event' && myVote == null ? (
-                  <Pressable
-                    onPress={async () => {
-                      try {
-                        await clearMyVote(pollId);
-                        await load();
-                      } catch (e: any) {
-                        Alert.alert('Update failed', e.message ?? String(e));
-                      }
-                    }}
-                    style={{ marginTop: 8 }}
-                  >
-                    <Text style={{ color: c.muted, textDecorationLine: 'underline' }}>
-                      Clear my No response
-                    </Text>
-                  </Pressable>
-                ) : null}
-              </View>
-            </View>
-          ) : (
-            <FlatList
-              style={{ marginTop: 16 }}
-              data={options}
-              keyExtractor={(o) => String(o.id)}
-              key={`poll-list-${isWide ? 'grid' : 'list'}`}
-              numColumns={isWide ? 2 : 1}
-              columnWrapperStyle={isWide ? { gap: 12 } : undefined}
-              contentContainerStyle={{ gap: 12 }}
-              renderItem={({ item }) => {
-                const count = item.votes ?? 0;
-                const pct = totalVotes === 0 ? 0 : Math.round((count * 100) / totalVotes);
-                const isMine = myVote === item.id;
-                const isLeader = leader && leader.id === item.id;
-                return (
-                  <View style={{ marginBottom: isWide ? 0 : 10, flex: isWide ? 1 : undefined }}>
-                    <View style={{ position: 'relative' }}>
-                      {isLeader ? (
-                        <View
-                          style={{
-                            position: 'absolute',
-                            top: -16,
-                            right: -16,
-                            transform: [{ rotate: '45deg' }],
-                            backgroundColor: 'transparent',
-                            paddingHorizontal: 8,
-                            paddingVertical: 4,
-                            borderRadius: 999,
-                            zIndex: 2,
-                          }}
-                          pointerEvents="none"
-                          accessibilityElementsHidden
-                          importantForAccessibility="no-hide-descendants"
-                        >
-                          <Text style={{ fontSize: 24 }}>👑</Text>
-                        </View>
-                      ) : null}
-                      {item.kind === 'event' ? (
-                        <EventRowCard
-                          event={
-                            (item.event ?? {
-                              id: item.id,
-                              title: `Event #${item.id}`,
-                              date_time: new Date().toISOString(),
-                            }) as any
-                          }
-                          isSaved={false}
-                          onToggleSave={() => {}}
-                          onOpenDetails={() => router.push(`/events/${item.id}`)}
-                          matchPercent={(item as any).match_percent}
-                        />
-                      ) : (
-                        <View style={{ backgroundColor: c.card, padding: 12, borderRadius: 12 }}>
-                          <Text style={{ color: c.text, fontWeight: '800' }}>
-                            {(item as any).text}
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-                    {poll?.mode === 'rating' && item.kind === 'event' ? (
-                      <View style={{ flexDirection: 'row', gap: 6, marginTop: 8 }}>
-                        <Pressable
-                          onPress={() => handleRating(item.id, 1)}
-                          disabled={ratingInFlight.current.has(item.id)}
-                          style={{
-                            paddingVertical: 4,
-                            paddingHorizontal: 8,
-                            borderRadius: 8,
-                            opacity: ratingInFlight.current.has(item.id) ? 0.6 : 1,
-                            backgroundColor:
-                              (myRatings?.[item.id] ?? 0) === 1 ? c.primary : c.background,
-                          }}
-                          accessibilityLabel={`Love it ${(item as any).love_it ?? 0}`}
-                        >
-                          <Text style={{ color: c.text, fontSize: 12 }}>
-                            ❤️ {(item as any).love_it ?? 0}
-                          </Text>
-                        </Pressable>
-                        <Pressable
-                          onPress={() => handleRating(item.id, 0)}
-                          disabled={ratingInFlight.current.has(item.id)}
-                          style={{
-                            paddingVertical: 4,
-                            paddingHorizontal: 8,
-                            borderRadius: 8,
-                            opacity: ratingInFlight.current.has(item.id) ? 0.6 : 1,
-                            backgroundColor:
-                              (myRatings?.[item.id] ?? -99) === 0 ? c.primary : c.background,
-                          }}
-                          accessibilityLabel={`It's fine ${(item as any).fine ?? 0}`}
-                        >
-                          <Text style={{ color: c.text, fontSize: 12 }}>
-                            👍 {(item as any).fine ?? 0}
-                          </Text>
-                        </Pressable>
-                        <Pressable
-                          onPress={() => handleRating(item.id, -1)}
-                          disabled={ratingInFlight.current.has(item.id)}
-                          style={{
-                            paddingVertical: 4,
-                            paddingHorizontal: 8,
-                            borderRadius: 8,
-                            opacity: ratingInFlight.current.has(item.id) ? 0.6 : 1,
-                            backgroundColor:
-                              (myRatings?.[item.id] ?? 0) === -1 ? c.primary : c.background,
-                          }}
-                          accessibilityLabel={`Not for me ${(item as any).not_for_me ?? 0}`}
-                        >
-                          <Text style={{ color: c.text, fontSize: 12 }}>
-                            👎 {(item as any).not_for_me ?? 0}
-                          </Text>
-                        </Pressable>
-                      </View>
-                    ) : (
-                      <>
-                        <View
-                          style={{
-                            height: 6,
-                            backgroundColor: c.background,
-                            borderRadius: 6,
-                            marginTop: 6,
-                            overflow: 'hidden',
-                          }}
-                        >
-                          <View
-                            style={{
-                              width: `${pct}%`,
-                              backgroundColor: isMine ? c.primary : c.accent,
-                              flex: 1,
-                            }}
-                          />
-                        </View>
-                        <View
-                          style={{
-                            flexDirection: 'row',
-                            justifyContent: 'space-between',
-                            marginTop: 4,
-                          }}
-                        >
-                          <Text style={{ color: c.muted, fontSize: 12 }}>{count} votes</Text>
-                          <Text style={{ color: c.muted, fontSize: 12 }}>{pct}%</Text>
-                        </View>
-                        {poll?.is_active ? (
+                {poll?.is_active ? (
+                  <View>
+                    {suggested === null ? (
+                      <Text style={{ color: c.muted }}>Loading suggestions…</Text>
+                    ) : suggested?.length ? (
+                      <View style={{ gap: 8 }}>
+                        {suggested.map((e) => {
+                          const selected = suggestSelected.has(e.id);
+                          return (
+                            <Pressable
+                              key={e.id}
+                              onPress={() => {
+                                setSuggestSelected((prev) => {
+                                  const next = new Set(prev);
+                                  if (next.has(e.id)) next.delete(e.id);
+                                  else next.add(e.id);
+                                  return next;
+                                });
+                              }}
+                              style={{ opacity: addingMany ? 0.6 : 1 }}
+                            >
+                              <EventRowCard
+                                event={e as any}
+                                isSaved={false}
+                                onToggleSave={() => {}}
+                                onOpenDetails={() => router.push(`/events/${e.id}`)}
+                                matchPercent={e.match_percent}
+                              />
+                              <Text
+                                style={{
+                                  color: selected ? c.primary : c.muted,
+                                  marginTop: 6,
+                                  marginLeft: 6,
+                                }}
+                              >
+                                {selected ? 'Selected' : 'Tap to select'}
+                              </Text>
+                            </Pressable>
+                          );
+                        })}
+                        {suggestSelected.size > 0 ? (
                           <Pressable
-                            onPress={() => onVote(item)}
+                            onPress={async () => {
+                              if (addingMany) return;
+                              try {
+                                setAddingMany(true);
+                                for (const eid of Array.from(suggestSelected)) {
+                                  await addPollOption(pollId, eid);
+                                }
+                                setSuggestSelected(new Set());
+                                await load();
+                              } catch (err: any) {
+                                Alert.alert('Add failed', err.message ?? String(err));
+                              } finally {
+                                setAddingMany(false);
+                              }
+                            }}
                             style={{
                               alignSelf: 'flex-start',
                               backgroundColor: c.primary,
-                              paddingVertical: 6,
-                              paddingHorizontal: 10,
-                              borderRadius: 8,
-                              marginTop: 6,
+                              paddingVertical: 8,
+                              paddingHorizontal: 12,
+                              borderRadius: 10,
+                              marginTop: 8,
+                              opacity: addingMany ? 0.7 : 1,
                             }}
                           >
-                            <Text style={{ color: c.text, fontWeight: '700' }}>Vote for this</Text>
+                            <Text style={{ color: c.text, fontWeight: '800' }}>
+                              {addingMany ? 'Adding…' : `Add selected (${suggestSelected.size})`}
+                            </Text>
                           </Pressable>
                         ) : null}
-                      </>
+                      </View>
+                    ) : (
+                      <Text style={{ color: c.muted }}>
+                        No suggestions. Use the Browse tab to save events.
+                      </Text>
                     )}
+                    <Pressable
+                      onPress={() => router.push('/(tabs)/home')}
+                      style={{
+                        alignSelf: 'flex-start',
+                        backgroundColor: c.background,
+                        paddingVertical: 8,
+                        paddingHorizontal: 12,
+                        borderRadius: 10,
+                        marginTop: 16,
+                      }}
+                    >
+                      <Text style={{ color: c.text, fontWeight: '700' }}>Browse Events</Text>
+                    </Pressable>
                   </View>
-                );
-              }}
-              ListEmptyComponent={
-                <View style={{ marginTop: 20 }}>
-                  <Text style={{ color: c.muted, marginBottom: 12 }}>
-                    No options yet. Add some events to get started.
-                  </Text>
-                  {poll?.is_active ? (
-                    <View>
-                      {suggested === null ? (
-                        <Text style={{ color: c.muted }}>Loading suggestions…</Text>
-                      ) : suggested?.length ? (
-                        <View style={{ gap: 8 }}>
-                          {suggested.map((e) => {
-                            const selected = suggestSelected.has(e.id);
-                            return (
-                              <Pressable
-                                key={e.id}
-                                onPress={() => {
-                                  setSuggestSelected((prev) => {
-                                    const next = new Set(prev);
-                                    if (next.has(e.id)) next.delete(e.id);
-                                    else next.add(e.id);
-                                    return next;
-                                  });
-                                }}
-                                style={{ opacity: addingMany ? 0.6 : 1 }}
-                              >
-                                <EventRowCard
-                                  event={e as any}
-                                  isSaved={false}
-                                  onToggleSave={() => {}}
-                                  onOpenDetails={() => router.push(`/events/${e.id}`)}
-                                  matchPercent={e.match_percent}
-                                />
-                                <Text
-                                  style={{
-                                    color: selected ? c.primary : c.muted,
-                                    marginTop: 6,
-                                    marginLeft: 6,
-                                  }}
-                                >
-                                  {selected ? 'Selected' : 'Tap to select'}
-                                </Text>
-                              </Pressable>
-                            );
-                          })}
-                          {suggestSelected.size > 0 ? (
-                            <Pressable
-                              onPress={async () => {
-                                if (addingMany) return;
-                                try {
-                                  setAddingMany(true);
-                                  // Add all selected suggestions
-                                  for (const eid of Array.from(suggestSelected)) {
-                                    await addPollOption(pollId, eid);
-                                  }
-                                  setSuggestSelected(new Set());
-                                  await load();
-                                } catch (err: any) {
-                                  Alert.alert('Add failed', err.message ?? String(err));
-                                } finally {
-                                  setAddingMany(false);
-                                }
-                              }}
-                              style={{
-                                alignSelf: 'flex-start',
-                                backgroundColor: c.primary,
-                                paddingVertical: 8,
-                                paddingHorizontal: 12,
-                                borderRadius: 10,
-                                marginTop: 8,
-                                opacity: addingMany ? 0.7 : 1,
-                              }}
-                            >
-                              <Text style={{ color: c.text, fontWeight: '800' }}>
-                                {addingMany ? 'Adding…' : `Add selected (${suggestSelected.size})`}
-                              </Text>
-                            </Pressable>
-                          ) : null}
-                        </View>
-                      ) : (
-                        <Text style={{ color: c.muted }}>
-                          No suggestions. Use the Browse tab to save events.
-                        </Text>
-                      )}
-                      <Pressable
-                        onPress={() => router.push('/(tabs)/home')}
-                        style={{
-                          alignSelf: 'flex-start',
-                          backgroundColor: c.background,
-                          paddingVertical: 8,
-                          paddingHorizontal: 12,
-                          borderRadius: 10,
-                          marginTop: 16,
-                        }}
-                      >
-                        <Text style={{ color: c.text, fontWeight: '700' }}>Browse Events</Text>
-                      </Pressable>
-                    </View>
-                  ) : null}
-                </View>
-              }
-              ListHeaderComponent={
-                leader && !hasTextOptions ? (
+                ) : null}
+              </View>
+            ) : (
+              <View style={{ gap: 18 }}>
+                {leader && !hasTextOptions ? (
                   <View
                     style={{
                       backgroundColor: c.card,
                       padding: 12,
                       borderRadius: 12,
-                      marginBottom: 10,
                       borderWidth: 2,
                       borderColor: c.primary,
                     }}
                   >
                     <Text style={{ color: c.text, fontWeight: '800' }}>Suggested choice 👑</Text>
                     <Text style={{ color: c.muted, marginTop: 4 }}>
-                      This event currently leads. It has a crown badge below.
+                      This option currently leads. It has a crown badge below.
                     </Text>
                     {poll?.is_active ? (
                       <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
@@ -1439,10 +1007,135 @@ export default function PollDetails() {
                       </View>
                     ) : null}
                   </View>
-                ) : null
-              }
-            />
-          )
+                ) : null}
+
+                {options.map((opt) => {
+                  const count = opt.votes ?? 0;
+                  const pct = totalVotes ? Math.round((count * 100) / totalVotes) : 0;
+                  const isMine = myVote === opt.id;
+                  return (
+                    <View
+                      key={opt.id}
+                      style={{
+                        backgroundColor: c.card,
+                        padding: 12,
+                        borderRadius: 16,
+                      }}
+                    >
+                      <PollCard
+                        option={opt}
+                        isLeader={!!leader && leader.id === opt.id}
+                        variant={leader && leader.id === opt.id ? 'leader' : 'list'}
+                        foodDetails={foodOptions[opt.id] as any}
+                        foodThumb={foodThumbs[opt.id]}
+                        colors={c}
+                      />
+                      {poll?.mode === 'rating' && opt.kind === 'event' ? (
+                        <View style={{ flexDirection: 'row', gap: 6, marginTop: 12 }}>
+                          <Pressable
+                            onPress={() => handleRating(opt.id, 1)}
+                            disabled={ratingInFlight.current.has(opt.id)}
+                            style={{
+                              paddingVertical: 4,
+                              paddingHorizontal: 8,
+                              borderRadius: 8,
+                              opacity: ratingInFlight.current.has(opt.id) ? 0.6 : 1,
+                              backgroundColor:
+                                (myRatings?.[opt.id] ?? 0) === 1 ? c.primary : c.background,
+                            }}
+                            accessibilityLabel={`Love it ${(opt as any).love_it ?? 0}`}
+                          >
+                            <Text style={{ color: c.text, fontSize: 12 }}>
+                              ❤️ {(opt as any).love_it ?? 0}
+                            </Text>
+                          </Pressable>
+                          <Pressable
+                            onPress={() => handleRating(opt.id, 0)}
+                            disabled={ratingInFlight.current.has(opt.id)}
+                            style={{
+                              paddingVertical: 4,
+                              paddingHorizontal: 8,
+                              borderRadius: 8,
+                              opacity: ratingInFlight.current.has(opt.id) ? 0.6 : 1,
+                              backgroundColor:
+                                (myRatings?.[opt.id] ?? -99) === 0 ? c.primary : c.background,
+                            }}
+                            accessibilityLabel={`It's fine ${(opt as any).fine ?? 0}`}
+                          >
+                            <Text style={{ color: c.text, fontSize: 12 }}>
+                              👍 {(opt as any).fine ?? 0}
+                            </Text>
+                          </Pressable>
+                          <Pressable
+                            onPress={() => handleRating(opt.id, -1)}
+                            disabled={ratingInFlight.current.has(opt.id)}
+                            style={{
+                              paddingVertical: 4,
+                              paddingHorizontal: 8,
+                              borderRadius: 8,
+                              opacity: ratingInFlight.current.has(opt.id) ? 0.6 : 1,
+                              backgroundColor:
+                                (myRatings?.[opt.id] ?? 0) === -1 ? c.primary : c.background,
+                            }}
+                            accessibilityLabel={`Not for me ${(opt as any).not_for_me ?? 0}`}
+                          >
+                            <Text style={{ color: c.text, fontSize: 12 }}>
+                              👎 {(opt as any).not_for_me ?? 0}
+                            </Text>
+                          </Pressable>
+                        </View>
+                      ) : poll?.mode !== 'rating' ? (
+                        <>
+                          <View
+                            style={{
+                              height: 6,
+                              backgroundColor: c.background,
+                              borderRadius: 6,
+                              marginTop: 10,
+                              overflow: 'hidden',
+                            }}
+                          >
+                            <View
+                              style={{
+                                width: `${pct}%`,
+                                backgroundColor: isMine ? c.primary : c.accent,
+                                flex: 1,
+                              }}
+                            />
+                          </View>
+                          <View
+                            style={{
+                              flexDirection: 'row',
+                              justifyContent: 'space-between',
+                              marginTop: 4,
+                            }}
+                          >
+                            <Text style={{ color: c.muted, fontSize: 12 }}>{count} votes</Text>
+                            <Text style={{ color: c.muted, fontSize: 12 }}>{pct}%</Text>
+                          </View>
+                          {poll?.is_active ? (
+                            <Pressable
+                              onPress={() => onVote(opt)}
+                              style={{
+                                alignSelf: 'flex-start',
+                                backgroundColor: c.primary,
+                                paddingVertical: 6,
+                                paddingHorizontal: 10,
+                                borderRadius: 8,
+                                marginTop: 6,
+                              }}
+                            >
+                              <Text style={{ color: c.text, fontWeight: '700' }}>Vote for this</Text>
+                            </Pressable>
+                          ) : null}
+                        </>
+                      ) : null}
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+          </View>
         ) : null}
 
         {/* Post-commit actions */}

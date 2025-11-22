@@ -60,6 +60,10 @@ export default function GroupDecideStart() {
 
   const onPickGroup = async (groupId: number) => {
     if (creating != null) return;
+    if (!navReady) {
+      Alert.alert('Not ready', 'Navigation is initializing. Please try again in a moment.');
+      return;
+    }
     try {
       setCreating(groupId);
       let pollId: number | null = null;
@@ -102,12 +106,24 @@ export default function GroupDecideStart() {
         setCreating(null);
         return;
       }
-      if (mountedRef.current && navReady) {
-        router.replace(`/polls/${pollId}`);
+      
+      if (mountedRef.current) {
+        if (navReady) {
+          router.replace(`/polls/${pollId}`);
+          // Reset creating state after a short delay to ensure UI doesn't flash before nav
+          // But if nav happens, component unmounts anyway.
+          // If we are still here after a timeout, something went wrong with nav.
+          setTimeout(() => {
+            if (mountedRef.current) setCreating(null);
+          }, 2000);
+        } else {
+          setCreating(null);
+          Alert.alert('Error', 'Navigation lost. Please try again.');
+        }
       }
     } catch (e: any) {
       Alert.alert('Failed to start', e.message ?? String(e));
-      setCreating(null);
+      if (mountedRef.current) setCreating(null);
     }
   };
 

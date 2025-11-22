@@ -15,6 +15,7 @@ type SwipeDeckProps<T> = {
   onSwipeRight?: (item: T, index: number) => void | Promise<void>;
   onSwipeLeft?: (item: T, index: number) => void | Promise<void>;
   onSwipeUp?: (item: T, index: number) => void | Promise<void>;
+  onComplete?: () => void; // fired when user swiped all cards in current dataset
   overlayLabels?: OverlayLabels;
   stackDepth?: number; // number of cards to render in stack
   enableHaptics?: boolean;
@@ -32,6 +33,7 @@ export default function SwipeDeck<T = any>({
   onSwipeLeft,
   onSwipeRight,
   onSwipeUp,
+  onComplete,
   overlayLabels,
   stackDepth = 3,
   activeCardOutlineRadius = 16,
@@ -162,7 +164,13 @@ export default function SwipeDeck<T = any>({
         requestAnimationFrame(() => {
           const keys = data.map((item, i) => keyExtractor(item, i));
           const first = keys.findIndex((k) => !swipedKeysRef.current.has(k));
-          setIndex(first < 0 ? keys.length : Math.max(first, indexSnapshot + 1));
+          const nextIndex = first < 0 ? keys.length : Math.max(first, indexSnapshot + 1);
+          setIndex(nextIndex);
+          if (nextIndex >= data.length) {
+            try {
+              onComplete && onComplete();
+            } catch {}
+          }
         });
       }
     });

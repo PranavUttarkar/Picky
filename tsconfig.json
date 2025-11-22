@@ -15,7 +15,8 @@
       "@/theme/*": ["theme/*"],
       "@/types/*": ["types/*"],
       "@/utils/*": ["utils/*"],
-      "@/hooks/*": ["hooks/*"]
+      "@/hooks/*": ["hooks/*"],
+      "@/assets/*": ["assets/*"]
     }
   }
 }
