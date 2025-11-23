@@ -677,9 +677,12 @@ export default function FoodExplore() {
         </View>
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
           <Pressable
-            onPress={() => setMode('all')}
+            onPress={() => {
+              setMode('all');
+              setSortMode('default');
+            }}
             style={{
-              backgroundColor: mode === 'all' ? c.primary : c.background,
+              backgroundColor: mode === 'all' && sortMode === 'default' ? c.primary : c.background,
               paddingVertical: 6,
               paddingHorizontal: 10,
               borderRadius: 8,
@@ -688,7 +691,10 @@ export default function FoodExplore() {
             <Text style={{ color: c.text, fontWeight: '700' }}>All</Text>
           </Pressable>
           <Pressable
-            onPress={() => setMode('personalized')}
+            onPress={() => {
+              setMode('personalized');
+              setSortMode('default');
+            }}
             style={{
               backgroundColor: mode === 'personalized' ? c.primary : c.background,
               paddingVertical: 6,
@@ -707,9 +713,9 @@ export default function FoodExplore() {
           </Pressable>
           <Pressable
             onPress={() => {
-              const next = sortMode === 'nearest' ? 'default' : 'nearest';
-              setSortMode(next);
-              if (next === 'nearest' && !userLocation) void ensureLocation();
+              setMode('all');
+              setSortMode('nearest');
+              if (!userLocation) void ensureLocation();
             }}
             style={{
               backgroundColor: sortMode === 'nearest' ? c.primary : c.background,
@@ -724,7 +730,7 @@ export default function FoodExplore() {
               sortMode === 'nearest' ? 'Disable sorting by nearest' : 'Sort by nearest'
             }
           >
-            <Ionicons name="locate" size={16} color={c.text} />
+            <Ionicons name="locate" size={16} color={sortMode === 'nearest' ? '#000' : c.text} />
             <Text
               style={{ color: sortMode === 'nearest' ? '#000' : c.text, fontWeight: '700' }}
             >
@@ -773,6 +779,7 @@ export default function FoodExplore() {
                 <FoodRowCard
                   item={item}
                   matchPercent={(item as any).match_percent}
+                  distanceMiles={distanceById[item.id]}
                   onOpenDetails={() => router.push(`/foods/${encodeURIComponent(item.id)}`)}
                   onSelect={() =>
                     setSelected((prev) => {

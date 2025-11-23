@@ -1310,7 +1310,7 @@ const AddEditEventModal = memo(function AddEditEventModal({
                 setLatitude(lat);
                 setLongitude(lng);
                 if (lat != null && lng != null && prevLatRef.current == null && prevLngRef.current == null) {
-                  setLocationStatus(`Current location added: (${lat.toFixed(4)}, ${lng.toFixed(4)})`);
+                  setLocationStatus(`📍Current location added: (${lat.toFixed(4)}, ${lng.toFixed(4)})`);
                 }
                 prevLatRef.current = lat;
                 prevLngRef.current = lng;

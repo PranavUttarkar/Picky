@@ -214,12 +214,6 @@ export default function LocationPicker({
         </Pressable>
       </View>
 
-      {latitude && longitude && (
-        <Text style={[styles.coordText, { color: placeholderColor }]}>
-          📍 {latitude.toFixed(6)}, {longitude.toFixed(6)}
-        </Text>
-      )}
-
       {showSuggestions && suggestions.length > 0 && (
         <View
           style={[

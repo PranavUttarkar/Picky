@@ -10,6 +10,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import type { Event } from '@/types/models';
 import { shareEvent } from '@/utils/share';
 import FriendActivityIndicator from '@/components/FriendActivityIndicator';
+import { Typography } from '@/theme/designTokens';
 
 export interface EventGridCardProps {
   event: Event;
@@ -93,7 +94,13 @@ export const EventGridCard: React.FC<EventGridCardProps> = memo(
                     backgroundColor: '#00000010',
                   }}
                 >
-                  <Text style={{ color: c.muted, fontSize: 12 }}>No Image</Text>
+                  <Text style={{ 
+                    color: c.muted, 
+                    fontSize: Typography.scale.bodySmall.fontSize,
+                    fontFamily: Typography.fontFamily.body,
+                  }}>
+                    No Image
+                  </Text>
                 </View>
               )}
             </View>
@@ -107,7 +114,13 @@ export const EventGridCard: React.FC<EventGridCardProps> = memo(
                 }}
               >
                 <Text
-                  style={{ color: c.text, fontWeight: '800', fontSize: 16, flex: 1 }}
+                  style={{ 
+                    color: c.text, 
+                    fontWeight: Typography.fontWeight.bold,
+                    fontSize: Typography.scale.bodyLarge.fontSize,
+                    fontFamily: Typography.fontFamily.bodyBold,
+                    flex: 1,
+                  }}
                   numberOfLines={2}
                 >
                   {event.title}
@@ -128,14 +141,23 @@ export const EventGridCard: React.FC<EventGridCardProps> = memo(
                         alignItems: 'center',
                       }}
                     >
-                      <Text style={{ color: c.text, fontSize: 11, fontWeight: '800' }}>
+                      <Text style={{ 
+                        color: c.text, 
+                        fontSize: Typography.scale.caption.fontSize,
+                        fontFamily: Typography.fontFamily.bodyBold,
+                        fontWeight: Typography.fontWeight.bold,
+                      }}>
                         {score}% Match{score > 65 ? '!' : ''}
                       </Text>
                     </View>
                   </LinearGradient>
                 ) : null}
               </View>
-              <Text style={{ color: c.muted, fontSize: 12 }} numberOfLines={1}>
+              <Text style={{ 
+                color: c.muted, 
+                fontSize: Typography.scale.bodySmall.fontSize,
+                fontFamily: Typography.fontFamily.body,
+              }} numberOfLines={1}>
                 {(() => {
                   const start = dayjs(event.date_time);
                   const end = (event as any).end_time ? dayjs((event as any).end_time) : null;
@@ -149,7 +171,11 @@ export const EventGridCard: React.FC<EventGridCardProps> = memo(
                 })()}
               </Text>
               {event.description ? (
-                <Text style={{ color: c.text, fontSize: 13 }} numberOfLines={2}>
+                <Text style={{ 
+                  color: c.text, 
+                  fontSize: 13,
+                  fontFamily: Typography.fontFamily.body,
+                }} numberOfLines={2}>
                   {event.description}
                 </Text>
               ) : null}
@@ -167,7 +193,13 @@ export const EventGridCard: React.FC<EventGridCardProps> = memo(
                         borderRadius: 999,
                       }}
                     >
-                      <Text style={{ color: c.text, fontSize: 11 }}>{t}</Text>
+                      <Text style={{ 
+                        color: c.text, 
+                        fontSize: Typography.scale.caption.fontSize,
+                        fontFamily: Typography.fontFamily.body,
+                      }}>
+                        {t}
+                      </Text>
                     </View>
                   ))}
                 </View>

@@ -6,6 +6,8 @@ import { useThemeColors } from '@/theme/ThemeProvider';
 import type { Restaurant } from '@/types/models';
 import { Ionicons } from '@expo/vector-icons';
 import FriendActivityIndicator from '@/components/FriendActivityIndicator';
+import { Typography } from '@/theme/designTokens';
+import { getRestaurantStatus } from '@/utils/restaurantHours';
 
 export interface FoodGridCardProps {
   item: Restaurant;
@@ -30,6 +32,7 @@ const FoodGridCard: React.FC<FoodGridCardProps> = memo(
     ) as string[];
     const score = typeof matchPercent === 'number' ? matchPercent : (item as any).match_percent;
     const showScore = Number.isFinite(score);
+    const { isOpen, status } = getRestaurantStatus(item);
 
     return (
       <Pressable
@@ -78,7 +81,12 @@ const FoodGridCard: React.FC<FoodGridCardProps> = memo(
                       justifyContent: 'center',
                     }}
                   >
-                    <Text style={{ color: '#ffffffcc', fontSize: 12, fontWeight: '800' }}>
+                    <Text style={{ 
+                      color: '#ffffffcc', 
+                      fontSize: Typography.scale.bodySmall.fontSize,
+                      fontFamily: Typography.fontFamily.bodyBold,
+                      fontWeight: Typography.fontWeight.bold,
+                    }}>
                       No Image
                     </Text>
                   </View>
@@ -95,7 +103,13 @@ const FoodGridCard: React.FC<FoodGridCardProps> = memo(
                 }}
               >
                 <Text
-                  style={{ color: c.text, fontWeight: '800', fontSize: 16, flex: 1 }}
+                  style={{ 
+                    color: c.text, 
+                    fontWeight: Typography.fontWeight.bold,
+                    fontSize: Typography.scale.bodyLarge.fontSize,
+                    fontFamily: Typography.fontFamily.bodyBold,
+                    flex: 1,
+                  }}
                   numberOfLines={2}
                 >
                   {item.restaurant_name}
@@ -110,20 +124,42 @@ const FoodGridCard: React.FC<FoodGridCardProps> = memo(
                       marginLeft: 8,
                     }}
                   >
-                    <Text style={{ color: c.text, fontSize: 11, fontWeight: '800' }}>
+                    <Text style={{ 
+                      color: c.text, 
+                      fontSize: Typography.scale.caption.fontSize,
+                      fontFamily: Typography.fontFamily.bodyBold,
+                      fontWeight: Typography.fontWeight.bold,
+                    }}>
                       {score}% Match
                     </Text>
                   </View>
                 ) : null}
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                <Text style={{ color: c.muted, fontSize: 12 }} numberOfLines={1}>
+                <Text style={{ 
+                  color: c.muted, 
+                  fontSize: Typography.scale.bodySmall.fontSize,
+                  fontFamily: Typography.fontFamily.body,
+                }} numberOfLines={1}>
                   {[item.category, item.price_range].filter(Boolean).join(' • ')}
+                </Text>
+                <Text style={{ 
+                  color: isOpen ? '#10b981' : '#ef4444', 
+                  fontWeight: Typography.fontWeight.semibold,
+                  fontSize: Typography.scale.bodySmall.fontSize,
+                  fontFamily: Typography.fontFamily.bodySemibold,
+                }}>
+                  {status}
                 </Text>
                 {item.review_points ? (
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                     <Ionicons name="star" size={12} color="#fbbf24" />
-                    <Text style={{ color: '#fbbf24', fontWeight: '800', fontSize: 12 }}>
+                    <Text style={{ 
+                      color: '#fbbf24', 
+                      fontWeight: Typography.fontWeight.bold,
+                      fontSize: Typography.scale.bodySmall.fontSize,
+                      fontFamily: Typography.fontFamily.bodyBold,
+                    }}>
                       {item.review_points}
                     </Text>
                   </View>
@@ -131,7 +167,12 @@ const FoodGridCard: React.FC<FoodGridCardProps> = memo(
                 {typeof distanceMiles === 'number' && Number.isFinite(distanceMiles) ? (
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                     <Ionicons name="location" size={12} color={c.muted} />
-                    <Text style={{ color: c.muted, fontSize: 12, fontWeight: '700' }}>
+                    <Text style={{ 
+                      color: c.muted, 
+                      fontSize: Typography.scale.bodySmall.fontSize,
+                      fontFamily: Typography.fontFamily.bodySemibold,
+                      fontWeight: Typography.fontWeight.semibold,
+                    }}>
                       {distanceMiles < 0.1
                         ? '<0.1 mi'
                         : `${distanceMiles.toFixed(distanceMiles < 10 ? 1 : 0)} mi`}
@@ -140,7 +181,11 @@ const FoodGridCard: React.FC<FoodGridCardProps> = memo(
                 ) : null}
               </View>
               {item.address ? (
-                <Text style={{ color: c.muted, fontSize: 12 }} numberOfLines={2}>
+                <Text style={{ 
+                  color: c.muted, 
+                  fontSize: Typography.scale.bodySmall.fontSize,
+                  fontFamily: Typography.fontFamily.body,
+                }} numberOfLines={2}>
                   {item.address}
                   {item.city ? `, ${item.city}` : ''}
                 </Text>
@@ -166,7 +211,8 @@ const FoodGridCard: React.FC<FoodGridCardProps> = memo(
                     accessibilityLabel="Open website"
                     style={{ padding: 4 }}
                   >
-                    <Ionicons name="globe-outline" size={18} color={c.text} />
+                    <Text style={{ color: c.muted, fontSize: 12, fontWeight: '600', textDecorationLine: 'underline' }}>Website</Text>
+                    {/* <Ionicons name="globe-outline" size={18} color={c.text} /> */}
                   </Pressable>
                 ) : (
                   <View />

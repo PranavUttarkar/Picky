@@ -1,10 +1,17 @@
 import { supabase } from './supabase';
-import type { 
-  Friendship, 
-  FriendSearchResult, 
-  UserProfile, 
-  FriendActivityResult 
-} from '@/types/models';
+import type { FriendSearchResult, UserProfile, FriendActivityResult } from '@/types/models';
+
+export interface PendingFriendRequest {
+  id: number;
+  requester: UserProfile;
+  created_at: string;
+}
+
+export interface SentFriendRequest {
+  id: number;
+  addressee: UserProfile;
+  created_at: string;
+}
 
 // Friend management functions
 export async function sendFriendRequest(username: string): Promise<number> {
@@ -57,11 +64,7 @@ export async function removeFriend(friendId: string): Promise<void> {
   if (error) throw error;
 }
 
-export async function getPendingFriendRequests(): Promise<Array<{
-  id: number;
-  requester: UserProfile;
-  created_at: string;
-}>> {
+export async function getPendingFriendRequests(): Promise<PendingFriendRequest[]> {
   const user = (await supabase.auth.getUser()).data.user;
   if (!user) throw new Error('Not authenticated');
 
@@ -70,7 +73,7 @@ export async function getPendingFriendRequests(): Promise<Array<{
     .select(`
       id,
       created_at,
-      requester:users!friendships_requester_id_fkey(id, username, display_name, account_type)
+      requester:users!friendships_requester_id_fkey(id, username, display_name, account_type, avatar_url)
     `)
     .eq('addressee_id', user.id)
     .eq('status', 'pending')
@@ -84,11 +87,7 @@ export async function getPendingFriendRequests(): Promise<Array<{
   }));
 }
 
-export async function getSentFriendRequests(): Promise<Array<{
-  id: number;
-  addressee: UserProfile;
-  created_at: string;
-}>> {
+export async function getSentFriendRequests(): Promise<SentFriendRequest[]> {
   const user = (await supabase.auth.getUser()).data.user;
   if (!user) throw new Error('Not authenticated');
 
@@ -97,7 +96,7 @@ export async function getSentFriendRequests(): Promise<Array<{
     .select(`
       id,
       created_at,
-      addressee:users!friendships_addressee_id_fkey(id, username, display_name, account_type)
+      addressee:users!friendships_addressee_id_fkey(id, username, display_name, account_type, avatar_url)
     `)
     .eq('requester_id', user.id)
     .eq('status', 'pending')

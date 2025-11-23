@@ -2,12 +2,13 @@ import React from 'react';
 import { View, ViewStyle, Text, TextStyle, Pressable } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme, useThemeColors } from '@/theme/ThemeProvider';
+import { BorderRadius, Spacing, Shadows, Typography, Colors, Gradients } from '@/theme/designTokens';
 
 // Shared 3D styles
 export const useThreeDStyles = () => {
   const c = useThemeColors();
   const { scheme } = useTheme();
-  const elevation = 6;
+  const shadows = scheme === 'dark' ? Shadows.dark : Shadows.light;
   const cardBg = c.card;
   const shadowColor = '#000';
   const highlight = scheme === 'light' ? 'rgba(255,255,255,0.65)' : 'rgba(255,255,255,0.08)';
@@ -15,38 +16,32 @@ export const useThreeDStyles = () => {
 
   const card: ViewStyle = {
     backgroundColor: cardBg,
-    borderRadius: 16,
-    shadowColor,
-    shadowOffset: { width: 0, height: elevation },
-    shadowOpacity: 0.18,
-    shadowRadius: 12,
-    elevation: 8,
+    borderRadius: BorderRadius.lg,
+    ...shadows.md,
     borderWidth: 1,
-    borderColor: scheme === 'light' ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.06)',
+    borderColor: scheme === 'light' ? Colors.light.neutral[300] + '40' : Colors.dark.neutral[600] + '60',
   };
 
   const inset: ViewStyle = {
-    borderRadius: 12,
+    borderRadius: BorderRadius.md,
     borderWidth: 1,
     borderColor: scheme === 'light' ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.06)',
     backgroundColor: scheme === 'light' ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.03)',
   };
 
   const button: ViewStyle = {
-    borderRadius: 12,
+    borderRadius: BorderRadius.md,
     backgroundColor: c.primary,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    shadowColor,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.2,
-    shadowRadius: 10,
-    elevation: 6,
+    paddingHorizontal: Spacing.md - 2, // 14px
+    paddingVertical: Spacing.sm + 2, // 10px
+    ...shadows.md,
   };
 
   const buttonText: TextStyle = {
-    color: '#000',
-    fontWeight: '800',
+    color: '#FFFFFF', // White text on primary for better contrast
+    fontSize: Typography.scale.body.fontSize,
+    fontFamily: Typography.fontFamily.body,
+    fontWeight: Typography.fontWeight.bold,
   };
 
   return { card, inset, button, buttonText, highlight, shadow };
@@ -59,8 +54,9 @@ export const ThreeDCard: React.FC<{
   gradientColors?: readonly [string, string];
 }> = ({ style, children, gradient = false, gradientColors }) => {
   const { card } = useThreeDStyles();
+  const { scheme } = useTheme();
   if (gradient) {
-    const colors = gradientColors ?? (['#ffffff', '#f3f4f6'] as const);
+    const colors = gradientColors ?? (scheme === 'dark' ? Gradients.background.dark : Gradients.background.light);
     return (
       <LinearGradient
         colors={colors}
@@ -95,13 +91,14 @@ export const ThreeDButton: React.FC<{
   children,
 }) => {
   const { button, buttonText } = useThreeDStyles();
+  const { scheme } = useTheme();
   if (gradient) {
-    const colors = gradientColors ?? (['#34d399', '#22d3ee'] as const);
+    const colors = gradientColors ?? Gradients.success;
     return (
       <Pressable
         onPress={onPress}
         disabled={disabled}
-        style={[{ borderRadius: 12 }, disabled ? { opacity: 0.6 } : null]}
+        style={[{ borderRadius: BorderRadius.md }, disabled ? { opacity: 0.6 } : null]}
         accessibilityRole="button"
         accessibilityLabel={title || 'Button'}
       >
@@ -114,7 +111,19 @@ export const ThreeDButton: React.FC<{
           {children ? (
             children
           ) : (
-            <Text style={[{ color: '#001219', fontWeight: '800' }, textStyle]}>{title}</Text>
+            <Text
+              style={[
+                {
+                  color: '#FFFFFF',
+                  fontSize: Typography.scale.body.fontSize,
+                  fontFamily: Typography.fontFamily.body,
+                  fontWeight: Typography.fontWeight.bold,
+                },
+                textStyle,
+              ]}
+            >
+              {title}
+            </Text>
           )}
         </LinearGradient>
       </Pressable>

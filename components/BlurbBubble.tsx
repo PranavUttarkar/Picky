@@ -1,6 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet, ViewStyle, Image, ImageSourcePropType } from 'react-native';
 import { useThemeColors } from '@/theme/ThemeProvider';
+import { BorderRadius, Spacing, Shadows, Typography } from '@/theme/designTokens';
+import { useTheme } from '@/theme/ThemeProvider';
 
 type Props = {
   title?: string;
@@ -12,6 +14,8 @@ type Props = {
 
 export default function BlurbBubble({ title, children, style, footerTag, illustration }: Props) {
   const c = useThemeColors();
+  const { scheme } = useTheme();
+  const shadows = scheme === 'dark' ? Shadows.dark : Shadows.light;
   // Use a more lively accent derived from theme primary instead of orange
   const accentColor = c.primary;
   return (
@@ -40,6 +44,7 @@ export default function BlurbBubble({ title, children, style, footerTag, illustr
             backgroundColor: c.card,
             borderColor: accentColor,
             shadowColor: c.text,
+            ...shadows.lg,
           },
         ]}
         accessibilityRole="summary"
@@ -61,15 +66,40 @@ export default function BlurbBubble({ title, children, style, footerTag, illustr
                 )}
               </View>
             ) : null}
-            {title ? <Text style={[styles.title, { color: c.text }]}>{title}</Text> : null}
+            {title ? (
+              <Text
+                style={[
+                  {
+                    color: c.text,
+                    fontSize: Typography.scale.heading3.fontSize,
+                    lineHeight: Typography.scale.heading3.lineHeight,
+                    fontFamily: Typography.fontFamily.body,
+                    fontWeight: Typography.fontWeight.bold,
+                    marginBottom: Spacing.xs + 2, // 6px
+                  },
+                ]}
+              >
+                {title}
+              </Text>
+            ) : null}
           </View>
         ) : null}
 
-        <View style={{ gap: 8 }}>{children}</View>
+        <View style={{ gap: Spacing.sm }}>{children}</View>
 
         {footerTag ? (
           <View style={[styles.tag, { backgroundColor: 'transparent' }]}>
-            <Text style={[styles.tagText, { color: accentColor, fontWeight: 700 }]}>
+            <Text
+              style={[
+                {
+                  color: accentColor,
+                  fontSize: Typography.scale.bodySmall.fontSize,
+                  fontFamily: Typography.fontFamily.body,
+                  fontWeight: Typography.fontWeight.bold,
+                  letterSpacing: 0.3,
+                },
+              ]}
+            >
               {footerTag}
             </Text>
           </View>
@@ -84,25 +114,20 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   container: {
-    borderRadius: 22,
-    padding: 16,
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.md,
     borderWidth: 3,
-    // playful shadow
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 16 },
-    elevation: 6,
   },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    marginBottom: 6,
+    gap: Spacing.md - 4, // 12px
+    marginBottom: Spacing.xs + 2, // 6px
   },
   stickerWrap: {
     width: 72,
     height: 72,
-    borderRadius: 22,
+    borderRadius: BorderRadius.xl,
     borderWidth: 0,
     alignItems: 'center',
     justifyContent: 'center',
@@ -112,23 +137,12 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
   },
-  title: {
-    fontSize: 18,
-    fontWeight: '900',
-    marginBottom: 6,
-  },
   tag: {
     alignSelf: 'flex-start',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 9,
-    marginTop: 12,
-  },
-  tagText: {
-    color: '#000000',
-    fontSize: 12,
-    fontWeight: '900',
-    letterSpacing: 0.3,
+    paddingHorizontal: Spacing.sm + 2, // 10px
+    paddingVertical: Spacing.xs,
+    borderRadius: BorderRadius.sm + 1, // 9px
+    marginTop: Spacing.md - 4, // 12px
   },
   dotLg: {
     position: 'absolute',
@@ -138,10 +152,7 @@ const styles = StyleSheet.create({
     height: 22,
     borderRadius: 22,
     borderWidth: 3,
-    shadowOpacity: 0.12,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
+    ...Shadows.light.sm,
   },
   dotMd: {
     position: 'absolute',
@@ -151,10 +162,7 @@ const styles = StyleSheet.create({
     height: 16,
     borderRadius: 16,
     borderWidth: 2,
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: 1,
+    ...Shadows.light.sm,
   },
   dotSm: {
     position: 'absolute',

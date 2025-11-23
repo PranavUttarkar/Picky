@@ -14,6 +14,7 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import GradientBackground from '@/components/GradientBackground';
 import AnimatedPage from '@/components/AnimatedPage';
 import { useThemeColors, useTheme } from '@/theme/ThemeProvider';
@@ -22,11 +23,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/services/supabase';
 import { getTopUserMatches, getUpcomingEvents } from '@/services/events';
-import { getTopUserRestaurantMatches } from '@/services/food';
+import { getTopUserRestaurantMatches, listRestaurants } from '@/services/food';
 import { getMyGroups } from '@/services/groups';
 import type { Event, Restaurant } from '@/types/models';
 import LazyImage from '@/components/LazyImage';
 import dayjs from 'dayjs';
+import { Spacing, BorderRadius, Typography, Colors, IconSizes } from '@/theme/designTokens';
 
 // Compact square card for events
 function CompactEventCard({ event, onPress }: { event: Event & { match_percent?: number }; onPress: () => void }) {
@@ -64,8 +66,17 @@ function CompactEventCard({ event, onPress }: { event: Event & { match_percent?:
           </View>
         )}
         {(event as any).match_percent && (
-          <View style={styles.matchBadge}>
-            <Text style={styles.matchBadgeText}>{(event as any).match_percent}%</Text>
+          <View style={styles.matchBadgeContainer}>
+            <LinearGradient
+              colors={['#34D399', '#3B82F6', '#818CF8', '#F59E0B']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.matchBadgeGradient}
+            >
+              <View style={styles.matchBadge}>
+                <Text style={styles.matchBadgeText}>{(event as any).match_percent}%</Text>
+              </View>
+            </LinearGradient>
           </View>
         )}
       </View>
@@ -111,8 +122,17 @@ function CompactFoodCard({ restaurant, onPress }: { restaurant: Restaurant & { m
           </View>
         )}
         {restaurant.match_percent && (
-          <View style={styles.matchBadge}>
-            <Text style={styles.matchBadgeText}>{restaurant.match_percent}%</Text>
+          <View style={styles.matchBadgeContainer}>
+            <LinearGradient
+              colors={['#34D399', '#3B82F6', '#818CF8', '#F59E0B']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.matchBadgeGradient}
+            >
+              <View style={styles.matchBadge}>
+                <Text style={styles.matchBadgeText}>{restaurant.match_percent}%</Text>
+              </View>
+            </LinearGradient>
           </View>
         )}
       </View>
@@ -132,6 +152,9 @@ export default function HomeTab() {
   const insets = useSafeAreaInsets();
   const [signedIn, setSignedIn] = useState(false);
   const { width } = useWindowDimensions();
+  // Responsive card count: 5 for desktop (>= 1024px), 3 for mobile/tablet
+  const isDesktop = width >= 1024;
+  const cardCount = isDesktop ? 5 : 3;
   const [topEvents, setTopEvents] = useState<(Event & { match_percent?: number })[]>([]);
   const [topRestaurants, setTopRestaurants] = useState<(Restaurant & { match_percent?: number })[]>([]);
   const [loadingEvents, setLoadingEvents] = useState(true);
@@ -164,19 +187,51 @@ export default function HomeTab() {
     if (signedIn) {
       (async () => {
         try {
-          let events = await getTopUserMatches(3);
-          // Fallback to upcoming events if no personalized matches found
-          if (!events || events.length === 0) {
-            events = await getUpcomingEvents(3) as any;
+          // Get personalized events (up to cardCount)
+          let personalizedEvents = await getTopUserMatches(cardCount);
+          personalizedEvents = personalizedEvents || [];
+          
+          // Always ensure we have at least cardCount events
+          const targetCount = cardCount;
+          const neededCount = Math.max(0, targetCount - personalizedEvents.length);
+          
+          let finalEvents: (Event & { match_percent?: number })[] = [...personalizedEvents];
+          
+          // If we need more events, get recent upcoming events to fill the gap
+          if (neededCount > 0) {
+            try {
+              const upcomingEvents = await getUpcomingEvents(targetCount + neededCount); // Get extra to avoid duplicates
+              
+              // Get IDs of personalized events to avoid duplicates
+              const personalizedIds = new Set(personalizedEvents.map(e => e.id));
+              
+              // Add upcoming events that aren't already in personalized events
+              const additionalEvents = upcomingEvents
+                .filter(e => !personalizedIds.has(e.id))
+                .slice(0, neededCount)
+                .map(e => ({ ...e, match_percent: undefined })); // No match percent for non-personalized
+              
+              finalEvents = [...personalizedEvents, ...additionalEvents].slice(0, targetCount);
+            } catch (upcomingError) {
+              console.error('Failed to load additional events:', upcomingError);
+              // If we can't get additional events, just use what we have
+            }
+          } else {
+            // We have enough or more personalized events, just take the first targetCount
+            finalEvents = personalizedEvents.slice(0, targetCount);
           }
-          if (events && events.length > 0) {
-            setTopEvents(events);
+          
+          if (finalEvents.length > 0) {
+            setTopEvents(finalEvents);
+            console.log('Loaded events:', finalEvents.length, finalEvents.map(e => ({ id: e.id, match: e.match_percent })));
+          } else {
+            console.log('No events found');
           }
         } catch (e) {
           console.error('Failed to load events:', e);
           // Try fallback on error too
           try {
-            const fallbackEvents = await getUpcomingEvents(3);
+            const fallbackEvents = await getUpcomingEvents(cardCount);
             if (fallbackEvents && fallbackEvents.length > 0) {
               setTopEvents(fallbackEvents as any);
             }
@@ -190,9 +245,42 @@ export default function HomeTab() {
 
       (async () => {
         try {
-          const restaurants = await getTopUserRestaurantMatches(3);
-          if (restaurants && restaurants.length > 0) {
-            setTopRestaurants(restaurants);
+          // Get personalized restaurants (up to cardCount)
+          let personalizedRestaurants = await getTopUserRestaurantMatches(cardCount);
+          personalizedRestaurants = personalizedRestaurants || [];
+          
+          // Always ensure we have at least cardCount restaurants
+          const targetCount = cardCount;
+          const neededCount = Math.max(0, targetCount - personalizedRestaurants.length);
+          
+          let finalRestaurants: (Restaurant & { match_percent?: number })[] = [...personalizedRestaurants];
+          
+          // If we need more restaurants, get popular restaurants to fill the gap
+          if (neededCount > 0) {
+            try {
+              const popularRestaurants = await listRestaurants(0, targetCount + neededCount); // Get extra to avoid duplicates
+              
+              // Get IDs of personalized restaurants to avoid duplicates
+              const personalizedIds = new Set(personalizedRestaurants.map(r => r.id));
+              
+              // Add popular restaurants that aren't already in personalized restaurants
+              const additionalRestaurants = popularRestaurants
+                .filter(r => !personalizedIds.has(r.id))
+                .slice(0, neededCount)
+                .map(r => ({ ...r, match_percent: undefined })); // No match percent for non-personalized
+              
+              finalRestaurants = [...personalizedRestaurants, ...additionalRestaurants].slice(0, targetCount);
+            } catch (popularError) {
+              console.error('Failed to load additional restaurants:', popularError);
+              // If we can't get additional restaurants, just use what we have
+            }
+          } else {
+            // We have enough or more personalized restaurants, just take the first targetCount
+            finalRestaurants = personalizedRestaurants.slice(0, targetCount);
+          }
+          
+          if (finalRestaurants.length > 0) {
+            setTopRestaurants(finalRestaurants);
           }
         } catch (e) {
           console.error('Failed to load restaurants:', e);
@@ -204,7 +292,7 @@ export default function HomeTab() {
       // For non-signed-in users, show upcoming events
       (async () => {
         try {
-          const events = await getUpcomingEvents(3);
+          const events = await getUpcomingEvents(cardCount);
           if (events && events.length > 0) {
             setTopEvents(events as any);
           }
@@ -216,7 +304,7 @@ export default function HomeTab() {
       })();
       setLoadingFood(false);
     }
-  }, [signedIn]);
+  }, [signedIn, cardCount]);
 
   const handleGroupDecide = (type: 'events' | 'food' | 'time') => {
     if (!signedIn) {
@@ -299,7 +387,8 @@ export default function HomeTab() {
           style={[
             styles.header,
             {
-              paddingTop: insets.top + 16,
+              paddingTop: insets.top + Spacing.md,
+              marginTop: 0,
               backgroundColor: c.background,
               borderBottomColor: c.muted + '30',
             },
@@ -497,63 +586,71 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingBottom: 16,
+    paddingHorizontal: Spacing.md,
+    paddingBottom: Spacing.md,
     borderBottomWidth: 1,
   },
   headerTitle: {
-    fontSize: 28,
-    fontWeight: '400',
+    fontSize: Typography.scale.display.fontSize,
+    lineHeight: Typography.scale.display.lineHeight,
+    fontWeight: Typography.fontWeight.regular,
     letterSpacing: 0,
     // @ts-ignore - font loaded globally
-    fontFamily: 'Pacifico_400Regular',
+    fontFamily: Typography.fontFamily.brand,
   },
   headerIcons: {
     flexDirection: 'row',
-    gap: 16,
+    gap: Spacing.md,
     alignItems: 'center',
   },
   headerIconButton: {
-    padding: 4,
+    padding: Spacing.xs,
   },
   // Section styles
   section: {
-    paddingHorizontal: 16,
-    marginTop: 24,
+    paddingHorizontal: Spacing.md,
+    marginTop: Spacing.lg,
+    width: '100%',
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: Spacing.md - 4, // 12px
   },
   sectionTitle: {
-    fontSize: 20,
-    fontWeight: '700',
+    fontSize: Typography.scale.heading2.fontSize,
+    lineHeight: Typography.scale.heading2.lineHeight,
+    fontFamily: Typography.fontFamily.body,
+    fontWeight: Typography.fontWeight.bold,
   },
   viewAllButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: Spacing.xs,
   },
   viewAllText: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: Typography.scale.body.fontSize,
+    lineHeight: Typography.scale.body.lineHeight,
+    fontFamily: Typography.fontFamily.body,
+    fontWeight: Typography.fontWeight.semibold,
   },
   // Compact grid styles
   compactGrid: {
     flexDirection: 'row',
-    gap: 12,
-    marginTop: 8,
+    gap: Spacing.md - 4, // 12px
+    marginTop: Spacing.sm,
     justifyContent: 'flex-start',
+    flexWrap: 'nowrap', // Ensure all cards show in a row
   },
   compactCard: {
     flex: 1,
-    borderRadius: 12,
+    borderRadius: BorderRadius.md,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: '#00000010',
+    borderColor: Colors.light.neutral[300] + '20',
     minWidth: 100,
+    maxWidth: '100%', // Ensure cards don't exceed container
   },
   compactImageContainer: {
     width: '100%',
@@ -564,66 +661,89 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  matchBadge: {
+  matchBadgeContainer: {
     position: 'absolute',
-    top: 8,
-    right: 8,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-    borderRadius: 8,
+    top: Spacing.sm,
+    right: Spacing.sm,
+    zIndex: 10,
+    elevation: 5, // Android shadow
+    shadowColor: '#000', // iOS shadow
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+  },
+  matchBadgeGradient: {
+    padding: 2.5,
+    borderRadius: BorderRadius.full,
+  },
+  matchBadge: {
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.full,
   },
   matchBadgeText: {
     color: '#fff',
-    fontSize: 10,
-    fontWeight: '700',
+    fontSize: Typography.scale.caption.fontSize,
+    lineHeight: Typography.scale.caption.lineHeight,
+    fontFamily: Typography.fontFamily.body,
+    fontWeight: Typography.fontWeight.bold,
   },
   compactTitle: {
     fontSize: 13,
-    fontWeight: '600',
-    paddingHorizontal: 8,
-    paddingTop: 8,
     lineHeight: 16,
+    fontFamily: Typography.fontFamily.body,
+    fontWeight: Typography.fontWeight.semibold,
+    paddingHorizontal: Spacing.sm,
+    paddingTop: Spacing.sm,
   },
   compactMeta: {
-    fontSize: 11,
-    paddingHorizontal: 8,
-    paddingBottom: 8,
+    fontSize: Typography.scale.bodySmall.fontSize,
+    lineHeight: Typography.scale.bodySmall.lineHeight,
+    fontFamily: Typography.fontFamily.body,
+    fontWeight: Typography.fontWeight.regular,
+    paddingHorizontal: Spacing.sm,
+    paddingBottom: Spacing.sm,
     marginTop: 2,
   },
   // Group Decide styles
   groupDecideGrid: {
     flexDirection: 'row',
-    gap: 12,
-    marginTop: 8,
+    gap: Spacing.md - 4, // 12px
+    marginTop: Spacing.sm,
   },
   groupDecideCard: {
     flex: 1,
-    padding: 16,
-    borderRadius: 12,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 100,
     borderWidth: 1,
-    borderColor: '#00000010',
+    borderColor: Colors.light.neutral[300] + '20',
   },
   groupDecideText: {
     fontSize: 13,
-    fontWeight: '600',
-    marginTop: 8,
+    lineHeight: 16,
+    fontFamily: Typography.fontFamily.body,
+    fontWeight: Typography.fontWeight.semibold,
+    marginTop: Spacing.sm,
     textAlign: 'center',
   },
   // Loading and empty states
   loadingContainer: {
-    paddingVertical: 24,
+    paddingVertical: Spacing.lg,
     alignItems: 'center',
   },
   emptyState: {
-    paddingVertical: 24,
+    paddingVertical: Spacing.lg,
     alignItems: 'center',
   },
   emptyStateText: {
-    fontSize: 14,
+    fontSize: Typography.scale.body.fontSize,
+    lineHeight: Typography.scale.body.lineHeight,
+    fontFamily: Typography.fontFamily.body,
+    fontWeight: Typography.fontWeight.regular,
     textAlign: 'center',
   },
   // Modal styles
@@ -633,54 +753,63 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalContent: {
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingTop: 20,
-    paddingBottom: 40,
+    borderTopLeftRadius: BorderRadius.xl,
+    borderTopRightRadius: BorderRadius.xl,
+    paddingTop: Spacing.lg - 4, // 20px
+    paddingBottom: Spacing.xl + 8, // 40px
     maxHeight: '80%',
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingBottom: 16,
+    paddingHorizontal: Spacing.lg - 4, // 20px
+    paddingBottom: Spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: '#00000010',
+    borderBottomColor: Colors.light.neutral[300] + '20',
   },
   modalTitle: {
-    fontSize: 20,
-    fontWeight: '700',
+    fontSize: Typography.scale.heading2.fontSize,
+    lineHeight: Typography.scale.heading2.lineHeight,
+    fontFamily: Typography.fontFamily.body,
+    fontWeight: Typography.fontWeight.bold,
   },
   modalEmpty: {
-    padding: 20,
+    padding: Spacing.lg - 4, // 20px
     alignItems: 'center',
   },
   modalEmptyText: {
-    fontSize: 14,
+    fontSize: Typography.scale.body.fontSize,
+    lineHeight: Typography.scale.body.lineHeight,
+    fontFamily: Typography.fontFamily.body,
+    fontWeight: Typography.fontWeight.regular,
     textAlign: 'center',
-    marginBottom: 16,
+    marginBottom: Spacing.md,
   },
   modalButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 10,
+    paddingHorizontal: Spacing.lg - 4, // 20px
+    paddingVertical: Spacing.md - 4, // 12px
+    borderRadius: BorderRadius.sm + 2, // 10px
   },
   modalButtonText: {
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: Typography.scale.bodyLarge.fontSize,
+    lineHeight: Typography.scale.bodyLarge.lineHeight,
+    fontFamily: Typography.fontFamily.body,
+    fontWeight: Typography.fontWeight.bold,
   },
   groupItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingHorizontal: Spacing.lg - 4, // 20px
+    paddingVertical: Spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: '#00000010',
+    borderBottomColor: Colors.light.neutral[300] + '20',
   },
   groupItemText: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: Typography.scale.bodyLarge.fontSize,
+    lineHeight: Typography.scale.bodyLarge.lineHeight,
+    fontFamily: Typography.fontFamily.body,
+    fontWeight: Typography.fontWeight.semibold,
   },
 });

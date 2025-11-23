@@ -7,6 +7,7 @@ import { useThemeColors } from '@/theme/ThemeProvider';
 import GradientBackground from '@/components/GradientBackground';
 import AnimatedPage from '@/components/AnimatedPage';
 import { Ionicons } from '@expo/vector-icons';
+import { Spacing, BorderRadius, Typography, Colors } from '@/theme/designTokens';
 
 export default function ProfileSetup() {
   const c = useThemeColors();
@@ -94,48 +95,53 @@ export default function ProfileSetup() {
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1 }}>
           <View style={{ 
             flex: 1, 
-            padding: 20, 
+            padding: Spacing.lg - 4, 
             justifyContent: 'center',
             maxWidth: 400,
             alignSelf: 'center',
             width: '100%',
           }}>
             {/* Header */}
-            <View style={{ alignItems: 'center', marginBottom: 40 }}>
+            <View style={{ alignItems: 'center', marginBottom: Spacing.xl + 8 }}>
               <View style={{
                 backgroundColor: c.primary,
-                borderRadius: 50,
-                padding: 20,
-                marginBottom: 20,
+                borderRadius: BorderRadius.full,
+                padding: Spacing.lg - 4,
+                marginBottom: Spacing.lg - 4,
               }}>
                 <Ionicons name="person-add" size={32} color="white" />
               </View>
               <Text style={{
-                fontSize: 28,
-                fontWeight: '700',
+                fontSize: Typography.scale.display.fontSize,
+                lineHeight: Typography.scale.display.lineHeight,
+                fontWeight: Typography.fontWeight.bold,
+                fontFamily: Typography.fontFamily.body,
                 color: c.text,
                 textAlign: 'center',
-                marginBottom: 8,
+                marginBottom: Spacing.sm,
               }}>
                 Set Up Your Profile
               </Text>
               <Text style={{
-                fontSize: 16,
+                fontSize: Typography.scale.bodyLarge.fontSize,
+                lineHeight: Typography.scale.bodyLarge.lineHeight,
+                fontFamily: Typography.fontFamily.body,
                 color: c.muted,
                 textAlign: 'center',
-                lineHeight: 24,
               }}>
                 Choose a username and tell us about yourself so friends can find you
               </Text>
             </View>
 
             {/* Username Input */}
-            <View style={{ marginBottom: 20 }}>
+            <View style={{ marginBottom: Spacing.lg - 4 }}>
               <Text style={{
-                fontSize: 16,
-                fontWeight: '600',
+                fontSize: Typography.scale.bodyLarge.fontSize,
+                lineHeight: Typography.scale.bodyLarge.lineHeight,
+                fontFamily: Typography.fontFamily.body,
+                fontWeight: Typography.fontWeight.semibold,
                 color: c.text,
-                marginBottom: 8,
+                marginBottom: Spacing.sm,
               }}>
                 Username *
               </Text>
@@ -149,51 +155,54 @@ export default function ProfileSetup() {
                   autoCorrect={false}
                   style={{
                     backgroundColor: c.card,
-                    padding: 16,
-                    borderRadius: 12,
+                    padding: Spacing.md,
+                    borderRadius: BorderRadius.md,
                     color: c.text,
-                    fontSize: 16,
+                    fontSize: Typography.scale.bodyLarge.fontSize,
+                    fontFamily: Typography.fontFamily.body,
                     paddingRight: 50,
                     borderWidth: 2,
-                    borderColor: usernameStatus === 'available' ? '#10b981' : 
-                                usernameStatus === 'taken' ? '#ef4444' : c.border,
+                    borderColor: usernameStatus === 'available' ? Colors.light.secondary[500] : 
+                                usernameStatus === 'taken' ? Colors.light.accent.warning : c.card,
                   }}
                 />
                 <View style={{
                   position: 'absolute',
-                  right: 16,
-                  top: 16,
-                  bottom: 16,
+                  right: Spacing.md,
+                  top: Spacing.md,
+                  bottom: Spacing.md,
                   justifyContent: 'center',
                 }}>
                   {checkingUsername ? (
                     <Ionicons name="ellipsis-horizontal" size={20} color={c.muted} />
                   ) : usernameStatus === 'available' ? (
-                    <Ionicons name="checkmark-circle" size={20} color="#10b981" />
+                    <Ionicons name="checkmark-circle" size={20} color={Colors.light.secondary[500]} />
                   ) : usernameStatus === 'taken' ? (
-                    <Ionicons name="close-circle" size={20} color="#ef4444" />
+                    <Ionicons name="close-circle" size={20} color={Colors.light.accent.warning} />
                   ) : null}
                 </View>
               </View>
               {usernameStatus === 'taken' && (
-                <Text style={{ color: '#ef4444', fontSize: 14, marginTop: 4 }}>
+                <Text style={{ color: Colors.light.accent.warning, fontSize: Typography.scale.body.fontSize, lineHeight: Typography.scale.body.lineHeight, fontFamily: Typography.fontFamily.body, marginTop: Spacing.xs }}>
                   Username is already taken
                 </Text>
               )}
               {usernameStatus === 'available' && (
-                <Text style={{ color: '#10b981', fontSize: 14, marginTop: 4 }}>
+                <Text style={{ color: Colors.light.secondary[500], fontSize: Typography.scale.body.fontSize, lineHeight: Typography.scale.body.lineHeight, fontFamily: Typography.fontFamily.body, marginTop: Spacing.xs }}>
                   Username is available!
                 </Text>
               )}
             </View>
 
             {/* Display Name Input */}
-            <View style={{ marginBottom: 20 }}>
+            <View style={{ marginBottom: Spacing.lg - 4 }}>
               <Text style={{
-                fontSize: 16,
-                fontWeight: '600',
+                fontSize: Typography.scale.bodyLarge.fontSize,
+                lineHeight: Typography.scale.bodyLarge.lineHeight,
+                fontFamily: Typography.fontFamily.body,
+                fontWeight: Typography.fontWeight.semibold,
                 color: c.text,
-                marginBottom: 8,
+                marginBottom: Spacing.sm,
               }}>
                 Display Name *
               </Text>
@@ -204,23 +213,26 @@ export default function ProfileSetup() {
                 placeholderTextColor={c.muted}
                 style={{
                   backgroundColor: c.card,
-                  padding: 16,
-                  borderRadius: 12,
+                  padding: Spacing.md,
+                  borderRadius: BorderRadius.md,
                   color: c.text,
-                  fontSize: 16,
+                  fontSize: Typography.scale.bodyLarge.fontSize,
+                  fontFamily: Typography.fontFamily.body,
                   borderWidth: 1,
-                  borderColor: c.border,
+                  borderColor: c.card,
                 }}
               />
             </View>
 
             {/* Account Type Selection */}
-            <View style={{ marginBottom: 30 }}>
+            <View style={{ marginBottom: Spacing.xl - 2 }}>
               <Text style={{
-                fontSize: 16,
-                fontWeight: '600',
+                fontSize: Typography.scale.bodyLarge.fontSize,
+                lineHeight: Typography.scale.bodyLarge.lineHeight,
+                fontFamily: Typography.fontFamily.body,
+                fontWeight: Typography.fontWeight.semibold,
                 color: c.text,
-                marginBottom: 12,
+                marginBottom: Spacing.md - 4,
               }}>
                 Account Type
               </Text>
@@ -229,11 +241,11 @@ export default function ProfileSetup() {
                 onPress={() => setAccountType('personal')}
                 style={{
                   backgroundColor: accountType === 'personal' ? `${c.primary}20` : c.card,
-                  padding: 16,
-                  borderRadius: 12,
-                  marginBottom: 12,
+                  padding: Spacing.md,
+                  borderRadius: BorderRadius.md,
+                  marginBottom: Spacing.md - 4,
                   borderWidth: 2,
-                  borderColor: accountType === 'personal' ? c.primary : c.border,
+                  borderColor: accountType === 'personal' ? c.primary : c.card,
                   flexDirection: 'row',
                   alignItems: 'center',
                 }}
@@ -245,7 +257,7 @@ export default function ProfileSetup() {
                   borderWidth: 2,
                   borderColor: accountType === 'personal' ? c.primary : c.muted,
                   backgroundColor: accountType === 'personal' ? c.primary : 'transparent',
-                  marginRight: 12,
+                  marginRight: Spacing.md - 4,
                   alignItems: 'center',
                   justifyContent: 'center',
                 }}>
@@ -260,15 +272,19 @@ export default function ProfileSetup() {
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={{
-                    fontSize: 16,
-                    fontWeight: '600',
+                    fontSize: Typography.scale.bodyLarge.fontSize,
+                    lineHeight: Typography.scale.bodyLarge.lineHeight,
+                    fontFamily: Typography.fontFamily.body,
+                    fontWeight: Typography.fontWeight.semibold,
                     color: c.text,
                     marginBottom: 2,
                   }}>
                     Personal Account
                   </Text>
                   <Text style={{
-                    fontSize: 14,
+                    fontSize: Typography.scale.body.fontSize,
+                    lineHeight: Typography.scale.body.lineHeight,
+                    fontFamily: Typography.fontFamily.body,
                     color: c.muted,
                   }}>
                     For individual users who want to connect with friends
@@ -280,10 +296,10 @@ export default function ProfileSetup() {
                 onPress={() => setAccountType('organization')}
                 style={{
                   backgroundColor: accountType === 'organization' ? `${c.primary}20` : c.card,
-                  padding: 16,
-                  borderRadius: 12,
+                  padding: Spacing.md,
+                  borderRadius: BorderRadius.md,
                   borderWidth: 2,
-                  borderColor: accountType === 'organization' ? c.primary : c.border,
+                  borderColor: accountType === 'organization' ? c.primary : c.card,
                   flexDirection: 'row',
                   alignItems: 'center',
                 }}
@@ -295,7 +311,7 @@ export default function ProfileSetup() {
                   borderWidth: 2,
                   borderColor: accountType === 'organization' ? c.primary : c.muted,
                   backgroundColor: accountType === 'organization' ? c.primary : 'transparent',
-                  marginRight: 12,
+                  marginRight: Spacing.md - 4,
                   alignItems: 'center',
                   justifyContent: 'center',
                 }}>
@@ -310,15 +326,19 @@ export default function ProfileSetup() {
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={{
-                    fontSize: 16,
-                    fontWeight: '600',
+                    fontSize: Typography.scale.bodyLarge.fontSize,
+                    lineHeight: Typography.scale.bodyLarge.lineHeight,
+                    fontFamily: Typography.fontFamily.body,
+                    fontWeight: Typography.fontWeight.semibold,
                     color: c.text,
                     marginBottom: 2,
                   }}>
                     Organization Account
                   </Text>
                   <Text style={{
-                    fontSize: 14,
+                    fontSize: Typography.scale.body.fontSize,
+                    lineHeight: Typography.scale.body.lineHeight,
+                    fontFamily: Typography.fontFamily.body,
                     color: c.muted,
                   }}>
                     For clubs, businesses, or groups that host events
@@ -334,16 +354,18 @@ export default function ProfileSetup() {
               style={{
                 backgroundColor: (loading || !username.trim() || !displayName.trim() || usernameAvailable === false) 
                   ? c.muted : c.primary,
-                paddingVertical: 16,
-                borderRadius: 12,
+                paddingVertical: Spacing.md,
+                borderRadius: BorderRadius.md,
                 alignItems: 'center',
-                marginBottom: 16,
+                marginBottom: Spacing.md,
               }}
             >
               <Text style={{
-                color: 'white',
-                fontSize: 16,
-                fontWeight: '600',
+                color: '#FFFFFF',
+                fontSize: Typography.scale.bodyLarge.fontSize,
+                lineHeight: Typography.scale.bodyLarge.lineHeight,
+                fontFamily: Typography.fontFamily.body,
+                fontWeight: Typography.fontWeight.semibold,
               }}>
                 {loading ? 'Setting up...' : 'Continue'}
               </Text>
@@ -353,13 +375,15 @@ export default function ProfileSetup() {
             <Pressable
               onPress={() => router.replace('/onboarding/interests')}
               style={{
-                paddingVertical: 12,
+                paddingVertical: Spacing.md - 4,
                 alignItems: 'center',
               }}
             >
               <Text style={{
                 color: c.muted,
-                fontSize: 16,
+                fontSize: Typography.scale.body.fontSize,
+                lineHeight: Typography.scale.body.lineHeight,
+                fontFamily: Typography.fontFamily.body,
               }}>
                 Skip for now
               </Text>

@@ -162,8 +162,19 @@ export default function SearchUsers() {
     }
   };
 
+  const goToFriendsTab = () => {
+    router.push({
+      pathname: '/(tabs)/groups',
+      params: { tab: 'friends' },
+    });
+  };
+
   const renderUserItem = ({ item }: { item: FriendSearchResult }) => {
     const isOrganization = item.account_type === 'organization';
+    const status = item.friendship_status;
+    const isFriend = item.is_friend || status === 'accepted';
+    const isPendingOutgoing = status === 'pending_outgoing';
+    const isPendingIncoming = status === 'pending_incoming';
     
     return (
       <View style={{
@@ -223,8 +234,39 @@ export default function SearchUsers() {
                     Follow
                   </Text>
                 </Pressable>
-              ) : item.is_friend ? (
+              ) : isFriend ? (
                 <Text style={{ color: c.muted, fontSize: 12 }}>Friends</Text>
+              ) : isPendingIncoming ? (
+                <Pressable
+                  onPress={goToFriendsTab}
+                  style={{
+                    backgroundColor: c.card,
+                    paddingHorizontal: 12,
+                    paddingVertical: 6,
+                    borderRadius: 8,
+                    borderWidth: 1,
+                    borderColor: c.primary,
+                  }}
+                >
+                  <Text style={{ color: c.primary, fontWeight: '600', fontSize: 12 }}>
+                    Respond
+                  </Text>
+                </Pressable>
+              ) : isPendingOutgoing ? (
+                <View
+                  style={{
+                    backgroundColor: c.card,
+                    borderWidth: 1,
+                    borderColor: c.primary,
+                    paddingHorizontal: 12,
+                    paddingVertical: 6,
+                    borderRadius: 8,
+                  }}
+                >
+                  <Text style={{ color: c.primary, fontWeight: '600', fontSize: 12 }}>
+                    Sent
+                  </Text>
+                </View>
               ) : (
                 <Pressable
                   onPress={() => handleSendFriendRequest(item.username)}

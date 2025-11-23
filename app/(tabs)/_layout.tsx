@@ -8,7 +8,9 @@ import { Share } from 'react-native';
 import { useCallback, useMemo, useEffect } from 'react';
 import { useSavedNotification } from '@/utils/SavedNotificationContext';
 import { useGroupDecisionNotification } from '@/utils/GroupDecisionNotificationContext';
+import { useFriendNotification } from '@/utils/FriendNotificationContext';
 import { trackCTA, trackEvent } from '@/utils/analytics';
+import { Typography, Spacing, IconSizes, Colors } from '@/theme/designTokens';
 
 export default function TabsLayout() {
   const c = useThemeColors();
@@ -19,6 +21,7 @@ export default function TabsLayout() {
   const { hasNewSavedItems, clearNotification } = useSavedNotification();
   const { hasNewGroupDecisions, clearNotification: clearGroupDecisionNotification } =
     useGroupDecisionNotification();
+  const { hasNewFriends } = useFriendNotification();
 
   // Clear saved notification when profile tab is accessed (badge moved to profile)
   useEffect(() => {
@@ -60,7 +63,7 @@ export default function TabsLayout() {
                 width: 8,
                 height: 8,
                 borderRadius: 4,
-                backgroundColor: '#ef4444',
+                backgroundColor: Colors.light.accent.warning,
                 zIndex: 1,
               }}
             />
@@ -74,10 +77,11 @@ export default function TabsLayout() {
   // Custom social tab icon with notification dot
   const SocialTabIcon = useCallback(
     ({ color, size }: { color: string; size: number }) => {
+      const showDot = hasNewGroupDecisions || hasNewFriends;
       return (
         <View style={{ position: 'relative' }}>
           <Ionicons name="people" size={size} color={color} />
-          {hasNewGroupDecisions && (
+          {showDot && (
             <View
               style={{
                 position: 'absolute',
@@ -86,7 +90,7 @@ export default function TabsLayout() {
                 width: 8,
                 height: 8,
                 borderRadius: 4,
-                backgroundColor: '#ef4444',
+                backgroundColor: Colors.light.accent.warning,
                 zIndex: 1,
               }}
             />
@@ -94,7 +98,7 @@ export default function TabsLayout() {
         </View>
       );
     },
-    [hasNewGroupDecisions],
+    [hasNewGroupDecisions, hasNewFriends],
   );
 
   const HeaderTitle = useCallback(
@@ -110,11 +114,12 @@ export default function TabsLayout() {
         <Text
           style={{
             color: c.text,
-            fontSize: 24,
-            fontWeight: '900',
-            // Use custom font if loaded globally
+            fontSize: Typography.scale.heading1.fontSize,
+            lineHeight: Typography.scale.heading1.lineHeight,
+            // Use brand font for logo
             // @ts-ignore - font may be loaded under this name
-            fontFamily: 'Pacifico_400Regular',
+            fontFamily: Typography.fontFamily.brand,
+            fontWeight: Typography.fontWeight.regular,
           }}
         >
           Picky!
@@ -140,7 +145,7 @@ export default function TabsLayout() {
 
   const headerRight = useCallback(
     () => (
-      <View style={{ flexDirection: 'row', gap: 12, marginRight: 8 }}>
+      <View style={{ flexDirection: 'row', gap: Spacing.md - 4, marginRight: Spacing.sm }}>
         <Pressable
           onPress={() => {
             trackCTA('toggle_theme', { next: scheme === 'dark' ? 'light' : 'dark' }).catch(
@@ -148,9 +153,9 @@ export default function TabsLayout() {
             );
             toggleScheme();
           }}
-          hitSlop={8}
+          hitSlop={Spacing.sm}
         >
-          <Ionicons name={scheme === 'dark' ? 'moon' : 'sunny'} size={22} color={c.text} />
+          <Ionicons name={scheme === 'dark' ? 'moon' : 'sunny'} size={IconSizes.medium} color={c.text} />
         </Pressable>
       </View>
     ),
@@ -177,6 +182,7 @@ export default function TabsLayout() {
         name="home"
         options={{
           title: '',
+          headerShown: false, // Hide header on home tab since it has its own custom header
           tabBarIcon: ({ color, size }) => <Ionicons name="home" size={size} color={color} />,
         }}
       />

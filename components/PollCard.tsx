@@ -6,6 +6,7 @@ import LazyImage from '@/components/LazyImage';
 import Chip from '@/components/Chip';
 import type { PollOptionView } from '@/services/polls';
 import type { Restaurant } from '@/types/models';
+import { Typography } from '@/theme/designTokens';
 
 export interface PollCardProps {
   option: PollOptionView;
@@ -193,12 +194,22 @@ export const PollCard: React.FC<PollCardProps> = ({
         {variant === 'swipe' ? (
           <>
             {pollMode === 'rating' && hasRatingBuckets ? (
-              <Text style={{ color: c.muted }}>
+              <Text style={{ 
+                color: c.muted,
+                fontSize: Typography.scale.bodySmall.fontSize,
+                fontFamily: Typography.fontFamily.body,
+              }}>
                 ❤️ {love ?? 0} • 👍 {fine ?? 0} • 👎 {nope ?? 0}
               </Text>
             ) : null}
             {distanceDisplay ? (
-              <Text style={{ color: c.muted }}>{distanceDisplay}</Text>
+              <Text style={{ 
+                color: c.muted,
+                fontSize: Typography.scale.bodySmall.fontSize,
+                fontFamily: Typography.fontFamily.body,
+              }}>
+                {distanceDisplay}
+              </Text>
             ) : null}
           </>
         ) : null}

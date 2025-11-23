@@ -9,6 +9,7 @@ import { getRestaurantById, restaurantImages } from '@/services/food';
 import Chip from '@/components/Chip';
 import { Ionicons } from '@expo/vector-icons';
 import RestaurantMap from '@/components/RestaurantMap';
+import { getRestaurantStatus } from '@/utils/restaurantHours';
 
 export default function FoodDetails() {
   const c = useThemeColors();
@@ -51,6 +52,7 @@ export default function FoodDetails() {
   }
 
   const images = restaurantImages(item);
+  const { isOpen, status } = getRestaurantStatus(item);
   const metaParts: React.ReactNode[] = [
     item.category,
     item.price_range,
@@ -84,9 +86,16 @@ export default function FoodDetails() {
               <ImageGallery images={images} height={260} showArrows showDots />
             </View>
           ) : null}
-          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8, flexWrap: 'wrap', gap: 8 }}>
             <Ionicons name="location-sharp" size={16} color={c.muted} />
-            <Text style={{ color: c.muted, marginLeft: 8 }}>{meta}</Text>
+            <Text style={{ color: c.muted, marginLeft: 0 }}>{meta}</Text>
+            <Text style={{ 
+              color: isOpen ? '#10b981' : '#ef4444', 
+              fontWeight: '700',
+              fontSize: 14,
+            }}>
+              {status}
+            </Text>
           </View>
           {item.address ? (
             <Text style={{ color: c.muted, marginTop: 4 }}>
@@ -127,7 +136,9 @@ export default function FoodDetails() {
                 borderRadius: 10,
               }}
               >
-              <Ionicons name="globe" size={18} color={c.primary} />
+                                    <Text style={{ color: c.primary, fontSize: 12, fontWeight: '600', textDecorationLine: 'underline' }}>Website</Text>
+
+              {/* <Ionicons name="globe" size={18} color={c.primary} /> */}
               </Pressable>
             ) : null}
             {item.page_url ? (
@@ -140,7 +151,7 @@ export default function FoodDetails() {
                 borderRadius: 10,
               }}
               >
-                <Text style={{ color: c.text, fontWeight: '800' }}>Info & Directions</Text>
+                <Text style={{ color: c.text, fontWeight: '800' }}>Reviews & Directions</Text>
               </Pressable>
             ) : null}
             <Pressable

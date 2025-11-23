@@ -5,10 +5,13 @@ import LazyImage from '@/components/LazyImage';
 import { ThreeDCard, ThreeDButton } from '@/components/ThreeD';
 import type { Restaurant } from '@/types/models';
 import { Ionicons } from '@expo/vector-icons';
+import { Typography } from '@/theme/designTokens';
+import { getRestaurantStatus } from '@/utils/restaurantHours';
 
 export interface FoodRowCardProps {
   item: Restaurant;
   matchPercent?: number;
+  distanceMiles?: number;
   onOpenDetails?: () => void;
   onSelect?: () => void; // for building a poll selection list
   selected?: boolean;
@@ -17,7 +20,7 @@ export interface FoodRowCardProps {
 }
 
 const FoodRowCard: React.FC<FoodRowCardProps> = memo(
-  ({ item, matchPercent, onOpenDetails, onSelect, selected, isSaved = false, onToggleSave }) => {
+  ({ item, matchPercent, distanceMiles, onOpenDetails, onSelect, selected, isSaved = false, onToggleSave }) => {
     const c = useThemeColors();
     const imgs: string[] = [item.main_image, item.image_1, item.image_2, item.image_3].filter(
       Boolean,
@@ -26,6 +29,7 @@ const FoodRowCard: React.FC<FoodRowCardProps> = memo(
     const thumb = imgs[imgIdx];
     const score = typeof matchPercent === 'number' ? matchPercent : (item as any).match_percent;
     const showScore = Number.isFinite(score);
+    const { isOpen, status } = getRestaurantStatus(item);
 
     return (
       <Pressable
@@ -64,7 +68,12 @@ const FoodRowCard: React.FC<FoodRowCardProps> = memo(
                       justifyContent: 'center',
                     }}
                   >
-                    <Text style={{ color: '#ffffffcc', fontSize: 11, fontWeight: '700' }}>
+                    <Text style={{ 
+                      color: '#ffffffcc', 
+                      fontSize: Typography.scale.caption.fontSize,
+                      fontFamily: Typography.fontFamily.bodySemibold,
+                      fontWeight: Typography.fontWeight.semibold,
+                    }}>
                       No Image
                     </Text>
                   </View>
@@ -72,23 +81,65 @@ const FoodRowCard: React.FC<FoodRowCardProps> = memo(
               )}
             </View>
             <View style={{ flex: 1, minHeight: 96 }}>
-              <Text style={{ color: c.text, fontWeight: '800' }} numberOfLines={1}>
+              <Text style={{ 
+                color: c.text, 
+                fontWeight: Typography.fontWeight.bold,
+                fontSize: 13,
+                fontFamily: Typography.fontFamily.bodyBold,
+              }} numberOfLines={1}>
                 {item.restaurant_name}
               </Text>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 }}>
-                <Text style={{ color: c.muted }} numberOfLines={1}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2, flexWrap: 'wrap' }}>
+                <Text style={{ 
+                  color: c.muted,
+                  fontSize: Typography.scale.bodySmall.fontSize,
+                  fontFamily: Typography.fontFamily.body,
+                }} numberOfLines={1}>
                   {[item.category, item.price_range].filter(Boolean).join(' • ')}
+                </Text>
+                <Text style={{ 
+                  color: isOpen ? '#10b981' : '#ef4444', 
+                  fontWeight: Typography.fontWeight.semibold,
+                  fontSize: Typography.scale.bodySmall.fontSize,
+                  fontFamily: Typography.fontFamily.bodySemibold,
+                }}>
+                  {status}
                 </Text>
                 {item.review_points ? (
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                     <Ionicons name="star" size={12} color="#fbbf24" />
-                    <Text style={{ color: '#fbbf24', fontWeight: '700', fontSize: 12 }}>
+                    <Text style={{ 
+                      color: '#fbbf24', 
+                      fontWeight: Typography.fontWeight.semibold,
+                      fontSize: Typography.scale.bodySmall.fontSize,
+                      fontFamily: Typography.fontFamily.bodySemibold,
+                    }}>
                       {item.review_points}
                     </Text>
                   </View>
                 ) : null}
+                {typeof distanceMiles === 'number' && Number.isFinite(distanceMiles) ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <Ionicons name="location" size={12} color={c.muted} />
+                    <Text style={{ 
+                      color: c.muted, 
+                      fontSize: Typography.scale.bodySmall.fontSize,
+                      fontFamily: Typography.fontFamily.bodySemibold,
+                      fontWeight: Typography.fontWeight.semibold,
+                    }}>
+                      {distanceMiles < 0.1
+                        ? '<0.1 mi'
+                        : `${distanceMiles.toFixed(distanceMiles < 10 ? 1 : 0)} mi`}
+                    </Text>
+                  </View>
+                ) : null}
               </View>
-              <Text style={{ color: c.muted, marginTop: 2 }} numberOfLines={1}>
+              <Text style={{ 
+                color: c.muted, 
+                fontSize: Typography.scale.bodySmall.fontSize,
+                fontFamily: Typography.fontFamily.body,
+                marginTop: 2,
+              }} numberOfLines={1}>
                 {item.address}
                 {item.city ? `, ${item.city}` : ''}
               </Text>
@@ -122,9 +173,10 @@ const FoodRowCard: React.FC<FoodRowCardProps> = memo(
                     <Pressable
                       onPress={() => item.website && Linking.openURL(item.website)}
                       accessibilityLabel="Open website"
-                      style={{ padding: 4 }}
+                      style={{ padding: 4,  }}
                     >
-                      <Ionicons name="globe-outline" size={18} color={c.primary} />
+                      <Text style={{ color: c.text, fontSize: 12, fontWeight: '600', textDecorationLine: 'underline' }}>Website</Text>
+                      {/* <Ionicons name="globe-outline" size={18} color={c.primary} /> */}
                     </Pressable>
                   ) : null}
                   <Pressable

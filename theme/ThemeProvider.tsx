@@ -9,25 +9,10 @@ import React, {
 import { useColorScheme } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { Colors as DesignColors } from './designTokens';
 
-export const Colors = {
-  light: {
-    background: '#fcfff7c5',
-    card: '#b8edfaea',
-    text: '#111827',
-    muted: '#6d7177ff',
-    primary: '#9bb7ebff',
-    accent: '#0348c051',
-  },
-  dark: {
-    background: '#0b1220',
-    card: '#18233ac9',
-    text: '#f9fafb',
-    muted: '#9ca3af',
-    primary: '#22d3ee',
-    accent: '#031d4bc0',
-  },
-};
+// Re-export Colors for backward compatibility
+export const Colors = DesignColors;
 
 type Scheme = 'light' | 'dark';
 

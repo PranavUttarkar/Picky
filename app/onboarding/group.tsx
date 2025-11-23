@@ -5,6 +5,9 @@ import { useThemeColors } from '@/theme/ThemeProvider';
 import { supabase } from '@/services/supabase';
 import { ensureProfile } from '@/services/profile';
 import { useGroupDecisionNotification } from '@/utils/GroupDecisionNotificationContext';
+import { Spacing, BorderRadius, Typography, Colors } from '@/theme/designTokens';
+import GradientBackground from '@/components/GradientBackground';
+import AnimatedPage from '@/components/AnimatedPage';
 
 export default function OnboardingGroup() {
   const c = useThemeColors();
@@ -98,147 +101,230 @@ export default function OnboardingGroup() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: c.background, padding: 16 }}>
-      <Text
-        style={{
-          color: c.text,
-          fontSize: 24,
-          fontWeight: '800',
-          marginBottom: 12,
-        }}
-      >
-        Create or Join Group
-      </Text>
-      <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
-        <Pressable
-          onPress={() => setMode('create')}
-          style={{
-            flex: 1,
-            padding: 12,
-            borderRadius: 12,
-            backgroundColor: mode === 'create' ? c.primary : c.card,
-            alignItems: 'center',
-          }}
-        >
+    <GradientBackground>
+      <AnimatedPage variant="slide-left">
+        <View style={{ flex: 1, padding: Spacing.md }}>
           <Text
             style={{
-              color: mode === 'create' ? '#000' : c.text,
-              fontWeight: '700',
-            }}
-          >
-            Create
-          </Text>
-        </Pressable>
-        <Pressable
-          onPress={() => setMode('join')}
-          style={{
-            flex: 1,
-            padding: 12,
-            borderRadius: 12,
-            backgroundColor: mode === 'join' ? c.primary : c.card,
-            alignItems: 'center',
-          }}
-        >
-          <Text
-            style={{
-              color: mode === 'join' ? '#000' : c.text,
-              fontWeight: '700',
-            }}
-          >
-            Join
-          </Text>
-        </Pressable>
-      </View>
-      {mode === 'create' ? (
-        <View>
-          <TextInput
-            value={name}
-            onChangeText={setName}
-            placeholder="Group name"
-            placeholderTextColor={c.muted}
-            style={{
-              backgroundColor: c.card,
               color: c.text,
-              padding: 12,
-              borderRadius: 12,
-            }}
-          />
-          {error && <Text style={{ color: c.accent, marginTop: 8 }}>{error}</Text>}
-          <Pressable
-            onPress={createGroup}
-            disabled={loading || !name.trim()}
-            style={{
-              marginTop: 16,
-              backgroundColor: c.primary,
-              padding: 14,
-              borderRadius: 12,
-              alignItems: 'center',
+              fontSize: Typography.scale.heading1.fontSize,
+              lineHeight: Typography.scale.heading1.lineHeight,
+              fontFamily: Typography.fontFamily.body,
+              fontWeight: Typography.fontWeight.bold,
+              marginBottom: Spacing.md - 4,
             }}
           >
-            <Text style={{ color: '#000', fontWeight: '700' }}>
-              {loading ? 'Creating…' : 'Create group'}
-            </Text>
-          </Pressable>
-          <Pressable
-            onPress={() => router.replace('/(tabs)/home')}
-            disabled={loading}
-            style={{
-              marginTop: 12,
-              backgroundColor: '#0a039630',
-              padding: 14,
-              borderRadius: 12,
-              alignItems: 'center',
-            }}
-          >
-            <Text style={{ color: c.text, fontWeight: '700' }}>Skip for now</Text>
-          </Pressable>
+            Create or Join Group
+          </Text>
+          <Text style={{
+            color: c.muted,
+            fontSize: Typography.scale.body.fontSize,
+            lineHeight: Typography.scale.body.lineHeight,
+            fontFamily: Typography.fontFamily.body,
+            marginBottom: Spacing.md,
+          }}>
+            Connect with friends to make decisions together
+          </Text>
+          <View style={{ flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.md }}>
+            <Pressable
+              onPress={() => setMode('create')}
+              style={{
+                flex: 1,
+                padding: Spacing.md - 4,
+                borderRadius: BorderRadius.md,
+                backgroundColor: mode === 'create' ? c.primary : c.card,
+                alignItems: 'center',
+                borderWidth: 1,
+                borderColor: mode === 'create' ? 'transparent' : Colors.light.neutral[300] + '40',
+              }}
+            >
+              <Text
+                style={{
+                  color: mode === 'create' ? '#FFFFFF' : c.text,
+                  fontSize: Typography.scale.body.fontSize,
+                  fontFamily: Typography.fontFamily.body,
+                  fontWeight: Typography.fontWeight.semibold,
+                }}
+              >
+                Create
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setMode('join')}
+              style={{
+                flex: 1,
+                padding: Spacing.md - 4,
+                borderRadius: BorderRadius.md,
+                backgroundColor: mode === 'join' ? c.primary : c.card,
+                alignItems: 'center',
+                borderWidth: 1,
+                borderColor: mode === 'join' ? 'transparent' : Colors.light.neutral[300] + '40',
+              }}
+            >
+              <Text
+                style={{
+                  color: mode === 'join' ? '#FFFFFF' : c.text,
+                  fontSize: Typography.scale.body.fontSize,
+                  fontFamily: Typography.fontFamily.body,
+                  fontWeight: Typography.fontWeight.semibold,
+                }}
+              >
+                Join
+              </Text>
+            </Pressable>
+          </View>
+          {mode === 'create' ? (
+            <View>
+              <Text style={{
+                color: c.text,
+                fontSize: Typography.scale.bodyLarge.fontSize,
+                lineHeight: Typography.scale.bodyLarge.lineHeight,
+                fontFamily: Typography.fontFamily.body,
+                fontWeight: Typography.fontWeight.semibold,
+                marginBottom: Spacing.sm,
+              }}>
+                Group name
+              </Text>
+              <TextInput
+                value={name}
+                onChangeText={setName}
+                placeholder="e.g., Weekend Squad"
+                placeholderTextColor={c.muted}
+                style={{
+                  backgroundColor: c.card,
+                  color: c.text,
+                  padding: Spacing.md - 4,
+                  borderRadius: BorderRadius.md,
+                  fontSize: Typography.scale.body.fontSize,
+                  fontFamily: Typography.fontFamily.body,
+                  marginBottom: Spacing.sm,
+                }}
+              />
+              {error && <Text style={{ 
+                color: Colors.light.accent.warning, 
+                fontSize: Typography.scale.body.fontSize,
+                fontFamily: Typography.fontFamily.body,
+                marginTop: Spacing.sm,
+                marginBottom: Spacing.sm,
+              }}>
+                {error}
+              </Text>}
+              <Pressable
+                onPress={createGroup}
+                disabled={loading || !name.trim()}
+                style={{
+                  marginTop: Spacing.md,
+                  backgroundColor: (loading || !name.trim()) ? c.muted : c.primary,
+                  padding: Spacing.md - 2,
+                  borderRadius: BorderRadius.md,
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={{ 
+                  color: '#FFFFFF', 
+                  fontSize: Typography.scale.bodyLarge.fontSize,
+                  fontFamily: Typography.fontFamily.body,
+                  fontWeight: Typography.fontWeight.semibold,
+                }}>
+                  {loading ? 'Creating…' : 'Create group'}
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => router.replace('/(tabs)/home')}
+                disabled={loading}
+                style={{
+                  marginTop: Spacing.md - 4,
+                  padding: Spacing.md - 2,
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={{ 
+                  color: c.muted, 
+                  fontSize: Typography.scale.body.fontSize,
+                  fontFamily: Typography.fontFamily.body,
+                }}>
+                  Skip for now
+                </Text>
+              </Pressable>
+            </View>
+          ) : (
+            <View>
+              <Text style={{
+                color: c.text,
+                fontSize: Typography.scale.bodyLarge.fontSize,
+                lineHeight: Typography.scale.bodyLarge.lineHeight,
+                fontFamily: Typography.fontFamily.body,
+                fontWeight: Typography.fontWeight.semibold,
+                marginBottom: Spacing.sm,
+              }}>
+                Invite code or ID
+              </Text>
+              <TextInput
+                value={code}
+                onChangeText={setCode}
+                autoCapitalize="characters"
+                placeholder="Enter code from friend"
+                placeholderTextColor={c.muted}
+                style={{
+                  backgroundColor: c.card,
+                  color: c.text,
+                  padding: Spacing.md - 4,
+                  borderRadius: BorderRadius.md,
+                  fontSize: Typography.scale.body.fontSize,
+                  fontFamily: Typography.fontFamily.body,
+                  marginBottom: Spacing.sm,
+                }}
+              />
+              {error && <Text style={{ 
+                color: Colors.light.accent.warning, 
+                fontSize: Typography.scale.body.fontSize,
+                fontFamily: Typography.fontFamily.body,
+                marginTop: Spacing.sm,
+                marginBottom: Spacing.sm,
+              }}>
+                {error}
+              </Text>}
+              <Pressable
+                onPress={joinGroup}
+                disabled={loading || !code.trim()}
+                style={{
+                  marginTop: Spacing.md,
+                  backgroundColor: (loading || !code.trim()) ? c.muted : c.primary,
+                  padding: Spacing.md - 2,
+                  borderRadius: BorderRadius.md,
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={{ 
+                  color: '#FFFFFF', 
+                  fontSize: Typography.scale.bodyLarge.fontSize,
+                  fontFamily: Typography.fontFamily.body,
+                  fontWeight: Typography.fontWeight.semibold,
+                }}>
+                  {loading ? 'Joining…' : 'Join group'}
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => router.replace('/(tabs)/home')}
+                disabled={loading}
+                style={{
+                  marginTop: Spacing.md - 4,
+                  padding: Spacing.md - 2,
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={{ 
+                  color: c.muted, 
+                  fontSize: Typography.scale.body.fontSize,
+                  fontFamily: Typography.fontFamily.body,
+                }}>
+                  Skip for now
+                </Text>
+              </Pressable>
+            </View>
+          )}
         </View>
-      ) : (
-        <View>
-          <TextInput
-            value={code}
-            onChangeText={setCode}
-            autoCapitalize="characters"
-            placeholder="Invite code or ID"
-            placeholderTextColor={c.muted}
-            style={{
-              backgroundColor: c.card,
-              color: c.text,
-              padding: 12,
-              borderRadius: 12,
-            }}
-          />
-          {error && <Text style={{ color: c.accent, marginTop: 8 }}>{error}</Text>}
-          <Pressable
-            onPress={joinGroup}
-            disabled={loading || !code.trim()}
-            style={{
-              marginTop: 16,
-              backgroundColor: c.primary,
-              padding: 14,
-              borderRadius: 12,
-              alignItems: 'center',
-            }}
-          >
-            <Text style={{ color: '#000', fontWeight: '700' }}>
-              {loading ? 'Joining…' : 'Join group'}
-            </Text>
-          </Pressable>
-          <Pressable
-            onPress={() => router.replace('/(tabs)/home')}
-            disabled={loading}
-            style={{
-              marginTop: 12,
-              backgroundColor: '#00000030',
-              padding: 14,
-              borderRadius: 12,
-              alignItems: 'center',
-            }}
-          >
-            <Text style={{ color: c.text, fontWeight: '700' }}>Skip for now</Text>
-          </Pressable>
-        </View>
-      )}
-    </View>
+      </AnimatedPage>
+    </GradientBackground>
   );
 }

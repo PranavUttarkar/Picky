@@ -18,10 +18,23 @@ export default function Html({ children }: { children: React.ReactNode }) {
               html, body, #root { height: 100%; margin: 0; padding: 0; }
               /* React Navigation sometimes nests an extra div wrapper; make sure it fills */
               body > #root > div { height: 100%; }
-              body { overflow-x: hidden; -webkit-text-size-adjust: 100%; overscroll-behavior-y: none; }
+              body { 
+                overflow-x: hidden; 
+                -webkit-text-size-adjust: 100%; 
+                overscroll-behavior-y: none;
+                font-family: 'Inter_400Regular', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+              }
               *, *::before, *::after { box-sizing: border-box; }
               img, video, canvas, svg { max-width: 100%; height: auto; }
-              input, textarea, select, button { font-size: 16px; }
+              input, textarea, select { 
+                font-size: 16px; 
+                font-family: 'Inter_400Regular', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+              }
+              /* Don't apply font-family to buttons to avoid breaking icons inside them */
+              /* Ensure text elements use sans-serif fonts - but don't use !important to avoid breaking icons */
+              p, h1, h2, h3, h4, h5, h6, label {
+                font-family: 'Inter_400Regular', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+              }
             `,
           }}
         />

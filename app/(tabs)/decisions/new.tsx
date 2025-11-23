@@ -11,6 +11,7 @@ import { getMyGroups, createGroup, regenerateInviteCode } from '@/services/group
 import PollDeadlinePicker from '@/components/PollDeadlinePicker';
 import { createPollWithOptions } from '@/services/polls';
 import { triggerGroupDecisionNotification } from '@/utils/notifications';
+import { Spacing, BorderRadius, Typography } from '@/theme/designTokens';
 
 export default function NewDecision() {
   const c = useThemeColors();
@@ -126,16 +127,16 @@ export default function NewDecision() {
   return (
     <GradientBackground variant="dim">
       <AnimatedPage variant="slide-right" style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={{ padding: 16 }}>
+        <ScrollView contentContainerStyle={{ padding: Spacing.md }}>
           {/* progress dots */}
-          <View style={{ flexDirection: 'row', gap: 6, marginTop: 8 }}>
+          <View style={{ flexDirection: 'row', gap: 6, marginTop: Spacing.sm }}>
             {[0, 1, 2, 3].map((i) => (
               <View
                 key={i}
                 style={{
-                  width: 8,
-                  height: 8,
-                  borderRadius: 4,
+                  width: Spacing.sm,
+                  height: Spacing.sm,
+                  borderRadius: Spacing.xs,
                   backgroundColor: i <= step ? c.primary : c.card,
                 }}
               />
@@ -143,11 +144,11 @@ export default function NewDecision() {
           </View>
 
           {step === 0 ? (
-            <View style={{ backgroundColor: c.card, padding: 16, borderRadius: 14, marginTop: 16 }}>
-              <Text style={{ color: c.text, fontWeight: '800', fontSize: 16 }}>
+            <View style={{ backgroundColor: c.card, padding: Spacing.md, borderRadius: BorderRadius.md + 2, marginTop: Spacing.md }}>
+              <Text style={{ color: c.text, fontWeight: Typography.fontWeight.bold, fontSize: Typography.scale.bodyLarge.fontSize, lineHeight: Typography.scale.bodyLarge.lineHeight, fontFamily: Typography.fontFamily.body }}>
                 What are you deciding on?
               </Text>
-              <View style={{ gap: 12, marginTop: 12 }}>
+              <View style={{ gap: Spacing.md - 4, marginTop: Spacing.md - 4 }}>
                 {[
                   {
                     key: 'events' as const,
@@ -187,26 +188,26 @@ export default function NewDecision() {
                   </View>
                 ))}
               </View>
-              <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 12 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: Spacing.md - 4 }}>
                 <Pressable
                   onPress={() => setStep(1)}
                   disabled={!canNext}
                   style={{
                     backgroundColor: canNext ? c.primary : c.background,
-                    paddingHorizontal: 14,
-                    paddingVertical: 10,
-                    borderRadius: 10,
+                    paddingHorizontal: Spacing.md - 2,
+                    paddingVertical: Spacing.sm + 2,
+                    borderRadius: BorderRadius.sm + 2,
                   }}
                 >
-                  <Text style={{ color: canNext ? '#000' : c.text, fontWeight: '800' }}>Next</Text>
+                  <Text style={{ color: canNext ? '#FFFFFF' : c.text, fontWeight: Typography.fontWeight.bold, fontSize: Typography.scale.body.fontSize, fontFamily: Typography.fontFamily.body }}>Next</Text>
                 </Pressable>
               </View>
             </View>
           ) : null}
 
           {step === 1 ? (
-            <View style={{ backgroundColor: c.card, padding: 16, borderRadius: 14, marginTop: 16 }}>
-              <Text style={{ color: c.text, fontWeight: '800', fontSize: 16 }}>
+            <View style={{ backgroundColor: c.card, padding: Spacing.md, borderRadius: BorderRadius.md + 2, marginTop: Spacing.md }}>
+              <Text style={{ color: c.text, fontWeight: Typography.fontWeight.bold, fontSize: Typography.scale.bodyLarge.fontSize, lineHeight: Typography.scale.bodyLarge.lineHeight, fontFamily: Typography.fontFamily.body }}>
                 {decisionType === 'food'
                   ? 'What food are you deciding on?'
                   : decisionType === 'activities'
@@ -229,23 +230,25 @@ export default function NewDecision() {
                 value={topic}
                 onChangeText={setTopic}
                 style={{
-                  marginTop: 12,
-                  backgroundColor: '#00000020',
+                  marginTop: Spacing.md - 4,
+                  backgroundColor: c.background,
                   color: c.text,
-                  borderRadius: 10,
-                  paddingHorizontal: 10,
-                  paddingVertical: Platform.OS === 'web' ? 10 : 8,
+                  borderRadius: BorderRadius.sm + 2,
+                  paddingHorizontal: Spacing.sm + 2,
+                  paddingVertical: Platform.OS === 'web' ? Spacing.sm + 2 : Spacing.sm,
+                  fontSize: Typography.scale.body.fontSize,
+                  fontFamily: Typography.fontFamily.body,
                 }}
               />
               <View
-                style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 12 }}
+                style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: Spacing.md - 4 }}
               >
                 <Pressable
                   onPress={() => setStep(0)}
                   style={{
                     backgroundColor: c.background,
-                    paddingHorizontal: 14,
-                    paddingVertical: 10,
+                    paddingHorizontal: Spacing.md - 2,
+                    paddingVertical: Spacing.sm + 2,
                     borderRadius: 10,
                   }}
                 >

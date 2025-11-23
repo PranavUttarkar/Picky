@@ -2,6 +2,7 @@ import React from 'react';
 import { View, ViewStyle } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@/theme/ThemeProvider';
+import { Gradients } from '@/theme/designTokens';
 
 type Props = {
   children?: React.ReactNode;
@@ -18,20 +19,11 @@ export default function GradientBackground({
 }: Props) {
   const { scheme } = useTheme();
 
-  const light =
-    variant === 'app'
-      ? (['#e9fdf5', '#f9fafb'] as const)
-      : variant === 'dim'
-      ? (['#f8fafc', '#eef2ff'] as const)
-      : (['#f9fafb', '#eef2ff'] as const);
-  const dark =
-    variant === 'app'
-      ? (['#0b1220', '#111827'] as const)
-      : variant === 'dim'
-      ? (['#0a0f1c', '#0e172a'] as const)
-      : (['#0b1220', '#0e172a'] as const);
-
-  const colors = (scheme === 'dark' ? dark : light) as readonly [string, string];
+  // Use new gradient system from design tokens
+  const colors = (scheme === 'dark' ? Gradients.background.dark : Gradients.background.light) as readonly [
+    string,
+    string,
+  ];
 
   return (
     <LinearGradient

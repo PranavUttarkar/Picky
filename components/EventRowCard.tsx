@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import type { Event } from '@/types/models';
 import { shareEvent } from '@/utils/share';
+import { Typography } from '@/theme/designTokens';
 
 export interface EventRowCardProps {
   event: Event;
@@ -80,18 +81,34 @@ export const EventRowCard: React.FC<EventRowCardProps> = memo(
                     borderRadius: 12,
                   }}
                 >
-                  <Text style={{ color: c.muted, fontSize: 11 }}>No Image</Text>
+                  <Text style={{ 
+                    color: c.muted, 
+                    fontSize: Typography.scale.caption.fontSize,
+                    fontFamily: Typography.fontFamily.body,
+                  }}>
+                    No Image
+                  </Text>
                 </View>
               )}
             </View>
             <View style={{ flex: 1, minHeight: 96 }}>
               {/* Title only in header to free space */}
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <Text style={{ color: c.text, fontWeight: '700', fontSize: 13 }} numberOfLines={1}>
+                <Text style={{ 
+                  color: c.text, 
+                  fontWeight: Typography.fontWeight.semibold,
+                  fontSize: 13,
+                  fontFamily: Typography.fontFamily.bodySemibold,
+                }} numberOfLines={1}>
                   {event.title}
                 </Text>
               </View>
-              <Text style={{ color: c.muted, fontSize: 12, marginTop: 2 }} numberOfLines={1}>
+              <Text style={{ 
+                color: c.muted, 
+                fontSize: Typography.scale.bodySmall.fontSize,
+                fontFamily: Typography.fontFamily.body,
+                marginTop: 2,
+              }} numberOfLines={1}>
                 {(() => {
                   const start = dayjs(event.date_time);
                   const end = (event as any).end_time ? dayjs((event as any).end_time) : null;
@@ -144,7 +161,12 @@ export const EventRowCard: React.FC<EventRowCardProps> = memo(
                         justifyContent: 'center',
                       }}
                     >
-                      <Text style={{ color: c.text, fontSize: 11, fontWeight: '800' }}>
+                      <Text style={{ 
+                        color: c.text, 
+                        fontSize: Typography.scale.caption.fontSize,
+                        fontFamily: Typography.fontFamily.bodyBold,
+                        fontWeight: Typography.fontWeight.bold,
+                      }}>
                         {/*
                           If admin icons (edit/delete) are shown, display compact numeric percent like "86%".
                           Otherwise keep the friendly label "86% Match" and an optional exclamation.

@@ -127,6 +127,7 @@ export interface FriendSearchResult {
   account_type: 'personal' | 'organization';
   is_friend: boolean;
   is_blocked: boolean;
+  friendship_status?: 'accepted' | 'pending_incoming' | 'pending_outgoing' | null;
 }
 
 export interface FriendActivityResult {

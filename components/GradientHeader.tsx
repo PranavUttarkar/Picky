@@ -12,6 +12,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { useThemeColors } from '@/theme/ThemeProvider';
 import * as Clipboard from 'expo-clipboard';
+import { Typography } from '@/theme/designTokens';
 
 type Props = {
   title: string;
@@ -118,10 +119,22 @@ export default function GradientHeader({
                 accessibilityRole="button"
                 accessibilityLabel={backLabel}
               >
-                <Text style={{ color: c.text, fontWeight: '700' }}>{'‹'}</Text>
+                <Text style={{ 
+                  color: c.text, 
+                  fontWeight: Typography.fontWeight.bold,
+                  fontSize: Typography.scale.body.fontSize,
+                  fontFamily: Typography.fontFamily.bodyBold,
+                }}>
+                  {'‹'}
+                </Text>
               </Pressable>
             ) : null}
-            <Text style={[{ color: c.text, fontWeight: '800', fontSize: 20 }, titleStyle]}>
+            <Text style={[{ 
+              color: c.text, 
+              fontWeight: Typography.fontWeight.bold,
+              fontSize: Typography.scale.heading2.fontSize,
+              fontFamily: Typography.fontFamily.bodyBold,
+            }, titleStyle]}>
               {title}
             </Text>
           </View>
@@ -130,8 +143,9 @@ export default function GradientHeader({
               <Text
                 style={{
                   color: c.muted,
-                  fontSize: 12,
-                  fontWeight: '700',
+                  fontSize: Typography.scale.bodySmall.fontSize,
+                  fontFamily: Typography.fontFamily.bodySemibold,
+                  fontWeight: Typography.fontWeight.semibold,
                   textTransform: 'uppercase',
                   letterSpacing: 0.5,
                 }}
@@ -151,7 +165,14 @@ export default function GradientHeader({
                   borderRadius: 8,
                 }}
               >
-                <Text style={{ color: c.text, fontWeight: '700', fontSize: 12 }}>Share</Text>
+                <Text style={{ 
+                  color: c.text, 
+                  fontWeight: Typography.fontWeight.bold,
+                  fontSize: Typography.scale.bodySmall.fontSize,
+                  fontFamily: Typography.fontFamily.bodyBold,
+                }}>
+                  Share
+                </Text>
               </Pressable>
             ) : null}
           </View>
@@ -183,11 +204,25 @@ export default function GradientHeader({
               ],
             }}
           >
-            <Text style={{ color: c.text, fontWeight: '700', fontSize: 12 }}>Link copied</Text>
+            <Text style={{ 
+              color: c.text, 
+              fontWeight: Typography.fontWeight.bold,
+              fontSize: Typography.scale.bodySmall.fontSize,
+              fontFamily: Typography.fontFamily.bodyBold,
+            }}>
+              Link copied
+            </Text>
           </Animated.View>
         ) : null}
         {subtitle ? (
-          <Text style={[{ color: c.muted, marginTop: 4 }, subtitleStyle]}>{subtitle}</Text>
+          <Text style={[{ 
+            color: c.muted, 
+            fontSize: Typography.scale.body.fontSize,
+            fontFamily: Typography.fontFamily.body,
+            marginTop: 4,
+          }, subtitleStyle]}>
+            {subtitle}
+          </Text>
         ) : null}
       </LinearGradient>
     </View>

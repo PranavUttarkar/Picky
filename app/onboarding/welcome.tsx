@@ -4,6 +4,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { supabase } from '@/services/supabase';
 import { ensureProfile } from '@/services/profile';
 import { useThemeColors } from '@/theme/ThemeProvider';
+import { Spacing, BorderRadius, Typography, Colors } from '@/theme/designTokens';
 
 type Mode = 'signIn' | 'signUp';
 
@@ -136,31 +137,41 @@ export default function Welcome() {
         backgroundColor: c.background,
         alignItems: 'center',
         justifyContent: 'center',
-        padding: 24,
+        padding: Spacing.lg,
       }}
     >
       {/* Back button to return to Home */}
       <Pressable
         onPress={() => router.replace('/home')}
-        style={{ position: 'absolute', top: 48, left: 24, padding: 8 }}
+        style={{ position: 'absolute', top: Spacing['2xl'], left: Spacing.lg, padding: Spacing.sm }}
         accessibilityRole="button"
         accessibilityLabel="Go back to Home"
       >
-        <Text style={{ color: c.primary, fontWeight: '700' }}>Back</Text>
+        <Text style={{ color: c.primary, fontWeight: Typography.fontWeight.bold, fontSize: Typography.scale.body.fontSize, fontFamily: Typography.fontFamily.body }}>Back</Text>
       </Pressable>
       <Text
         style={{
           color: c.text,
-          fontSize: 36,
-          fontWeight: '800',
-          marginBottom: 12,
-          fontFamily: 'Pacifico',
+          fontSize: 42,
+          lineHeight: 50,
+          fontWeight: Typography.fontWeight.regular,
+          marginBottom: Spacing.md,
+          // @ts-ignore - font loaded globally
+          fontFamily: Typography.fontFamily.brand,
         }}
       >
-        Picky
+        Picky!
       </Text>
-      <Text style={{ color: c.muted, fontSize: 16, marginBottom: 24 }}>
-        Discover events. Decide together.
+      <Text style={{ 
+        color: c.muted, 
+        fontSize: Typography.scale.heading3.fontSize, 
+        lineHeight: Typography.scale.heading3.lineHeight, 
+        fontFamily: Typography.fontFamily.body,
+        fontWeight: Typography.fontWeight.medium,
+        marginBottom: Spacing['2xl'],
+        textAlign: 'center',
+      }}>
+        Simple decisions. Stronger groups. More doing.
       </Text>
 
       {/* Simple actions: Create account / Sign in */}
@@ -206,11 +217,13 @@ export default function Welcome() {
         keyboardType="email-address"
         style={{
           width: '100%',
-          padding: 14,
+          padding: Spacing.md - 2,
           backgroundColor: c.card,
           color: c.text,
-          borderRadius: 12,
-          marginBottom: 12,
+          borderRadius: BorderRadius.md,
+          marginBottom: Spacing.md - 4,
+          fontSize: Typography.scale.body.fontSize,
+          fontFamily: Typography.fontFamily.body,
         }}
       />
       <TextInput
@@ -221,11 +234,13 @@ export default function Welcome() {
         placeholderTextColor={c.muted}
         style={{
           width: '100%',
-          padding: 14,
+          padding: Spacing.md - 2,
           backgroundColor: c.card,
           color: c.text,
-          borderRadius: 12,
-          marginBottom: 12,
+          borderRadius: BorderRadius.md,
+          marginBottom: Spacing.md - 4,
+          fontSize: Typography.scale.body.fontSize,
+          fontFamily: Typography.fontFamily.body,
         }}
       />
       {mode === 'signUp' && !isAuthed && (
@@ -237,17 +252,19 @@ export default function Welcome() {
           placeholderTextColor={c.muted}
           style={{
             width: '100%',
-            padding: 14,
+            padding: Spacing.md - 2,
             backgroundColor: c.card,
             color: c.text,
-            borderRadius: 12,
-            marginBottom: 12,
+            borderRadius: BorderRadius.md,
+            marginBottom: Spacing.md - 4,
+            fontSize: Typography.scale.body.fontSize,
+            fontFamily: Typography.fontFamily.body,
           }}
         />
       )}
 
-      {error && <Text style={{ color: c.accent, marginBottom: 8 }}>{error}</Text>}
-      {info && <Text style={{ color: c.muted, marginBottom: 8 }}>{info}</Text>}
+      {error && <Text style={{ color: Colors.light.accent.warning, marginBottom: Spacing.sm, fontSize: Typography.scale.body.fontSize, fontFamily: Typography.fontFamily.body }}>{error}</Text>}
+      {info && <Text style={{ color: c.muted, marginBottom: Spacing.sm, fontSize: Typography.scale.body.fontSize, fontFamily: Typography.fontFamily.body }}>{info}</Text>}
 
       <Pressable
         onPress={onSubmit}
@@ -255,8 +272,8 @@ export default function Welcome() {
         style={{
           width: '100%',
           backgroundColor: c.primary,
-          padding: 14,
-          borderRadius: 12,
+          padding: Spacing.md - 2,
+          borderRadius: BorderRadius.md,
           alignItems: 'center',
         }}
       >
@@ -269,26 +286,26 @@ export default function Welcome() {
             if (mode === 'signIn') return 'Sign In';
             return isAuthed ? 'Sign In' : 'Create account';
           })();
-          return <Text style={{ color: '#000', fontWeight: '700' }}>{label}</Text>;
+          return <Text style={{ color: '#FFFFFF', fontWeight: Typography.fontWeight.bold, fontSize: Typography.scale.body.fontSize, fontFamily: Typography.fontFamily.body }}>{label}</Text>;
         })()}
       </Pressable>
 
       {/* Helper link to switch if needed; hide Create link for signed-in users */}
       {mode === 'signIn' ? (
         !isAuthed ? (
-          <Pressable onPress={startSignUp} style={{ marginTop: 16 }}>
-            <Text style={{ textDecorationLine: 'underline', color: c.muted }}>
+          <Pressable onPress={startSignUp} style={{ marginTop: Spacing.md }}>
+            <Text style={{ textDecorationLine: 'underline', color: c.muted, fontSize: Typography.scale.body.fontSize, fontFamily: Typography.fontFamily.body }}>
               {"Don't have an account? Create one"}
             </Text>
           </Pressable>
         ) : (
-          <Pressable onPress={() => router.replace('/(tabs)/home')} style={{ marginTop: 16 }}>
-            <Text style={{ color: c.muted }}>You are signed in. Continue to Home</Text>
+          <Pressable onPress={() => router.replace('/(tabs)/home')} style={{ marginTop: Spacing.md }}>
+            <Text style={{ color: c.muted, fontSize: Typography.scale.body.fontSize, fontFamily: Typography.fontFamily.body }}>You are signed in. Continue to Home</Text>
           </Pressable>
         )
       ) : (
-        <Pressable onPress={startSignIn} style={{ marginTop: 16 }}>
-          <Text style={{ textDecorationLine: 'underline', color: c.muted }}>
+        <Pressable onPress={startSignIn} style={{ marginTop: Spacing.md }}>
+          <Text style={{ textDecorationLine: 'underline', color: c.muted, fontSize: Typography.scale.body.fontSize, fontFamily: Typography.fontFamily.body }}>
             Already have an account? Sign in
           </Text>
         </Pressable>

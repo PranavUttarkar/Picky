@@ -11,39 +11,65 @@ import {
   Easing,
   KeyboardAvoidingView,
   Platform,
-  ScrollView,
   useWindowDimensions,
+  Share,
 } from 'react-native';
 import { useThemeColors } from '@/theme/ThemeProvider';
 import GradientBackground from '@/components/GradientBackground';
 import AnimatedPage from '@/components/AnimatedPage';
 import { GroupsBenefitsEmptyState } from '@/components/GroupsBenefitsEmptyState';
 import { supabase } from '@/services/supabase';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { getMyGroups, createGroup, joinGroupByCode } from '@/services/groups';
-import { getUserFriends, getPendingFriendRequests, respondToFriendRequest } from '@/services/friends';
+import {
+  getUserFriends,
+  getPendingFriendRequests,
+  respondToFriendRequest,
+  removeFriend,
+  type PendingFriendRequest,
+} from '@/services/friends';
 import { getFollowing, discoverOrganizations } from '@/services/following';
 import { useGroupDecisionNotification } from '@/utils/GroupDecisionNotificationContext';
+import { useFriendNotification } from '@/utils/FriendNotificationContext';
 import { Ionicons } from '@expo/vector-icons';
 import FriendPicker from '@/components/FriendPicker';
 import Avatar from '@/components/Avatar';
 import type { UserProfile, Group } from '@/types/models';
+import { blockUser } from '@/services/blocking';
+import * as Clipboard from 'expo-clipboard';
+import { Typography, Spacing, BorderRadius } from '@/theme/designTokens';
 
 type TabType = 'friends' | 'following' | 'groups';
+const FRIEND_TABS: TabType[] = ['friends', 'following', 'groups'];
+const FRIEND_BADGE_COLOR = '#EF4444';
+
+const parseTabParam = (value: string | string[] | undefined): TabType | null => {
+  const normalized = Array.isArray(value) ? value[0] : value;
+  if (normalized === 'friends' || normalized === 'following' || normalized === 'groups') {
+    return normalized;
+  }
+  return null;
+};
 
 export default function Groups() {
   const c = useThemeColors();
   const { width } = useWindowDimensions();
   const isWide = width >= 768;
+  const params = useLocalSearchParams<{ tab?: string }>();
   const { hasNewGroupDecisions } = useGroupDecisionNotification();
+  const { hasNewFriends, recordFriendSnapshot, markFriendsViewed } = useFriendNotification();
   
   // Tab state
-  // Default to groups tab instead of friends
-  const [activeTab, setActiveTab] = useState<TabType>('groups');
+  // Default to groups tab unless deep link specifies otherwise
+  const [activeTab, setActiveTab] = useState<TabType>(() => parseTabParam(params.tab) ?? 'groups');
   
   // Friends state
   const [friends, setFriends] = useState<UserProfile[]>([]);
-  const [friendRequests, setFriendRequests] = useState<any[]>([]);
+  const [friendRequests, setFriendRequests] = useState<PendingFriendRequest[]>([]);
+  const [friendsLoaded, setFriendsLoaded] = useState(false);
+  const [friendActionTarget, setFriendActionTarget] = useState<UserProfile | null>(null);
+  const [showFriendActions, setShowFriendActions] = useState(false);
+  const [showGroupInviteModal, setShowGroupInviteModal] = useState(false);
   
   // Following state
   const [following, setFollowing] = useState<UserProfile[]>([]);
@@ -68,14 +94,16 @@ export default function Groups() {
     try {
       const [friendsData, requestsData] = await Promise.all([
         getUserFriends(),
-        getPendingFriendRequests()
+        getPendingFriendRequests(),
       ]);
       setFriends(friendsData);
       setFriendRequests(requestsData);
+      setFriendsLoaded(true);
+      await recordFriendSnapshot(friendsData.length, requestsData.length);
     } catch (error) {
       console.error('Error loading friends:', error);
     }
-  }, []);
+  }, [recordFriendSnapshot]);
 
   const loadFollowing = useCallback(async () => {
     try {
@@ -94,10 +122,25 @@ export default function Groups() {
     try {
       const data = await getMyGroups();
       setGroups(data);
+      return data;
     } catch (error) {
       console.error('Error loading groups:', error);
+      return [];
     }
   }, []);
+
+  // Keep tab in sync with ?tab= query param
+  useEffect(() => {
+    const resolved = parseTabParam(params.tab);
+    if (resolved && resolved !== activeTab) {
+      setActiveTab(resolved);
+    }
+  }, [params.tab, activeTab]);
+
+  // Load friends once on mount so badge state stays fresh
+  useEffect(() => {
+    loadFriends();
+  }, [loadFriends]);
 
   // Load data based on active tab
   useEffect(() => {
@@ -124,6 +167,13 @@ export default function Groups() {
     checkAuth();
   }, [activeTab, loadFriends, loadFollowing, loadGroups]);
 
+  // Clear friend notification when user views the friends tab
+  useEffect(() => {
+    if (friendsLoaded && activeTab === 'friends') {
+      markFriendsViewed(friends.length).catch(() => {});
+    }
+  }, [friendsLoaded, activeTab, friends.length, markFriendsViewed]);
+
   // Handle friend request response
   const handleFriendRequest = async (requestId: number, response: 'accepted' | 'declined') => {
     try {
@@ -133,6 +183,136 @@ export default function Groups() {
     } catch (error) {
       Alert.alert('Error', 'Failed to respond to friend request');
     }
+  };
+
+  const openFriendActions = (friend: UserProfile) => {
+    setFriendActionTarget(friend);
+    setShowFriendActions(true);
+  };
+
+  const closeFriendActions = (resetTarget: boolean = false) => {
+    setShowFriendActions(false);
+    if (resetTarget) {
+      setFriendActionTarget(null);
+    }
+  };
+
+  const ensureGroupsAvailable = useCallback(async (): Promise<Group[]> => {
+    if (groups.length > 0) return groups;
+    const latest = await loadGroups();
+    return latest ?? [];
+  }, [groups, loadGroups]);
+
+  const handleStartGroupInviteFlow = useCallback(async () => {
+    if (!friendActionTarget) return;
+    closeFriendActions();
+    const availableGroups = await ensureGroupsAvailable();
+    if (!availableGroups || availableGroups.length === 0) {
+      Alert.alert(
+        'No groups yet',
+        'Create a group first, then you can share its invite code with friends.',
+      );
+      return;
+    }
+    setShowGroupInviteModal(true);
+  }, [friendActionTarget, ensureGroupsAvailable]);
+
+  const handleSelectGroupForFriend = useCallback(
+    async (group: Group) => {
+      if (!friendActionTarget) return;
+      if (!group.invite_code) {
+        Alert.alert(
+          'Missing invite code',
+          'This group does not have an invite code yet. Regenerate one from the group details screen.',
+        );
+        return;
+      }
+      const friendName =
+        friendActionTarget.display_name || friendActionTarget.username || 'your friend';
+      const message = `Hey ${friendName}! Join my "${group.name}" group on Picky with invite code ${group.invite_code}.`;
+      try {
+        await Share.share({ message });
+      } catch (error) {
+        try {
+          await Clipboard.setStringAsync(message);
+          Alert.alert('Invite copied', 'We copied the invite text to your clipboard.');
+        } catch {
+          Alert.alert('Error', 'Unable to share the invite right now.');
+        }
+      } finally {
+        setShowGroupInviteModal(false);
+        setFriendActionTarget(null);
+      }
+    },
+    [friendActionTarget],
+  );
+
+  const handleStartNewGroupWithFriend = () => {
+    if (!friendActionTarget) return;
+    setSelectedFriends([friendActionTarget]);
+    setShowCreate(true);
+    closeFriendActions(true);
+  };
+
+  const confirmRemoveFriend = () => {
+    if (!friendActionTarget) return;
+    const friendName = friendActionTarget.display_name || friendActionTarget.username || 'friend';
+    Alert.alert(
+      'Remove Friend',
+      `Are you sure you want to remove ${friendName}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await removeFriend(friendActionTarget.id);
+              await loadFriends();
+              Alert.alert('Removed', `${friendName} has been removed from your friends.`);
+            } catch (error: any) {
+              Alert.alert('Error', error?.message || 'Failed to remove friend.');
+            } finally {
+              setFriendActionTarget(null);
+            }
+          },
+        },
+      ],
+      { cancelable: true },
+    );
+    closeFriendActions();
+  };
+
+  const confirmBlockFriend = () => {
+    if (!friendActionTarget || !friendActionTarget.username) {
+      Alert.alert('Error', 'Unable to block this user right now.');
+      return;
+    }
+    const friendName = friendActionTarget.display_name || friendActionTarget.username;
+    Alert.alert(
+      'Block User',
+      `Blocking ${friendName} will remove your friendship and hide future activity. Continue?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Block',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await blockUser(friendActionTarget.username!);
+              await loadFriends();
+              Alert.alert('Blocked', `${friendName} will no longer be able to interact with you.`);
+            } catch (error: any) {
+              Alert.alert('Error', error?.message || 'Failed to block user.');
+            } finally {
+              setFriendActionTarget(null);
+            }
+          },
+        },
+      ],
+      { cancelable: true },
+    );
+    closeFriendActions();
   };
 
   // Group creation functions (from original groups.tsx)
@@ -193,7 +373,9 @@ export default function Groups() {
       marginHorizontal: 16,
       marginBottom: 16,
     }}>
-      {(['friends', 'following', 'groups'] as TabType[]).map((tab) => (
+      {FRIEND_TABS.map((tab) => {
+        const showBadge = tab === 'friends' && hasNewFriends;
+        return (
         <Pressable
           key={tab}
           onPress={() => setActiveTab(tab)}
@@ -206,16 +388,29 @@ export default function Groups() {
             alignItems: 'center',
           }}
         >
-          <Text style={{
-            color: activeTab === tab ? 'white' : c.text,
-            fontWeight: activeTab === tab ? '600' : '400',
-            fontSize: 16,
-            textTransform: 'capitalize',
-          }}>
-            {tab}
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Text style={{
+              color: activeTab === tab ? 'white' : c.text,
+              fontWeight: activeTab === tab ? '600' : '400',
+              fontSize: 16,
+              textTransform: 'capitalize',
+            }}>
+              {tab}
+            </Text>
+            {showBadge && (
+              <View
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: 4,
+                  backgroundColor: FRIEND_BADGE_COLOR,
+                }}
+              />
+            )}
+          </View>
         </Pressable>
-      ))}
+      );
+      })}
     </View>
   );
 
@@ -239,7 +434,12 @@ export default function Groups() {
         }}
       >
         <Ionicons name="person-add" size={20} color="white" />
-        <Text style={{ color: 'white', fontWeight: '600', fontSize: 16 }}>
+        <Text style={{ 
+          color: 'white', 
+          fontWeight: Typography.fontWeight.semibold,
+          fontSize: Typography.scale.bodyLarge.fontSize,
+          fontFamily: Typography.fontFamily.bodySemibold,
+        }}>
           Add Friends
         </Text>
       </Pressable>
@@ -248,8 +448,10 @@ export default function Groups() {
       {friendRequests.length > 0 && (
         <View style={{ marginBottom: 20 }}>
           <Text style={{
-            fontSize: 18,
-            fontWeight: '600',
+            fontSize: Typography.scale.heading3.fontSize,
+            lineHeight: Typography.scale.heading3.lineHeight,
+            fontFamily: Typography.fontFamily.bodySemibold,
+            fontWeight: Typography.fontWeight.semibold,
             color: c.text,
             marginHorizontal: 16,
             marginBottom: 12,
@@ -273,10 +475,19 @@ export default function Groups() {
                   size={40}
                 />
                 <View style={{ marginLeft: 12, flex: 1 }}>
-                  <Text style={{ color: c.text, fontWeight: '600', fontSize: 16 }}>
+                  <Text style={{ 
+                    color: c.text, 
+                    fontWeight: Typography.fontWeight.semibold,
+                    fontSize: Typography.scale.bodyLarge.fontSize,
+                    fontFamily: Typography.fontFamily.bodySemibold,
+                  }}>
                     {request.requester.display_name || request.requester.username}
                   </Text>
-                  <Text style={{ color: c.muted, fontSize: 14 }}>
+                  <Text style={{ 
+                    color: c.muted, 
+                    fontSize: Typography.scale.body.fontSize,
+                    fontFamily: Typography.fontFamily.body,
+                  }}>
                     @{request.requester.username}
                   </Text>
                 </View>
@@ -344,6 +555,7 @@ export default function Groups() {
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
             <Pressable
+              onPress={() => openFriendActions(item)}
               style={{
                 backgroundColor: c.card,
                 marginHorizontal: 16,
@@ -361,15 +573,30 @@ export default function Groups() {
                   size={40}
                 />
                 <View style={{ marginLeft: 12, flex: 1 }}>
-                  <Text style={{ color: c.text, fontWeight: '600', fontSize: 16 }}>
+                  <Text style={{ 
+                    color: c.text, 
+                    fontWeight: Typography.fontWeight.semibold,
+                    fontSize: Typography.scale.bodyLarge.fontSize,
+                    fontFamily: Typography.fontFamily.bodySemibold,
+                  }}>
                     {item.display_name || item.username}
                   </Text>
-                  <Text style={{ color: c.muted, fontSize: 14 }}>
+                  <Text style={{ 
+                    color: c.muted, 
+                    fontSize: Typography.scale.body.fontSize,
+                    fontFamily: Typography.fontFamily.body,
+                  }}>
                     @{item.username}
                   </Text>
                 </View>
               </View>
-              <Ionicons name="chevron-forward" size={20} color={c.muted} />
+              <Pressable
+                onPress={() => openFriendActions(item)}
+                hitSlop={10}
+                style={{ padding: 4 }}
+              >
+                <Ionicons name="chevron-forward" size={20} color={c.muted} />
+              </Pressable>
             </Pressable>
           )}
         />
@@ -449,8 +676,10 @@ export default function Groups() {
       {organizations.length > 0 && (
         <View style={{ marginTop: 20 }}>
           <Text style={{
-            fontSize: 18,
-            fontWeight: '600',
+            fontSize: Typography.scale.heading3.fontSize,
+            lineHeight: Typography.scale.heading3.lineHeight,
+            fontFamily: Typography.fontFamily.bodySemibold,
+            fontWeight: Typography.fontWeight.semibold,
             color: c.text,
             marginHorizontal: 16,
             marginBottom: 12,
@@ -530,7 +759,12 @@ export default function Groups() {
           }}
         >
           <Ionicons name="add" size={20} color="white" />
-          <Text style={{ color: 'white', fontWeight: '600', fontSize: 16 }}>
+          <Text style={{ 
+            color: 'white', 
+            fontWeight: Typography.fontWeight.semibold,
+            fontSize: Typography.scale.bodyLarge.fontSize,
+            fontFamily: Typography.fontFamily.bodySemibold,
+          }}>
             Create Group
           </Text>
         </Pressable>
@@ -623,8 +857,10 @@ export default function Groups() {
             maxWidth: 400,
           }}>
             <Text style={{
-              fontSize: 20,
-              fontWeight: '600',
+              fontSize: Typography.scale.heading2.fontSize,
+              lineHeight: Typography.scale.heading2.lineHeight,
+              fontFamily: Typography.fontFamily.bodySemibold,
+              fontWeight: Typography.fontWeight.semibold,
               color: c.text,
               marginBottom: 16,
               textAlign: 'center',
@@ -683,7 +919,13 @@ export default function Groups() {
                 borderRadius: 8,
                 marginBottom: 16,
               }}>
-                <Text style={{ color: c.primary, fontSize: 12, fontWeight: '600', marginBottom: 4 }}>
+                <Text style={{ 
+                  color: c.primary, 
+                  fontSize: Typography.scale.bodySmall.fontSize,
+                  fontFamily: Typography.fontFamily.bodySemibold,
+                  fontWeight: Typography.fontWeight.semibold,
+                  marginBottom: 4,
+                }}>
                   SELECTED FRIENDS
                 </Text>
                 {selectedFriends.slice(0, 3).map((friend, index) => (
@@ -753,8 +995,10 @@ export default function Groups() {
             maxWidth: 400,
           }}>
             <Text style={{
-              fontSize: 20,
-              fontWeight: '600',
+              fontSize: Typography.scale.heading2.fontSize,
+              lineHeight: Typography.scale.heading2.lineHeight,
+              fontFamily: Typography.fontFamily.bodySemibold,
+              fontWeight: Typography.fontWeight.semibold,
               color: c.text,
               marginBottom: 16,
               textAlign: 'center',
@@ -832,7 +1076,226 @@ export default function Groups() {
           <TabHeader />
           {renderContent()}
         </View>
-        
+
+        {/* Friend actions sheet */}
+        {friendActionTarget && (
+          <Modal visible={showFriendActions} transparent animationType="fade">
+            <View
+              style={{
+                flex: 1,
+                backgroundColor: 'rgba(0,0,0,0.5)',
+                justifyContent: 'flex-end',
+              }}
+            >
+              <Pressable style={{ flex: 1 }} onPress={() => closeFriendActions()}>
+                <View />
+              </Pressable>
+              <View
+                style={{
+                  backgroundColor: c.background,
+                  padding: 20,
+                  borderTopLeftRadius: 24,
+                  borderTopRightRadius: 24,
+                  gap: 12,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 18,
+                    fontWeight: '600',
+                    color: c.text,
+                    marginBottom: 4,
+                  }}
+                >
+                  Manage {friendActionTarget.display_name || friendActionTarget.username}
+                </Text>
+
+                <Pressable
+                  onPress={handleStartGroupInviteFlow}
+                  style={{
+                    backgroundColor: c.card,
+                    padding: 14,
+                    borderRadius: 12,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 12,
+                  }}
+                >
+                  <Ionicons name="people-outline" size={20} color={c.text} />
+                  <Text style={{ 
+                    color: c.text, 
+                    fontWeight: Typography.fontWeight.semibold,
+                    fontSize: Typography.scale.bodyLarge.fontSize,
+                    fontFamily: Typography.fontFamily.bodySemibold,
+                  }}>
+                    Add to existing group
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={handleStartNewGroupWithFriend}
+                  style={{
+                    backgroundColor: c.card,
+                    padding: 14,
+                    borderRadius: 12,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 12,
+                  }}
+                >
+                  <Ionicons name="add-circle-outline" size={20} color={c.text} />
+                  <Text style={{ color: c.text, fontWeight: '600', fontSize: 16 }}>
+                    Start a new group together
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={confirmRemoveFriend}
+                  style={{
+                    backgroundColor: c.card,
+                    padding: 14,
+                    borderRadius: 12,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 12,
+                  }}
+                >
+                  <Ionicons name="person-remove-outline" size={20} color={c.muted} />
+                  <Text style={{ color: c.text, fontWeight: '600', fontSize: 16 }}>
+                    Remove friend
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={confirmBlockFriend}
+                  style={{
+                    backgroundColor: FRIEND_BADGE_COLOR,
+                    padding: 14,
+                    borderRadius: 12,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 12,
+                  }}
+                >
+                  <Ionicons name="ban-outline" size={20} color="#fff" />
+                  <Text style={{ color: '#fff', fontWeight: '600', fontSize: 16 }}>
+                    Block user
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() => closeFriendActions(true)}
+                  style={{
+                    marginTop: 4,
+                    padding: 14,
+                    borderRadius: 12,
+                    backgroundColor: c.card,
+                    alignItems: 'center',
+                  }}
+                >
+                  <Text style={{ color: c.text, fontWeight: '600' }}>Cancel</Text>
+                </Pressable>
+              </View>
+            </View>
+          </Modal>
+        )}
+
+        {/* Group invite modal */}
+        {friendActionTarget && (
+          <Modal visible={showGroupInviteModal} transparent animationType="slide">
+            <View
+              style={{
+                flex: 1,
+                backgroundColor: 'rgba(0,0,0,0.5)',
+                justifyContent: 'flex-end',
+              }}
+            >
+              <Pressable
+                style={{ flex: 1 }}
+                onPress={() => {
+                  setShowGroupInviteModal(false);
+                  setFriendActionTarget(null);
+                }}
+              >
+                <View />
+              </Pressable>
+              <View
+                style={{
+                  backgroundColor: c.background,
+                  padding: 20,
+                  borderTopLeftRadius: 24,
+                  borderTopRightRadius: 24,
+                  maxHeight: '70%',
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 18,
+                    fontWeight: '600',
+                    color: c.text,
+                    marginBottom: 12,
+                  }}
+                >
+                  Invite {friendActionTarget.display_name || friendActionTarget.username} to a group
+                </Text>
+
+                {groups.length === 0 ? (
+                  <Text style={{ color: c.muted, marginBottom: 12 }}>
+                    You don't have any groups yet. Create one to start inviting friends.
+                  </Text>
+                ) : (
+                  <FlatList
+                    data={groups}
+                    keyExtractor={(item) => item.id.toString()}
+                    renderItem={({ item }) => (
+                      <Pressable
+                        onPress={() => handleSelectGroupForFriend(item)}
+                        style={{
+                          backgroundColor: c.card,
+                          padding: 16,
+                          borderRadius: 12,
+                          marginBottom: 10,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                        }}
+                      >
+                        <View>
+                          <Text style={{ color: c.text, fontWeight: '600', fontSize: 16 }}>
+                            {item.name}
+                          </Text>
+                          <Text style={{ color: c.muted, fontSize: 12 }}>
+                            Code: {item.invite_code ?? 'Tap to generate'}
+                          </Text>
+                        </View>
+                        <Ionicons name="send-outline" size={18} color={c.primary} />
+                      </Pressable>
+                    )}
+                    contentContainerStyle={{ paddingBottom: 12 }}
+                    showsVerticalScrollIndicator={false}
+                  />
+                )}
+
+                <Pressable
+                  onPress={() => {
+                    setShowGroupInviteModal(false);
+                    setFriendActionTarget(null);
+                  }}
+                  style={{
+                    marginTop: 8,
+                    padding: 14,
+                    borderRadius: 12,
+                    backgroundColor: c.card,
+                    alignItems: 'center',
+                  }}
+                >
+                  <Text style={{ color: c.text, fontWeight: '600' }}>Done</Text>
+                </Pressable>
+              </View>
+            </View>
+          </Modal>
+        )}
+
         {/* Friend Picker Modal */}
         <FriendPicker
           visible={showFriendPicker}
