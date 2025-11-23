@@ -13,6 +13,34 @@ import {
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 
+// Type definition for Region
+type Region = {
+  latitude: number;
+  longitude: number;
+  latitudeDelta: number;
+  longitudeDelta: number;
+};
+
+// Lazy load react-native-maps only when needed and only on native platforms
+// This prevents web bundlers from trying to resolve the module
+const getMapComponents = () => {
+  if (Platform.OS === 'web') {
+    return { MapView: null, Marker: null };
+  }
+  try {
+    // Use dynamic require to prevent static analysis on web
+    const moduleName = 'react-native-maps';
+    // @ts-ignore - Dynamic require for platform-specific module
+    const Maps = require(moduleName);
+    return {
+      MapView: Maps.default || Maps,
+      Marker: Maps.Marker,
+    };
+  } catch (e) {
+    return { MapView: null, Marker: null };
+  }
+};
+
 interface LocationResult {
   displayName: string;
   latitude: number;
@@ -49,11 +77,38 @@ export default function LocationPicker({
   const [suggestions, setSuggestions] = useState<LocationResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [showMap, setShowMap] = useState(false);
+  const [mapRegion, setMapRegion] = useState<Region | null>(null);
+  const [markerCoordinate, setMarkerCoordinate] = useState<{ latitude: number; longitude: number } | null>(null);
   const debounceTimer = useRef<NodeJS.Timeout | null>(null);
+  const mapRef = useRef<any>(null);
 
   useEffect(() => {
     setInputValue(value);
   }, [value]);
+
+  // Initialize map region and marker from props
+  useEffect(() => {
+    if (latitude != null && longitude != null) {
+      const region: Region = {
+        latitude,
+        longitude,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      };
+      setMapRegion(region);
+      setMarkerCoordinate({ latitude, longitude });
+    } else if (!mapRegion) {
+      // Default to a central location if no coordinates provided
+      const defaultRegion: Region = {
+        latitude: 37.7749, // San Francisco default
+        longitude: -122.4194,
+        latitudeDelta: 0.1,
+        longitudeDelta: 0.1,
+      };
+      setMapRegion(defaultRegion);
+    }
+  }, [latitude, longitude]);
 
   // Request location permissions on mount
   useEffect(() => {
@@ -93,6 +148,92 @@ export default function LocationPicker({
     }
   };
 
+  const reverseGeocode = async (lat: number, lng: number): Promise<string> => {
+    try {
+      if (Platform.OS !== 'web') {
+        // Use expo-location for native platforms
+        const reverseResults = await Location.reverseGeocodeAsync({
+          latitude: lat,
+          longitude: lng,
+        });
+
+        if (reverseResults.length > 0) {
+          const address = reverseResults[0];
+          return [
+            address.name,
+            address.street,
+            address.city,
+            address.region,
+            address.country,
+          ]
+            .filter(Boolean)
+            .join(', ');
+        }
+      }
+
+      // Fallback to Nominatim for web or if expo-location fails
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`,
+        {
+          headers: {
+            'User-Agent': 'Picky-Events-App',
+          },
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        return data.display_name || `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+      }
+
+      return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+    } catch (error) {
+      console.error('Reverse geocoding error:', error);
+      return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+    }
+  };
+
+  const handleMapPress = async (event: any) => {
+    // On web, react-native-maps may not support onPress the same way
+    // We'll handle web in the web-specific component
+    if (Platform.OS !== 'web' && event.nativeEvent?.coordinate) {
+      const { latitude, longitude } = event.nativeEvent.coordinate;
+      await updateLocationFromCoordinates(latitude, longitude);
+    }
+  };
+
+  const handleMarkerDragEnd = async (event: any) => {
+    const { latitude, longitude } = event.nativeEvent.coordinate;
+    await updateLocationFromCoordinates(latitude, longitude);
+  };
+
+  const updateLocationFromCoordinates = async (lat: number, lng: number) => {
+    setIsLoading(true);
+    try {
+      const address = await reverseGeocode(lat, lng);
+      setInputValue(address);
+      setMarkerCoordinate({ latitude: lat, longitude: lng });
+      
+      // Update map region to center on new location
+      const newRegion: Region = {
+        latitude: lat,
+        longitude: lng,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      };
+      setMapRegion(newRegion);
+      if (mapRef.current) {
+        mapRef.current.animateToRegion(newRegion, 300);
+      }
+      
+      onLocationChange(address, lat, lng);
+    } catch (error) {
+      console.error('Error updating location from coordinates:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleInputChange = (text: string) => {
     setInputValue(text);
     setShowSuggestions(true);
@@ -123,6 +264,19 @@ export default function LocationPicker({
     onLocationChange(result.displayName, result.latitude, result.longitude);
     setSuggestions([]);
     setShowSuggestions(false);
+    
+    // Update map to show selected location
+    const newRegion: Region = {
+      latitude: result.latitude,
+      longitude: result.longitude,
+      latitudeDelta: 0.01,
+      longitudeDelta: 0.01,
+    };
+    setMapRegion(newRegion);
+    setMarkerCoordinate({ latitude: result.latitude, longitude: result.longitude });
+    if (mapRef.current) {
+      mapRef.current.animateToRegion(newRegion, 300);
+    }
   };
 
   const getCurrentLocation = async () => {
@@ -169,6 +323,19 @@ export default function LocationPicker({
         onLocationChange(displayName, lat, lng);
       }
 
+      // Update map to show current location
+      const newRegion: Region = {
+        latitude: lat,
+        longitude: lng,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      };
+      setMapRegion(newRegion);
+      setMarkerCoordinate({ latitude: lat, longitude: lng });
+      if (mapRef.current) {
+        mapRef.current.animateToRegion(newRegion, 300);
+      }
+
       setSuggestions([]);
       setShowSuggestions(false);
       setIsLoading(false);
@@ -212,6 +379,17 @@ export default function LocationPicker({
             <Ionicons name="location" size={20} color={textColor} />
           )}
         </Pressable>
+        <Pressable
+          onPress={() => setShowMap(!showMap)}
+          style={[
+            styles.mapToggleButton,
+            {
+              backgroundColor: backgroundColor,
+            },
+          ]}
+        >
+          <Ionicons name={showMap ? "map-outline" : "map"} size={20} color={textColor} />
+        </Pressable>
       </View>
 
       {showSuggestions && suggestions.length > 0 && (
@@ -252,6 +430,33 @@ export default function LocationPicker({
           </ScrollView>
         </View>
       )}
+
+      {showMap && mapRegion && Platform.OS !== 'web' && (() => {
+        const { MapView: MapViewComponent, Marker: MarkerComponent } = getMapComponents();
+        if (!MapViewComponent || !MarkerComponent) {
+          return null;
+        }
+        
+        return (
+          <View style={styles.mapContainer}>
+            <MapViewComponent
+              ref={mapRef}
+              style={styles.map}
+              region={mapRegion}
+              onPress={handleMapPress}
+              onRegionChangeComplete={setMapRegion}
+            >
+              {markerCoordinate && (
+                <MarkerComponent
+                  coordinate={markerCoordinate}
+                  draggable={true}
+                  onDragEnd={handleMarkerDragEnd}
+                />
+              )}
+            </MapViewComponent>
+          </View>
+        );
+      })()}
     </View>
   );
 }
@@ -271,6 +476,14 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   locationButton: {
+    padding: 10,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 44,
+    height: 44,
+  },
+  mapToggleButton: {
     padding: 10,
     borderRadius: 8,
     justifyContent: 'center',
@@ -306,5 +519,31 @@ const styles = StyleSheet.create({
   suggestionText: {
     flex: 1,
     fontSize: 14,
+  },
+  mapContainer: {
+    marginTop: 8,
+    borderRadius: 8,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#00000020',
+    position: 'relative',
+  },
+  map: {
+    width: '100%',
+    height: 180,
+  },
+  mapOverlay: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    right: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    padding: 8,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  mapHint: {
+    fontSize: 12,
+    fontWeight: '500',
   },
 });

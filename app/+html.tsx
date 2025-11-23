@@ -4,6 +4,13 @@ export default function Html({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <head>
+        {/* Leaflet CSS for interactive maps */}
+        <link
+          rel="stylesheet"
+          href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+          crossOrigin=""
+        />
         {/* Ensure proper scaling on iOS Safari and fit to device width */}
         <meta
           name="viewport"

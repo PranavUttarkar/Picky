@@ -632,6 +632,13 @@ const AddEditEventModal = memo(function AddEditEventModal({
       Alert.alert('Missing tags', 'Please add at least one tag to categorize your event.');
       return;
     }
+    // Validate location is required
+    const locationVal = location.trim();
+    if (!locationVal || latitude == null || longitude == null) {
+      setShowValidation(true);
+      Alert.alert('Missing location', 'Please select a location for your event.');
+      return;
+    }
     // Passed required-field validation
     if (showValidation) setShowValidation(false);
     const { cleaned: imageUrlsFromText, errors: imageErrors } = sanitizeEventImageUrls([
@@ -691,7 +698,7 @@ const AddEditEventModal = memo(function AddEditEventModal({
       image_url: finalImages[0] || null,
       date_time: dtIso,
       end_time: endTimeIso,
-      location: location.trim() || null,
+      location: locationVal,
       latitude: latitude,
       longitude: longitude,
       tags,
@@ -809,7 +816,7 @@ const AddEditEventModal = memo(function AddEditEventModal({
             />
             <View>
               <TextInput
-                placeholder="Description, Room Number, etc."
+                placeholder="Description, Building/Room Number, etc."
                 placeholderTextColor={c.muted}
                 value={desc}
                 onChangeText={setDesc}
