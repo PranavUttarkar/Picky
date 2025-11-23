@@ -516,6 +516,23 @@ export default function HomeTab() {
               </Pressable>
             </View>
           </View>
+
+          <View style={{ paddingHorizontal: Spacing.md, marginTop: Spacing.xl }}>
+            
+              <Text
+                style={{
+                  fontStyle: 'italic',
+                  color: c.text,
+                  fontSize: Typography.scale.body.fontSize,
+                  lineHeight: Typography.scale.bodyLarge.lineHeight,
+                  fontFamily: Typography.fontFamily.body,
+                  fontWeight: Typography.fontWeight.semibold,
+                  textAlign: 'center',
+                }}
+              >
+                Smart Picks. Faster Plans. Greatest Hangouts!
+              </Text>
+          </View>
         </ScrollView>
 
         {/* Group Selection Modal */}
