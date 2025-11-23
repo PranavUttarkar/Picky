@@ -516,7 +516,7 @@ export default function LocationPicker({
               top: '8px',
               left: '8px',
               right: '8px',
-              backgroundColor: 'rgba(0, 0, 0, 0.6)',
+              backgroundColor: "rgba(225, 233, 225, 0.68)",
               padding: '8px',
               borderRadius: '6px',
               textAlign: 'center',
@@ -524,7 +524,7 @@ export default function LocationPicker({
               zIndex: 1000,
             }}
           >
-            <span style={{ color: textColor, fontSize: '12px', fontWeight: '500' }}>
+            <span style={{ color: "rgba(7, 7, 7, 0.6)", fontSize: '12px', fontWeight: '500' }}>
               Click on the map to set location • Drag marker to move
             </span>
           </div>

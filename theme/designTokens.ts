@@ -41,11 +41,11 @@ export const Colors = {
       info: '#3B82F6',
     },
     // Semantic Colors (for ThemeProvider compatibility)
-    background: '#F9FAFB',
-    card: '#F3F4F6',
+    background: '#fffff7f5',
+    card: '#fffff7f5',
     text: '#111827',
     muted: '#6B7280',
-    primary: '#4F46E5',
+    primary: '#FF6F61',
     accent: '#EEF2FF',
   },
   dark: {
@@ -83,7 +83,7 @@ export const Colors = {
     card: '#1F2937',
     text: '#F9FAFB',
     muted: '#9CA3AF',
-    primary: '#6366F1',
+    primary: '#5EC9FF',
     accent: '#1E1B4B',
   },
 } as const;

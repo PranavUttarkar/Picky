@@ -1465,8 +1465,8 @@ const FiltersTopBar = memo(function FiltersTopBar({
           accessibilityRole="link"
           accessibilityLabel={isAuthed ? 'Add Event' : 'Sign in to add event'}
         >
-          <Ionicons name="add" size={16} color="#000" />
-          <Text style={styles.actionButtonText}>Add Event</Text>
+          <Ionicons name="add" size={16} color="#130101ff" />
+          <Text style={{color:"#000"}}>Add Event</Text>
         </Pressable>
       </View>
     </View>
