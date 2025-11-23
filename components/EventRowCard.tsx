@@ -19,6 +19,7 @@ export interface EventRowCardProps {
   onPoll?: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
+  onReport?: () => void;
   isAdmin?: boolean;
   matchPercent?: number; // optional external override (e.g., personalized feed)
   pollButtonTitle?: string; // optional custom title for the poll button
@@ -37,6 +38,7 @@ export const EventRowCard: React.FC<EventRowCardProps> = memo(
     onPoll,
     onEdit,
     onDelete,
+    onReport,
     isAdmin,
     matchPercent,
     pollButtonTitle = 'Poll',
@@ -202,6 +204,18 @@ export const EventRowCard: React.FC<EventRowCardProps> = memo(
                       color={isSaved ? c.primary : c.text}
                     />
                   </Pressable>
+                  {onReport ? (
+                    <Pressable
+                      onPress={(e: any) => {
+                        e.stopPropagation();
+                        onReport();
+                      }}
+                      accessibilityLabel="Report event"
+                      style={{ padding: 4 }}
+                    >
+                      <Ionicons name="flag-outline" size={18} color={c.text} />
+                    </Pressable>
+                  ) : null}
                   {onPoll ? (
                     <ThreeDButton
                       title={pollButtonTitle}

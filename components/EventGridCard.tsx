@@ -20,6 +20,7 @@ export interface EventGridCardProps {
   onPoll?: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
+  onReport?: () => void;
   isAdmin?: boolean;
   matchPercent?: number;
 }
@@ -37,6 +38,7 @@ export const EventGridCard: React.FC<EventGridCardProps> = memo(
     onPoll,
     onEdit,
     onDelete,
+    onReport,
     isAdmin,
     matchPercent,
   }) => {
@@ -239,6 +241,15 @@ export const EventGridCard: React.FC<EventGridCardProps> = memo(
                       color={isSaved ? c.primary : c.text}
                     />
                   </Pressable>
+                  {onReport ? (
+                    <Pressable
+                      onPress={onReport}
+                      accessibilityLabel="Report event"
+                      style={{ padding: 6 }}
+                    >
+                      <Ionicons name="flag-outline" size={18} color={c.text} />
+                    </Pressable>
+                  ) : null}
                   {onPoll ? (
                     <ThreeDButton
                       title="Poll"

@@ -108,6 +108,63 @@ export async function createEvent(input: EventInput): Promise<Event> {
   const { data: auth } = await supabase.auth.getUser();
   const user = auth.user;
   if (!user) throw new Error('Not authenticated');
+  
+  // Check if user is suspended or banned (client-side check for better UX)
+  const { data: userData, error: userError } = await supabase
+    .from('users')
+    .select('is_suspended, is_banned, suspended_until, is_admin')
+    .eq('id', user.id)
+    .single();
+  
+  if (userError) throw userError;
+  
+  if (userData?.is_banned) {
+    throw new Error('Your account has been banned. You cannot create events.');
+  }
+  
+  if (userData?.is_suspended) {
+    const suspendedUntil = userData.suspended_until;
+    if (suspendedUntil && new Date(suspendedUntil) > new Date()) {
+      throw new Error(`Your account is suspended until ${new Date(suspendedUntil).toLocaleDateString()}. You cannot create events.`);
+    } else if (!suspendedUntil) {
+      throw new Error('Your account is suspended. You cannot create events.');
+    }
+  }
+  
+  // Check daily event limit for non-admin users
+  if (!userData?.is_admin) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    // Use RPC function for accurate count (handles timezone properly)
+    const { data: countData, error: countError } = await supabase.rpc('count_user_events_today', {
+      u: user.id,
+    });
+    
+    if (countError) {
+      // Fallback to direct query if RPC fails (for backwards compatibility)
+      const { count, error: fallbackError } = await supabase
+        .from('events')
+        .select('*', { count: 'exact', head: true })
+        .eq('created_by', user.id)
+        .gte('created_at', today.toISOString())
+        .lt('created_at', tomorrow.toISOString());
+      
+      if (fallbackError) throw fallbackError;
+      
+      if ((count ?? 0) >= 10) {
+        throw new Error('You have reached the daily limit of 10 events. Please try again tomorrow.');
+      }
+    } else {
+      const count = typeof countData === 'number' ? countData : Number(countData) || 0;
+      if (count >= 10) {
+        throw new Error('You have reached the daily limit of 10 events. Please try again tomorrow.');
+      }
+    }
+  }
+  
   const image_urls = input.image_urls && input.image_urls.length ? input.image_urls : (input.image_url ? [input.image_url] : null);
   const image_url = image_urls && image_urls.length ? image_urls[0] : (input.image_url ?? null);
   const { data, error } = await supabase
@@ -115,7 +172,13 @@ export async function createEvent(input: EventInput): Promise<Event> {
     .insert({ ...input, image_urls, image_url, created_by: user.id })
     .select('id,title,description,image_url,image_urls,date_time,end_time,location,latitude,longitude,tags,rsvp_url,created_by')
     .single();
-  if (error) throw error;
+  if (error) {
+    // Handle RLS policy rejection
+    if (error.message?.includes('can_user_create_events') || error.code === '42501') {
+      throw new Error('You are not allowed to create events. Your account may be suspended or banned.');
+    }
+    throw error;
+  }
   return data as Event;
 }
 

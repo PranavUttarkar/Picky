@@ -21,6 +21,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { ThreeDButton, ThreeDCard } from '@/components/ThreeD';
 import EventRowCard from '@/components/EventRowCard';
 import EventGridCard from '@/components/EventGridCard';
+import ReportEventModal from '@/components/ReportEventModal';
+import AdminReportsPanel from '@/components/AdminReportsPanel';
 import dayjs from 'dayjs';
 import LazyImage from '@/components/LazyImage';
 import EventImages from '@/components/EventImages';
@@ -1879,6 +1881,10 @@ export default function Home() {
   const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Event | null>(null);
+  // Report modal state
+  const [reportModalOpen, setReportModalOpen] = useState(false);
+  const [reportingEventId, setReportingEventId] = useState<number | null>(null);
+  const [reportingEventTitle, setReportingEventTitle] = useState<string>('');
   // Track which card is expanded; collapsed shows truncated description + hint
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
@@ -2509,39 +2515,47 @@ export default function Home() {
         <View style={{ flex: 1, padding: 16 }}>
           <GradientHeader title="Events" />
           {isAdmin ? (
-            <AdminHeader
-              c={c}
-              isAdmin={isAdmin}
-              adminOpen={adminOpen}
-              setAdminOpen={setAdminOpen}
-              editingId={editingId}
-              fTitle={fTitle}
-              setFTitle={setFTitle}
-              fDesc={fDesc}
-              setFDesc={setFDesc}
-              fImage1={fImage1}
-              setFImage1={setFImage1}
-              fImage2={fImage2}
-              setFImage2={setFImage2}
-              fImage3={fImage3}
-              setFImage3={setFImage3}
-              fDateTime={fDateTime}
-              setFDateTime={setFDateTime}
-              fLocation={fLocation}
-              setFLocation={setFLocation}
-              fTagsCsv={fTagsCsv}
-              setFTagsCsv={setFTagsCsv}
-              fRsvp={fRsvp}
-              setFRsvp={setFRsvp}
-              showDatePicker={showDatePicker}
-              setShowDatePicker={setShowDatePicker}
-              showTimePicker={showTimePicker}
-              setShowTimePicker={setShowTimePicker}
-              upsertEvent={upsertEvent}
-              resetForm={resetForm}
-              events={events}
-              deleteEvent={deleteEvent}
-            />
+            <>
+              <AdminHeader
+                c={c}
+                isAdmin={isAdmin}
+                adminOpen={adminOpen}
+                setAdminOpen={setAdminOpen}
+                editingId={editingId}
+                fTitle={fTitle}
+                setFTitle={setFTitle}
+                fDesc={fDesc}
+                setFDesc={setFDesc}
+                fImage1={fImage1}
+                setFImage1={setFImage1}
+                fImage2={fImage2}
+                setFImage2={setFImage2}
+                fImage3={fImage3}
+                setFImage3={setFImage3}
+                fDateTime={fDateTime}
+                setFDateTime={setFDateTime}
+                fLocation={fLocation}
+                setFLocation={setFLocation}
+                fTagsCsv={fTagsCsv}
+                setFTagsCsv={setFTagsCsv}
+                fRsvp={fRsvp}
+                setFRsvp={setFRsvp}
+                showDatePicker={showDatePicker}
+                setShowDatePicker={setShowDatePicker}
+                showTimePicker={showTimePicker}
+                setShowTimePicker={setShowTimePicker}
+                upsertEvent={upsertEvent}
+                resetForm={resetForm}
+                events={events}
+                deleteEvent={deleteEvent}
+              />
+              <AdminReportsPanel
+                isAdmin={isAdmin}
+                onEventDeleted={() => {
+                  loadFirstPage();
+                }}
+              />
+            </>
           ) : null}
           {filtersTopBar}
           <FlatList
@@ -2639,6 +2653,13 @@ export default function Home() {
                 ? () => (isOwner ? openEditModal(item) : prefillForEdit(item))
                 : undefined,
             onDelete: (isAdmin || isOwner) && item.id > 0 ? () => deleteEvent(item.id) : undefined,
+            onReport: isAuthed
+              ? () => {
+                  setReportingEventId(item.id);
+                  setReportingEventTitle(item.title);
+                  setReportModalOpen(true);
+                }
+              : undefined,
             isAdmin: isAdmin || !!isOwner,
             matchPercent: match(item.id, item.tags),
           } as const;
@@ -2664,26 +2685,38 @@ export default function Home() {
 
       {/* Floating Add Event Button (FAB) */}
           <View pointerEvents="box-none" style={{ position: 'absolute', right: 16, bottom: 24 }}>
-        <Pressable
-          onPress={openAddModal}
-          accessibilityRole="button"
-          accessibilityLabel="Add Event"
+        <BlurView
+          intensity={35}
+          tint={scheme === 'dark' ? 'dark' : 'light'}
           style={{
             width: 56,
             height: 56,
             borderRadius: 28,
-            backgroundColor: c.primary,
-            alignItems: 'center',
-            justifyContent: 'center',
+            overflow: 'hidden',
+            borderWidth: 1,
+            borderColor: scheme === 'dark' ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.5)',
             shadowColor: '#000',
-            shadowOpacity: 0.25,
-            shadowRadius: 6,
+            shadowOpacity: 0.3,
+            shadowRadius: 8,
             shadowOffset: { width: 0, height: 4 },
-            elevation: 6,
+            elevation: 8,
           }}
         >
-          <Ionicons name="add" size={26} color="#000" />
-        </Pressable>
+          <Pressable
+            onPress={openAddModal}
+            accessibilityRole="button"
+            accessibilityLabel="Add Event"
+            style={{
+              width: '100%',
+              height: '100%',
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: scheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.2)',
+            }}
+          >
+            <Ionicons name="add" size={26} color={c.text} />
+          </Pressable>
+        </BlurView>
           </View>
         </View>
       </GradientBackground>
@@ -2848,11 +2881,48 @@ export default function Home() {
                     <Text style={{ color: c.text, fontWeight: '700' }}>Open RSVP link</Text>
                   </Pressable>
                 ) : null}
+                {isAuthed && selectedEvent?.id ? (
+                  <Pressable
+                    onPress={() => {
+                      setReportingEventId(selectedEvent.id);
+                      setReportingEventTitle(selectedEvent.title);
+                      setReportModalOpen(true);
+                    }}
+                    style={{
+                      backgroundColor: '#00000030',
+                      padding: 12,
+                      borderRadius: 12,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 8,
+                    }}
+                  >
+                    <Ionicons name="flag-outline" size={18} color={c.text} />
+                    <Text style={{ color: c.text, fontWeight: '700' }}>Report</Text>
+                  </Pressable>
+                ) : null}
               </View>
             </View>
           </ScrollView>
         </SafeAreaView>
       </Modal>
+
+      {/* Report Event Modal */}
+      {reportingEventId && (
+        <ReportEventModal
+          visible={reportModalOpen}
+          eventId={reportingEventId}
+          eventTitle={reportingEventTitle}
+          onClose={() => {
+            setReportModalOpen(false);
+            setReportingEventId(null);
+            setReportingEventTitle('');
+          }}
+          onSuccess={() => {
+            // Report submitted successfully
+          }}
+        />
+      )}
 
       {/* Add/Edit Event Modal (user flow) */}
       <AddEditEventModal

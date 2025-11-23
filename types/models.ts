@@ -9,6 +9,10 @@ export interface UserProfile {
   avatar_url?: string | null;
   is_admin?: boolean | null;
   username_last_changed?: string | null; // server-enforced cooldown timestamp
+  is_suspended?: boolean | null;
+  is_banned?: boolean | null;
+  suspended_until?: string | null; // ISO string
+  suspension_reason?: string | null;
 }
 
 export interface Event {
@@ -133,4 +137,29 @@ export interface FriendSearchResult {
 export interface FriendActivityResult {
   friend_count: number;
   friend_names: string[];
+}
+
+// Event reporting interfaces
+export type ReportReason = 'inappropriate' | 'spam' | 'misinformation' | 'other';
+
+export type ReportStatus = 'pending' | 'reviewed' | 'resolved';
+
+export interface EventReport {
+  id: number;
+  event_id: number;
+  reported_by: string;
+  reason: ReportReason;
+  description?: string | null;
+  status: ReportStatus;
+  created_at: string; // ISO string
+}
+
+export interface EventReportWithDetails extends EventReport {
+  event_title: string;
+  event_description?: string | null;
+  event_created_by?: string | null;
+  creator_username?: string | null;
+  creator_display_name?: string | null;
+  reporter_username?: string | null;
+  reporter_display_name?: string | null;
 }
