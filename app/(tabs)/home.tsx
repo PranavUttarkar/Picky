@@ -90,6 +90,32 @@ function CompactEventCard({ event, onPress }: { event: Event & { match_percent?:
   );
 }
 
+// View All card component
+function ViewAllCard({ onPress, label = 'View All' }: { onPress: () => void; label?: string }) {
+  const c = useThemeColors();
+  
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.compactCard,
+        styles.viewAllCard,
+        {
+          backgroundColor: c.card,
+          opacity: pressed ? 0.8 : 1,
+        },
+      ]}
+    >
+      <View style={[styles.compactImageContainer, { backgroundColor: c.muted + '20', justifyContent: 'center', alignItems: 'center' }]}>
+        <Ionicons name="arrow-forward" size={32} color={c.primary} />
+      </View>
+      <Text style={[styles.compactTitle, { color: c.primary, fontWeight: Typography.fontWeight.bold }]} numberOfLines={2}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
 // Compact square card for restaurants
 function CompactFoodCard({ restaurant, onPress }: { restaurant: Restaurant & { match_percent?: number }; onPress: () => void }) {
   const c = useThemeColors();
@@ -152,9 +178,30 @@ export default function HomeTab() {
   const insets = useSafeAreaInsets();
   const [signedIn, setSignedIn] = useState(false);
   const { width } = useWindowDimensions();
-  // Responsive card count: 5 for desktop (>= 1024px), 3 for mobile/tablet
-  const isDesktop = width >= 1024;
-  const cardCount = isDesktop ? 5 : 3;
+  // Dynamic card count: Start with 5 for desktop (>= 1024px), 3 for mobile/tablet
+  // Then add more cards as screen width increases
+  const isDesktop = width >= 900;
+  const baseCardCount = isDesktop ? 5 : 3;
+  
+  // Calculate how many cards can fit based on screen width
+  // Account for padding (16px each side = 32px total) and gaps (12px between cards)
+  const containerPadding = 32; // 16px * 2
+  const cardGap = 12;
+  const minCardWidth = 230; // Minimum reasonable card width
+  const availableWidth = width - containerPadding;
+  const showViewAllButton = width > 1440;
+  
+  // Calculate total cards that can fit (including View All button if applicable)
+  const calculatedTotalCards = Math.max(
+    baseCardCount,
+    Math.floor((availableWidth + cardGap) / (minCardWidth + cardGap))
+  );
+  
+  // If showing View All button, reserve space for it (subtract 1 from content cards)
+  // Ensure we still show at least (baseCardCount - 1) content cards when showing View All
+  const cardCount = showViewAllButton 
+    ? Math.max(baseCardCount - 1, calculatedTotalCards - 1)
+    : calculatedTotalCards;
   const [topEvents, setTopEvents] = useState<(Event & { match_percent?: number })[]>([]);
   const [topRestaurants, setTopRestaurants] = useState<(Restaurant & { match_percent?: number })[]>([]);
   const [loadingEvents, setLoadingEvents] = useState(true);
@@ -281,9 +328,28 @@ export default function HomeTab() {
           
           if (finalRestaurants.length > 0) {
             setTopRestaurants(finalRestaurants);
+          } else {
+            // If no restaurants found, try loading popular restaurants as fallback
+            try {
+              const fallbackRestaurants = await listRestaurants(0, cardCount);
+              if (fallbackRestaurants && fallbackRestaurants.length > 0) {
+                setTopRestaurants(fallbackRestaurants as any);
+              }
+            } catch (fallbackError) {
+              console.error('Fallback restaurants also failed:', fallbackError);
+            }
           }
         } catch (e) {
           console.error('Failed to load restaurants:', e);
+          // Try fallback on error too
+          try {
+            const fallbackRestaurants = await listRestaurants(0, cardCount);
+            if (fallbackRestaurants && fallbackRestaurants.length > 0) {
+              setTopRestaurants(fallbackRestaurants as any);
+            }
+          } catch (fallbackError) {
+            console.error('Fallback restaurants also failed:', fallbackError);
+          }
         } finally {
           setLoadingFood(false);
         }
@@ -302,7 +368,20 @@ export default function HomeTab() {
           setLoadingEvents(false);
         }
       })();
-      setLoadingFood(false);
+
+      // For non-signed-in users, also show popular restaurants
+      (async () => {
+        try {
+          const restaurants = await listRestaurants(0, cardCount);
+          if (restaurants && restaurants.length > 0) {
+            setTopRestaurants(restaurants as any);
+          }
+        } catch (e) {
+          console.error('Failed to load restaurants:', e);
+        } finally {
+          setLoadingFood(false);
+        }
+      })();
     }
   }, [signedIn, cardCount]);
 
@@ -444,11 +523,17 @@ export default function HomeTab() {
                     onPress={() => router.push(`/events/${event.id}`)}
                   />
                 ))}
+                {showViewAllButton && (
+                  <ViewAllCard
+                    onPress={() => router.push('/events')}
+                    label="View All"
+                  />
+                )}
               </View>
             ) : (
               <View style={styles.emptyState}>
                 <Text style={[styles.emptyStateText, { color: c.muted }]}>
-                  {signedIn ? 'No events found. Check back later!' : 'Sign in to see personalized events'}
+                  No events found. Check back later!
                 </Text>
               </View>
             )}
@@ -479,11 +564,17 @@ export default function HomeTab() {
                     onPress={() => router.push(`/foods/${encodeURIComponent(restaurant.id)}`)}
                   />
                 ))}
+                {showViewAllButton && (
+                  <ViewAllCard
+                    onPress={() => router.push('/food')}
+                    label="View All"
+                  />
+                )}
               </View>
             ) : (
               <View style={styles.emptyState}>
                 <Text style={[styles.emptyStateText, { color: c.muted }]}>
-                  {signedIn ? 'No restaurants found. Check back later!' : 'Sign in to see personalized restaurants'}
+                  No restaurants found. Check back later!
                 </Text>
               </View>
             )}
@@ -668,6 +759,9 @@ const styles = StyleSheet.create({
     borderColor: Colors.light.neutral[300] + '20',
     minWidth: 100,
     maxWidth: '100%', // Ensure cards don't exceed container
+  },
+  viewAllCard: {
+    borderStyle: 'dashed',
   },
   compactImageContainer: {
     width: '100%',
