@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -480,6 +480,39 @@ type AddEditEventModalProps = {
   onSaved: () => Promise<void> | void;
 };
 
+// Extracted Section component to prevent re-creation on every render
+type SectionProps = {
+  id: string;
+  title: string;
+  isOpen: boolean;
+  onToggle: () => void;
+  cardBg: string;
+  textColor: string;
+  mutedColor: string;
+  children: React.ReactNode;
+};
+
+const ModalSection = memo(function ModalSection({ id, title, isOpen, onToggle, cardBg, textColor, mutedColor, children }: SectionProps) {
+  return (
+    <View style={{ marginBottom: 14, borderRadius: 12, borderWidth: 1, borderColor: '#00000020', backgroundColor: cardBg }}>
+      <Pressable
+        onPress={onToggle}
+        accessibilityRole="button"
+        accessibilityLabel={`${isOpen ? 'Collapse' : 'Expand'} ${title} section`}
+        style={{ paddingHorizontal: 14, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          {id === 'images' ? <Ionicons name="image-outline" size={18} color={mutedColor} /> : null}
+          {id === 'location' ? <Ionicons name="location-outline" size={18} color={mutedColor} /> : null}
+          <Text style={{ color: textColor, fontWeight: '700', fontSize: 15 }}>{title}</Text>
+        </View>
+        <Ionicons name={isOpen ? 'chevron-up' : 'chevron-down'} size={18} color={mutedColor} />
+      </Pressable>
+      {isOpen ? <View style={{ paddingHorizontal: 14, paddingBottom: 14, gap: 10 }}>{children}</View> : null}
+    </View>
+  );
+});
+
 const AddEditEventModal = memo(function AddEditEventModal({
   visible,
   initialEvent,
@@ -488,10 +521,16 @@ const AddEditEventModal = memo(function AddEditEventModal({
 }: AddEditEventModalProps) {
   const c = useThemeColors();
   const { scheme } = useTheme();
+  const { width: screenWidth } = useWindowDimensions();
+  const isNarrowScreen = screenWidth < 500; // Detect mobile-width screens
 
   // Local modal state
   const [title, setTitle] = useState('');
   const [desc, setDesc] = useState('');
+  // Local buffer states to prevent re-renders on every keystroke
+  const [titleLocal, setTitleLocal] = useState('');
+  const [descLocal, setDescLocal] = useState('');
+  const [tagsCsvLocal, setTagsCsvLocal] = useState('');
   const [image1, setImage1] = useState('');
   const [image2, setImage2] = useState('');
   const [image3, setImage3] = useState('');
@@ -522,7 +561,9 @@ const AddEditEventModal = memo(function AddEditEventModal({
     if (!visible) return;
     if (initialEvent) {
       setTitle(initialEvent.title);
+      setTitleLocal(initialEvent.title);
       setDesc(initialEvent.description ?? '');
+      setDescLocal(initialEvent.description ?? '');
       const imgs: string[] = (initialEvent as any).image_urls?.length
         ? (initialEvent as any).image_urls
         : initialEvent.image_url
@@ -552,7 +593,9 @@ const AddEditEventModal = memo(function AddEditEventModal({
       setLocation(initialEvent.location ?? '');
       setLatitude(initialEvent.latitude ?? null);
       setLongitude(initialEvent.longitude ?? null);
-      setTagsCsv((initialEvent.tags ?? []).join(', '));
+      const tagsStr = (initialEvent.tags ?? []).join(', ');
+      setTagsCsv(tagsStr);
+      setTagsCsvLocal(tagsStr);
       setRsvp((initialEvent as any).rsvp_url ?? '');
       setShowEndTimePicker(false);
     } else {
@@ -560,7 +603,9 @@ const AddEditEventModal = memo(function AddEditEventModal({
       const start = base.hour(18).minute(0).second(0).millisecond(0);
       const endDefault = base.hour(20).minute(0).second(0).millisecond(0);
       setTitle('');
+      setTitleLocal('');
       setDesc('');
+      setDescLocal('');
       setImage1('');
       setImage2('');
       setImage3('');
@@ -577,6 +622,7 @@ const AddEditEventModal = memo(function AddEditEventModal({
       setLatitude(null);
       setLongitude(null);
       setTagsCsv('');
+      setTagsCsvLocal('');
       setRsvp('');
     }
   }, [visible, initialEvent]);
@@ -587,25 +633,35 @@ const AddEditEventModal = memo(function AddEditEventModal({
   );
 
   const submit = async () => {
-    const titleVal = title.trim();
+    // Sync local buffer values before validation
+    const titleVal = titleLocal.trim();
+    const descVal = descLocal;
+    const tagsVal = tagsCsvLocal;
+    setTitle(titleVal);
+    setDesc(descVal);
+    setTagsCsv(tagsVal);
+    const showAlertMsg = (title: string, message: string) => {
+      if (Platform.OS === 'web') {
+        (globalThis as any).alert?.(`${title}: ${message}`);
+      } else {
+        Alert.alert(title, message);
+      }
+    };
     if (!titleVal) {
       setShowValidation(true);
-      Alert.alert('Missing title', 'Please give your event a title.');
+      showAlertMsg('Missing title', 'Please give your event a title.');
       return;
     }
-    const profanityErr = validateEventCopy(titleVal, desc);
+    const profanityErr = validateEventCopy(titleVal, descVal);
     if (profanityErr) {
-      Alert.alert('Inappropriate content', profanityErr);
+      showAlertMsg('Inappropriate content', profanityErr);
       return;
     }
     const hasPicked = pickedUris.length > 0;
     const hasUrl = [image1, image2, image3].some((s) => !!s && s.trim().length > 0);
     if (!hasPicked && !hasUrl) {
       setShowValidation(true);
-      Alert.alert(
-        'Add an image',
-        'Please add at least one image by pasting a URL or picking a photo.',
-      );
+      showAlertMsg('Add an image', 'Please add at least one image by pasting a URL or picking a photo.');
       return;
     }
     const dtIso = dayjs(dateTime).isValid()
@@ -615,30 +671,30 @@ const AddEditEventModal = memo(function AddEditEventModal({
     if (endTimeISO) {
       const end = dayjs(endTimeISO);
       if (!end.isValid()) {
-        Alert.alert('Invalid end time', 'Please enter a valid end time or clear it.');
+        showAlertMsg('Invalid end time', 'Please enter a valid end time or clear it.');
         return;
       }
       if (end.isBefore(dayjs(dtIso))) {
-        Alert.alert('End time before start', 'End time must be after the start time.');
+        showAlertMsg('End time before start', 'End time must be after the start time.');
         return;
       }
       endTimeIso = end.toISOString();
     }
-    const tags = tagsCsv
+    const tags = tagsVal
       .split(',')
       .map((t) => t.trim().toLowerCase())
       .filter(Boolean)
       .filter((v, i, a) => a.indexOf(v) === i);
     if (!tags.length) {
       setShowValidation(true);
-      Alert.alert('Missing tags', 'Please add at least one tag to categorize your event.');
+      showAlertMsg('Missing tags', 'Please add at least one tag to categorize your event.');
       return;
     }
     // Validate location is required
     const locationVal = location.trim();
     if (!locationVal || latitude == null || longitude == null) {
       setShowValidation(true);
-      Alert.alert('Missing location', 'Please select a location for your event.');
+      showAlertMsg('Missing location', 'Please select a location for your event.');
       return;
     }
     // Passed required-field validation
@@ -648,7 +704,7 @@ const AddEditEventModal = memo(function AddEditEventModal({
       image2,
       image3,
     ]);
-    if (imageErrors.length) Alert.alert('Image issues', imageErrors.join('\n'));
+    if (imageErrors.length) showAlertMsg('Image issues', imageErrors.join('\n'));
 
     let uploadedUrls: string[] = [];
     if (pickedUris.length) {
@@ -670,7 +726,7 @@ const AddEditEventModal = memo(function AddEditEventModal({
         }
         uploadedUrls = await uploadEventImages(compressedUris);
       } catch (e: any) {
-        Alert.alert('Upload failed', e?.message ?? 'Could not upload images');
+        showAlertMsg('Upload failed', e?.message ?? 'Could not upload images');
         return;
       }
     }
@@ -687,15 +743,12 @@ const AddEditEventModal = memo(function AddEditEventModal({
       })
       .slice(0, 3);
     if (!finalImages.length) {
-      Alert.alert(
-        'Add an image',
-        'Please add at least one valid image by pasting a URL or picking a photo.',
-      );
+      showAlertMsg('Add an image', 'Please add at least one valid image by pasting a URL or picking a photo.');
       return;
     }
     const payload = {
       title: titleVal,
-      description: desc.trim() || null,
+      description: descVal.trim() || null,
       image_urls: finalImages,
       image_url: finalImages[0] || null,
       date_time: dtIso,
@@ -708,17 +761,17 @@ const AddEditEventModal = memo(function AddEditEventModal({
     };
     setSavingEvent(true);
     try {
-      if (initialEvent?.id) {
-        await updateEvent(initialEvent.id, payload);
-        Alert.alert('Updated', 'Your event was updated.');
+      const eventId = initialEvent?.id;
+      if (eventId) {
+        await updateEvent(eventId, payload);
       } else {
         await createEvent(payload);
-        Alert.alert('Created', 'Your event was created.');
       }
       onClose();
       await onSaved();
     } catch (e: any) {
-      Alert.alert('Error', e?.message ?? 'Failed to save event');
+      const errorMsg = e?.message ?? 'Failed to save event';
+      showAlertMsg('Error', errorMsg);
     } finally {
       setSavingEvent(false);
     }
@@ -751,8 +804,13 @@ const AddEditEventModal = memo(function AddEditEventModal({
   const prevLatRef = useRef<number | null>(null);
   const prevLngRef = useRef<number | null>(null);
 
-  const toggleSection = (key: string) =>
-    setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
+  const toggleSection = useCallback((key: string) =>
+    setOpenSections((prev) => ({ ...prev, [key]: !prev[key] })), []);
+  
+  // Stable toggle callbacks for each section
+  const toggleEssentials = useCallback(() => toggleSection('essentials'), [toggleSection]);
+  const toggleImages = useCallback(() => toggleSection('images'), [toggleSection]);
+  const toggleLocation = useCallback(() => toggleSection('location'), [toggleSection]);
 
   // Streamlined image URL handling: show only one empty input at a time
   const imageUrlList = [image1, image2, image3];
@@ -768,29 +826,6 @@ const AddEditEventModal = memo(function AddEditEventModal({
     // show one next empty only if prior has content
     return filledBefore && !currentFilled;
   });
-
-  // Section component inline (small, avoids extra file)
-  const Section: React.FC<{ id: string; title: string; defaultOpen?: boolean; children: React.ReactNode }> = ({ id, title, children }) => {
-    const open = openSections[id];
-    return (
-      <View style={{ marginBottom: 14, borderRadius: 12, borderWidth: 1, borderColor: '#00000020', backgroundColor: c.card }}>
-        <Pressable
-          onPress={() => toggleSection(id)}
-          accessibilityRole="button"
-          accessibilityLabel={`${open ? 'Collapse' : 'Expand'} ${title} section`}
-          style={{ paddingHorizontal: 14, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
-        >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                {id === 'images' ? <Ionicons name="image-outline" size={18} color={c.muted} /> : null}
-                {id === 'location' ? <Ionicons name="location-outline" size={18} color={c.muted} /> : null}
-                <Text style={{ color: c.text, fontWeight: '700', fontSize: 15 }}>{title}</Text>
-              </View>
-          <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={18} color={c.muted} />
-        </Pressable>
-        {open ? <View style={{ paddingHorizontal: 14, paddingBottom: 14, gap: 10 }}>{children}</View> : null}
-      </View>
-    );
-  };
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={() => !savingEvent && onClose()}>
@@ -808,31 +843,42 @@ const AddEditEventModal = memo(function AddEditEventModal({
           </View>
         </BlurView>
         <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 120 }}>
-          <Section id="essentials" title="Details">
+          <ModalSection
+            id="essentials"
+            title="Details"
+            isOpen={openSections.essentials}
+            onToggle={toggleEssentials}
+            cardBg={c.card}
+            textColor={c.text}
+            mutedColor={c.muted}
+          >
             <TextInput
               placeholder="Title"
               placeholderTextColor={c.muted}
-              value={title}
-              onChangeText={setTitle}
-              style={{ color: c.text, backgroundColor: '#00000010', padding: 12, borderRadius: 10, fontSize: 15, borderWidth: 1, borderColor: showValidation && !title.trim() ? '#ff4444' : '#00000020' }}
+              value={titleLocal}
+              onChangeText={setTitleLocal}
+              onBlur={() => setTitle(titleLocal)}
+              style={{ color: c.text, backgroundColor: '#00000010', padding: 12, borderRadius: 10, fontSize: 15, borderWidth: 1, borderColor: showValidation && !titleLocal.trim() ? '#ff4444' : '#00000020' }}
             />
             <View>
               <TextInput
                 placeholder="Description, Building/Room Number, etc."
                 placeholderTextColor={c.muted}
-                value={desc}
-                onChangeText={setDesc}
+                value={descLocal}
+                onChangeText={setDescLocal}
+                onBlur={() => setDesc(descLocal)}
                 multiline
                 style={{ color: c.text, backgroundColor: '#00000010', padding: 12, borderRadius: 10, minHeight: 100, fontSize: 14 }}
               />
-              <Text style={{ color: c.muted, fontSize: 11, marginTop: 4 }}>{desc.length} chars</Text>
+              <Text style={{ color: c.muted, fontSize: 11, marginTop: 4 }}>{descLocal.length} chars</Text>
             </View>
             <View style={{ gap: 6 }}>
               <TextInput
                 placeholder="Tags (comma seperated ex: workshop, engineering, free food)"
                 placeholderTextColor={c.muted}
-                value={tagsCsv}
-                onChangeText={setTagsCsv}
+                value={tagsCsvLocal}
+                onChangeText={setTagsCsvLocal}
+                onBlur={() => setTagsCsv(tagsCsvLocal)}
                 style={{
                   color: c.text,
                   backgroundColor: '#00000010',
@@ -840,15 +886,15 @@ const AddEditEventModal = memo(function AddEditEventModal({
                   borderRadius: 10,
                   fontSize: 14,
                   borderWidth: 1,
-                  borderColor: showValidation && !tagsCsv.trim().length ? '#ff4444' : '#00000020',
+                  borderColor: showValidation && !tagsCsvLocal.trim().length ? '#ff4444' : '#00000020',
                 }}
                 autoCapitalize="none"
               />
-              {tagsCsv.trim().length === 0 ? (
+              {tagsCsvLocal.trim().length === 0 ? (
                 showValidation ? <Text style={{ color: '#ff6666', fontSize: 11 }}>Add at least one tag.</Text> : null
               ) : (
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-                  {Array.from(new Set(tagsCsv.split(',').map(t => t.trim().toLowerCase()).filter(Boolean))).slice(0,12).map(t => (
+                  {Array.from(new Set(tagsCsvLocal.split(',').map(t => t.trim().toLowerCase()).filter(Boolean))).slice(0,12).map(t => (
                     <View key={t} style={{ backgroundColor: c.primary, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999 }}>
                       <Text style={{ color: '#000', fontSize: 11, fontWeight: '700' }}>#{t}</Text>
                     </View>
@@ -856,7 +902,7 @@ const AddEditEventModal = memo(function AddEditEventModal({
                 </View>
               )}
             </View>
-          </Section>
+          </ModalSection>
           {/* Static When card */}
           <View style={{ marginBottom: 14, borderRadius: 12, borderWidth: 1, borderColor: '#00000020', backgroundColor: c.card }}>
             <View style={{ paddingHorizontal: 14, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -865,227 +911,244 @@ const AddEditEventModal = memo(function AddEditEventModal({
             </View>
             {Platform.OS === 'web' ? (
               <View style={{ paddingHorizontal: 14, paddingBottom: 14, gap: 10 }}>
-                <TextInput
-                  placeholder="Date (YYYY-MM-DD)"
-                  placeholderTextColor={c.muted}
-                  value={dateInput}
-                  onChangeText={(val) => {
-                    setDateInput(val);
-                    const parsed = dayjs(val, 'YYYY-MM-DD', true);
-                    if (parsed.isValid()) {
-                      const current = dayjs(dateTime);
-                      const merged = parsed
-                        .hour(current.hour())
-                        .minute(current.minute())
-                        .second(0)
-                        .millisecond(0);
-                      setDateTime(merged.toISOString());
-                      // also adjust end time date portion if exists
-                      if (endTimeISO) {
-                        const end = dayjs(endTimeISO);
-                        const endMerged = parsed
-                          .hour(end.hour())
-                          .minute(end.minute())
-                          .second(0)
-                          .millisecond(0);
-                        setEndTimeISO(endMerged.toISOString());
-                      }
-                    }
+                {/* Native HTML date picker for web */}
+                <Pressable
+                  style={{ backgroundColor: '#00000010', padding: 12, borderRadius: 10, position: 'relative' }}
+                  onPress={() => {
+                    // Trigger the hidden date input
+                    const input = (globalThis as any).document?.getElementById?.('event-date-picker');
+                    if (input) input.showPicker?.() || input.click?.();
                   }}
-                  style={{ color: c.text, backgroundColor: '#00000010', padding: 12, borderRadius: 10 }}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-                <View style={{ flexDirection: 'row', gap: 8 }}>
-                  {/* Start time + inline AM/PM */}
-                  <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <TextInput
-                      placeholder="Start (e.g. 3:30)"
-                      placeholderTextColor={c.muted}
-                      value={timeInput}
-                      onChangeText={(val) => {
-                        setTimeInput(val);
-                        const m = val.trim().match(/^(\d{1,2})(?::(\d{2}))?$/);
-                        if (!m) return;
-                        let hour = parseInt(m[1], 10);
-                        const minute = m[2] ? parseInt(m[2], 10) : 0;
-                        if (hour < 1 || hour > 12 || minute < 0 || minute > 59) return;
-                        let h24 = hour % 12;
-                        if (startMeridiem === 'PM') h24 += 12;
-                        const baseDate = dayjs(dateInput, 'YYYY-MM-DD', true).isValid()
-                          ? dayjs(dateInput, 'YYYY-MM-DD', true)
-                          : dayjs(dateTime);
-                        const merged = baseDate.hour(h24).minute(minute).second(0).millisecond(0);
-                        setDateTime(merged.toISOString());
-                        if (endTimeISO) {
-                          const end = dayjs(endTimeISO);
-                          if (end.isBefore(merged)) {
-                            const bumped = merged.add(1, 'hour');
-                            setEndTimeISO(bumped.toISOString());
-                            setEndTimeInput(bumped.format('h:mm'));
-                            setEndMeridiem(bumped.format('A') as 'AM' | 'PM');
+                >
+                  <Text style={{ color: c.text, fontWeight: '700', textAlign: 'center' }}>
+                    {dayjs(dateTime).format('dddd, MMMM D, YYYY')}
+                  </Text>
+                  {Platform.OS === 'web' && (
+                    <input
+                      id="event-date-picker"
+                      type="date"
+                      value={dateInput}
+                      onChange={(e: any) => {
+                        const val = e.target.value;
+                        setDateInput(val);
+                        const parsed = dayjs(val, 'YYYY-MM-DD', true);
+                        if (parsed.isValid()) {
+                          const current = dayjs(dateTime);
+                          const merged = parsed
+                            .hour(current.hour())
+                            .minute(current.minute())
+                            .second(0)
+                            .millisecond(0);
+                          setDateTime(merged.toISOString());
+                          if (endTimeISO) {
+                            const end = dayjs(endTimeISO);
+                            const endMerged = parsed
+                              .hour(end.hour())
+                              .minute(end.minute())
+                              .second(0)
+                              .millisecond(0);
+                            setEndTimeISO(endMerged.toISOString());
                           }
                         }
                       }}
-                      style={{ flex: 1, color: c.text, backgroundColor: '#00000010', paddingVertical: 10, paddingHorizontal: 12, borderRadius: 10 }}
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                      keyboardType={Platform.OS === 'web' ? 'default' : 'numbers-and-punctuation'}
+                      style={{
+                        position: 'absolute',
+                        opacity: 0,
+                        width: '100%',
+                        height: '100%',
+                        top: 0,
+                        left: 0,
+                        cursor: 'pointer',
+                      }}
                     />
-                    <Pressable
-                      onPress={() => {
-                        setStartMeridiem('AM');
-                        const m = timeInput.trim().match(/^(\d{1,2})(?::(\d{2}))?$/);
-                        let hour: number;
-                        let minute: number;
-                        if (m) {
-                          hour = Math.min(12, Math.max(1, parseInt(m[1], 10)));
-                          minute = m[2] ? Math.min(59, Math.max(0, parseInt(m[2], 10))) : 0;
-                        } else {
-                          const cur = dayjs(dateTime);
-                          hour = parseInt(cur.format('h'), 10);
-                          minute = cur.minute();
-                          setTimeInput(cur.format('h:mm'));
-                        }
-                        let h24 = hour % 12; // AM => keep 0-11
-                        const baseDate = dayjs(dateInput, 'YYYY-MM-DD', true).isValid()
-                          ? dayjs(dateInput, 'YYYY-MM-DD', true)
-                          : dayjs(dateTime);
-                        const merged = baseDate.hour(h24).minute(minute).second(0).millisecond(0);
-                        setDateTime(merged.toISOString());
-                      }}
-                      style={{
-                        paddingVertical: 6,
-                        paddingHorizontal: 10,
-                        borderRadius: 8,
-                        backgroundColor: startMeridiem === 'AM' ? c.primary : 'transparent',
-                        borderWidth: 1,
-                        borderColor: '#00000030',
-                        minWidth: 44,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      <Text style={{ color: startMeridiem === 'AM' ? '#000' : c.text, fontWeight: '700' }}>AM</Text>
-                    </Pressable>
-                    <Pressable
-                      onPress={() => {
-                        setStartMeridiem('PM');
-                        const m = timeInput.trim().match(/^(\d{1,2})(?::(\d{2}))?$/);
-                        let hour: number;
-                        let minute: number;
-                        if (m) {
-                          hour = Math.min(12, Math.max(1, parseInt(m[1], 10)));
-                          minute = m[2] ? Math.min(59, Math.max(0, parseInt(m[2], 10))) : 0;
-                        } else {
-                          const cur = dayjs(dateTime);
-                          hour = parseInt(cur.format('h'), 10);
-                          minute = cur.minute();
-                          setTimeInput(cur.format('h:mm'));
-                        }
-                        let h24 = (hour % 12) + 12; // PM => force 12-23
-                        const baseDate = dayjs(dateInput, 'YYYY-MM-DD', true).isValid()
-                          ? dayjs(dateInput, 'YYYY-MM-DD', true)
-                          : dayjs(dateTime);
-                        const merged = baseDate.hour(h24).minute(minute).second(0).millisecond(0);
-                        setDateTime(merged.toISOString());
-                      }}
-                      style={{
-                        paddingVertical: 6,
-                        paddingHorizontal: 10,
-                        borderRadius: 8,
-                        backgroundColor: startMeridiem === 'PM' ? c.primary : 'transparent',
-                        borderWidth: 1,
-                        borderColor: '#00000030',
-                        minWidth: 44,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      <Text style={{ color: startMeridiem === 'PM' ? '#000' : c.text, fontWeight: '700' }}>PM</Text>
-                    </Pressable>
+                  )}
+                </Pressable>
+
+                {/* Time inputs - responsive layout: stacked on narrow screens */}
+                <View style={{ flexDirection: isNarrowScreen ? 'column' : 'row', gap: 8 }}>
+                  {/* Start time + inline AM/PM */}
+                  <View style={{ flex: isNarrowScreen ? undefined : 1 }}>
+                    <Text style={{ color: c.muted, fontSize: 11, marginBottom: 4 }}>Start Time</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <TextInput
+                        placeholder="e.g. 3:30"
+                        placeholderTextColor={c.muted}
+                        value={timeInput}
+                        onChangeText={(val) => {
+                          setTimeInput(val);
+                          const m = val.trim().match(/^(\d{1,2})(?::(\d{2}))?$/);
+                          if (!m) return;
+                          let hour = parseInt(m[1], 10);
+                          const minute = m[2] ? parseInt(m[2], 10) : 0;
+                          if (hour < 1 || hour > 12 || minute < 0 || minute > 59) return;
+                          let h24 = hour % 12;
+                          if (startMeridiem === 'PM') h24 += 12;
+                          const baseDate = dayjs(dateInput, 'YYYY-MM-DD', true).isValid()
+                            ? dayjs(dateInput, 'YYYY-MM-DD', true)
+                            : dayjs(dateTime);
+                          const merged = baseDate.hour(h24).minute(minute).second(0).millisecond(0);
+                          setDateTime(merged.toISOString());
+                          if (endTimeISO) {
+                            const end = dayjs(endTimeISO);
+                            if (end.isBefore(merged)) {
+                              const bumped = merged.add(1, 'hour');
+                              setEndTimeISO(bumped.toISOString());
+                              setEndTimeInput(bumped.format('h:mm'));
+                              setEndMeridiem(bumped.format('A') as 'AM' | 'PM');
+                            }
+                          }
+                        }}
+                        style={{ flex: 1, color: c.text, backgroundColor: '#00000010', paddingVertical: 10, paddingHorizontal: 12, borderRadius: 10 }}
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                        keyboardType="default"
+                      />
+                      <Pressable
+                        onPress={() => {
+                          setStartMeridiem('AM');
+                          const m = timeInput.trim().match(/^(\d{1,2})(?::(\d{2}))?$/);
+                          let hour: number;
+                          let minute: number;
+                          if (m) {
+                            hour = Math.min(12, Math.max(1, parseInt(m[1], 10)));
+                            minute = m[2] ? Math.min(59, Math.max(0, parseInt(m[2], 10))) : 0;
+                          } else {
+                            const cur = dayjs(dateTime);
+                            hour = parseInt(cur.format('h'), 10);
+                            minute = cur.minute();
+                            setTimeInput(cur.format('h:mm'));
+                          }
+                          let h24 = hour % 12;
+                          const baseDate = dayjs(dateInput, 'YYYY-MM-DD', true).isValid()
+                            ? dayjs(dateInput, 'YYYY-MM-DD', true)
+                            : dayjs(dateTime);
+                          const merged = baseDate.hour(h24).minute(minute).second(0).millisecond(0);
+                          setDateTime(merged.toISOString());
+                        }}
+                        style={{
+                          paddingVertical: 10,
+                          paddingHorizontal: 14,
+                          borderRadius: 8,
+                          backgroundColor: startMeridiem === 'AM' ? c.primary : 'transparent',
+                          borderWidth: 1,
+                          borderColor: '#00000030',
+                        }}
+                      >
+                        <Text style={{ color: startMeridiem === 'AM' ? '#000' : c.text, fontWeight: '700' }}>AM</Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => {
+                          setStartMeridiem('PM');
+                          const m = timeInput.trim().match(/^(\d{1,2})(?::(\d{2}))?$/);
+                          let hour: number;
+                          let minute: number;
+                          if (m) {
+                            hour = Math.min(12, Math.max(1, parseInt(m[1], 10)));
+                            minute = m[2] ? Math.min(59, Math.max(0, parseInt(m[2], 10))) : 0;
+                          } else {
+                            const cur = dayjs(dateTime);
+                            hour = parseInt(cur.format('h'), 10);
+                            minute = cur.minute();
+                            setTimeInput(cur.format('h:mm'));
+                          }
+                          let h24 = (hour % 12) + 12;
+                          const baseDate = dayjs(dateInput, 'YYYY-MM-DD', true).isValid()
+                            ? dayjs(dateInput, 'YYYY-MM-DD', true)
+                            : dayjs(dateTime);
+                          const merged = baseDate.hour(h24).minute(minute).second(0).millisecond(0);
+                          setDateTime(merged.toISOString());
+                        }}
+                        style={{
+                          paddingVertical: 10,
+                          paddingHorizontal: 14,
+                          borderRadius: 8,
+                          backgroundColor: startMeridiem === 'PM' ? c.primary : 'transparent',
+                          borderWidth: 1,
+                          borderColor: '#00000030',
+                        }}
+                      >
+                        <Text style={{ color: startMeridiem === 'PM' ? '#000' : c.text, fontWeight: '700' }}>PM</Text>
+                      </Pressable>
+                    </View>
                   </View>
 
                   {/* End time + inline AM/PM */}
-                  <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <TextInput
-                      placeholder="End (optional)"
-                      placeholderTextColor={c.muted}
-                      value={endTimeInput}
-                      onChangeText={(val) => {
-                        setEndTimeInput(val);
-                        const m = val.trim().match(/^(\d{1,2})(?::(\d{2}))?$/);
-                        if (val.trim() === '') { setEndTimeISO(null); return; }
-                        if (!m) return;
-                        let hour = parseInt(m[1], 10);
-                        const minute = m[2] ? parseInt(m[2], 10) : 0;
-                        if (hour < 1 || hour > 12 || minute < 0 || minute > 59) return;
-                        let h24 = hour % 12;
-                        if (endMeridiem === 'PM') h24 += 12;
-                        const baseStart = dayjs(dateTime);
-                        let end = baseStart.hour(h24).minute(minute).second(0).millisecond(0);
-                        if (end.isBefore(baseStart)) end = end.add(1, 'hour');
-                        setEndTimeISO(end.toISOString());
-                      }}
-                      style={{ flex: 1, color: c.text, backgroundColor: '#00000010', paddingVertical: 10, paddingHorizontal: 12, borderRadius: 10 }}
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                      keyboardType={Platform.OS === 'web' ? 'default' : 'numbers-and-punctuation'}
-                    />
-                    <Pressable
-                      onPress={() => {
-                        setEndMeridiem('AM');
-                        const m = endTimeInput.trim().match(/^(\d{1,2})(?::(\d{2}))?$/);
-                        if (!m) return;
-                        let hour = Math.min(12, Math.max(1, parseInt(m[1], 10)));
-                        const minute = m[2] ? Math.min(59, Math.max(0, parseInt(m[2], 10))) : 0;
-                        let h24 = hour % 12; // AM => keep 0-11
-                        const baseStart = dayjs(dateTime);
-                        let end = baseStart.hour(h24).minute(minute).second(0).millisecond(0);
-                        if (end.isBefore(baseStart)) end = end.add(1, 'hour');
-                        setEndTimeISO(end.toISOString());
-                      }}
-                      style={{
-                        paddingVertical: 6,
-                        paddingHorizontal: 10,
-                        borderRadius: 8,
-                        backgroundColor: endMeridiem === 'AM' ? c.primary : 'transparent',
-                        borderWidth: 1,
-                        borderColor: '#00000030',
-                        minWidth: 44,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      <Text style={{ color: endMeridiem === 'AM' ? '#000' : c.text, fontWeight: '700' }}>AM</Text>
-                    </Pressable>
-                    <Pressable
-                      onPress={() => {
-                        setEndMeridiem('PM');
-                        const m = endTimeInput.trim().match(/^(\d{1,2})(?::(\d{2}))?$/);
-                        if (!m) return;
-                        let hour = Math.min(12, Math.max(1, parseInt(m[1], 10)));
-                        const minute = m[2] ? Math.min(59, Math.max(0, parseInt(m[2], 10))) : 0;
-                        let h24 = (hour % 12) + 12; // PM => force 12-23
-                        const baseStart = dayjs(dateTime);
-                        let end = baseStart.hour(h24).minute(minute).second(0).millisecond(0);
-                        if (end.isBefore(baseStart)) end = end.add(1, 'hour');
-                        setEndTimeISO(end.toISOString());
-                      }}
-                      style={{
-                        paddingVertical: 6,
-                        paddingHorizontal: 10,
-                        borderRadius: 8,
-                        backgroundColor: endMeridiem === 'PM' ? c.primary : 'transparent',
-                        borderWidth: 1,
-                        borderColor: '#00000030',
-                        minWidth: 44,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      <Text style={{ color: endMeridiem === 'PM' ? '#000' : c.text, fontWeight: '700' }}>PM</Text>
-                    </Pressable>
+                  <View style={{ flex: isNarrowScreen ? undefined : 1 }}>
+                    <Text style={{ color: c.muted, fontSize: 11, marginBottom: 4 }}>End Time (optional)</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <TextInput
+                        placeholder="e.g. 5:00"
+                        placeholderTextColor={c.muted}
+                        value={endTimeInput}
+                        onChangeText={(val) => {
+                          setEndTimeInput(val);
+                          const m = val.trim().match(/^(\d{1,2})(?::(\d{2}))?$/);
+                          if (val.trim() === '') { setEndTimeISO(null); return; }
+                          if (!m) return;
+                          let hour = parseInt(m[1], 10);
+                          const minute = m[2] ? parseInt(m[2], 10) : 0;
+                          if (hour < 1 || hour > 12 || minute < 0 || minute > 59) return;
+                          let h24 = hour % 12;
+                          if (endMeridiem === 'PM') h24 += 12;
+                          const baseStart = dayjs(dateTime);
+                          let end = baseStart.hour(h24).minute(minute).second(0).millisecond(0);
+                          if (end.isBefore(baseStart)) end = end.add(1, 'hour');
+                          setEndTimeISO(end.toISOString());
+                        }}
+                        style={{ flex: 1, color: c.text, backgroundColor: '#00000010', paddingVertical: 10, paddingHorizontal: 12, borderRadius: 10 }}
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                        keyboardType="default"
+                      />
+                      <Pressable
+                        onPress={() => {
+                          setEndMeridiem('AM');
+                          const m = endTimeInput.trim().match(/^(\d{1,2})(?::(\d{2}))?$/);
+                          if (!m) return;
+                          let hour = Math.min(12, Math.max(1, parseInt(m[1], 10)));
+                          const minute = m[2] ? Math.min(59, Math.max(0, parseInt(m[2], 10))) : 0;
+                          let h24 = hour % 12;
+                          const baseStart = dayjs(dateTime);
+                          let end = baseStart.hour(h24).minute(minute).second(0).millisecond(0);
+                          if (end.isBefore(baseStart)) end = end.add(1, 'hour');
+                          setEndTimeISO(end.toISOString());
+                        }}
+                        style={{
+                          paddingVertical: 10,
+                          paddingHorizontal: 14,
+                          borderRadius: 8,
+                          backgroundColor: endMeridiem === 'AM' ? c.primary : 'transparent',
+                          borderWidth: 1,
+                          borderColor: '#00000030',
+                        }}
+                      >
+                        <Text style={{ color: endMeridiem === 'AM' ? '#000' : c.text, fontWeight: '700' }}>AM</Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => {
+                          setEndMeridiem('PM');
+                          const m = endTimeInput.trim().match(/^(\d{1,2})(?::(\d{2}))?$/);
+                          if (!m) return;
+                          let hour = Math.min(12, Math.max(1, parseInt(m[1], 10)));
+                          const minute = m[2] ? Math.min(59, Math.max(0, parseInt(m[2], 10))) : 0;
+                          let h24 = (hour % 12) + 12;
+                          const baseStart = dayjs(dateTime);
+                          let end = baseStart.hour(h24).minute(minute).second(0).millisecond(0);
+                          if (end.isBefore(baseStart)) end = end.add(1, 'hour');
+                          setEndTimeISO(end.toISOString());
+                        }}
+                        style={{
+                          paddingVertical: 10,
+                          paddingHorizontal: 14,
+                          borderRadius: 8,
+                          backgroundColor: endMeridiem === 'PM' ? c.primary : 'transparent',
+                          borderWidth: 1,
+                          borderColor: '#00000030',
+                        }}
+                      >
+                        <Text style={{ color: endMeridiem === 'PM' ? '#000' : c.text, fontWeight: '700' }}>PM</Text>
+                      </Pressable>
+                    </View>
                   </View>
                 </View>
                 {endTimeISO && dayjs(endTimeISO).isValid() && dayjs(endTimeISO).isBefore(dayjs(dateTime)) ? (
@@ -1170,7 +1233,15 @@ const AddEditEventModal = memo(function AddEditEventModal({
               </View>
             )}
           </View>
-          <Section id="images" title="Images">
+          <ModalSection
+            id="images"
+            title="Images"
+            isOpen={openSections.images}
+            onToggle={toggleImages}
+            cardBg={c.card}
+            textColor={c.text}
+            mutedColor={c.muted}
+          >
             <View style={{ gap: 10 }}>
               {activeImageInputs.map((v, idx) => (
                 <TextInput
@@ -1308,8 +1379,16 @@ const AddEditEventModal = memo(function AddEditEventModal({
                 First image is cover. Up to 3 images (picked + URLs combined, no duplicates).
               </Text>
             </View>
-          </Section>
-          <Section id="location" title="Location">
+          </ModalSection>
+          <ModalSection
+            id="location"
+            title="Location"
+            isOpen={openSections.location}
+            onToggle={toggleLocation}
+            cardBg={c.card}
+            textColor={c.text}
+            mutedColor={c.muted}
+          >
             <LocationPicker
               value={location}
               latitude={latitude}
@@ -1330,7 +1409,7 @@ const AddEditEventModal = memo(function AddEditEventModal({
               placeholderColor={c.muted}
             />
             {locationStatus ? <Text style={{ color: c.muted, fontSize: 11 }}>{locationStatus}</Text> : null}
-          </Section>
+          </ModalSection>
           {/* RSVP URL card */}
           <View style={{ marginBottom: 14, borderRadius: 12, borderWidth: 1, borderColor: '#00000020', backgroundColor: c.card }}>
             <View style={{ paddingHorizontal: 14, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -1353,22 +1432,46 @@ const AddEditEventModal = memo(function AddEditEventModal({
             </View>
           </View>
         </ScrollView>
-        <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: 12 }}>
+        <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: 12, zIndex: 100 }}>
           <BlurView intensity={30} tint={scheme === 'dark' ? 'dark' : 'light'} style={{ borderRadius: 16, overflow: 'hidden' }}>
             <View style={{ flexDirection: 'row', gap: 12, padding: 12 }}>
               <Pressable
-                onPress={submit}
-                disabled={savingEvent}
-                style={{ flex: 1, backgroundColor: savingEvent ? c.muted : c.primary, paddingVertical: 14, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}
+                onPress={() => {
+                  if (savingEvent) return;
+                  submit();
+                }}
+                accessibilityRole="button"
+                style={({ pressed }) => ({
+                  flex: 1,
+                  backgroundColor: savingEvent ? c.muted : pressed ? `${c.primary}dd` : c.primary,
+                  paddingVertical: 14,
+                  borderRadius: 12,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  opacity: savingEvent ? 0.7 : 1,
+                  cursor: Platform.OS === 'web' ? 'pointer' : undefined,
+                } as any)}
               >
                 <Text style={{ color: '#000', fontWeight: '700' }}>
                   {savingEvent ? 'Saving…' : initialEvent ? 'Update Event' : 'Create Event'}
                 </Text>
               </Pressable>
               <Pressable
-                onPress={onClose}
-                disabled={savingEvent}
-                style={{ flex: 1, backgroundColor: '#00000030', paddingVertical: 14, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}
+                onPress={() => {
+                  if (savingEvent) return;
+                  onClose();
+                }}
+                accessibilityRole="button"
+                style={({ pressed }) => ({
+                  flex: 1,
+                  backgroundColor: pressed ? '#00000050' : '#00000030',
+                  paddingVertical: 14,
+                  borderRadius: 12,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  opacity: savingEvent ? 0.7 : 1,
+                  cursor: Platform.OS === 'web' ? 'pointer' : undefined,
+                } as any)}
               >
                 <Text style={{ color: c.text, fontWeight: '600' }}>Cancel</Text>
               </Pressable>

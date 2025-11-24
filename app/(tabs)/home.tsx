@@ -119,8 +119,14 @@ function ViewAllCard({ onPress, label = 'View All' }: { onPress: () => void; lab
 // Compact square card for restaurants
 function CompactFoodCard({ restaurant, onPress }: { restaurant: Restaurant & { match_percent?: number }; onPress: () => void }) {
   const c = useThemeColors();
+  const [imageFailed, setImageFailed] = useState(false);
   const images = [restaurant.main_image, restaurant.image_1, restaurant.image_2, restaurant.image_3].filter(Boolean) as string[];
   const cover = images[0];
+
+  // Reset imageFailed when cover changes
+  useEffect(() => {
+    setImageFailed(false);
+  }, [cover]);
 
   return (
     <Pressable
@@ -134,18 +140,21 @@ function CompactFoodCard({ restaurant, onPress }: { restaurant: Restaurant & { m
       ]}
     >
       <View style={styles.compactImageContainer}>
-        {cover ? (
+        {cover && !imageFailed ? (
           <LazyImage
             uri={cover}
             width="100%"
             height="100%"
             borderRadius={0}
             resizeMode="cover"
+            onError={() => setImageFailed(true)}
           />
         ) : (
-          <View style={[styles.compactImage, { backgroundColor: c.muted + '20', alignItems: 'center', justifyContent: 'center' }]}>
-            <Ionicons name="restaurant-outline" size={24} color={c.muted} />
-          </View>
+          <Image
+            source={require('../../assets/NoImageRestaurant.jpg')}
+            style={{ width: '100%', height: '100%' }}
+            resizeMode="cover"
+          />
         )}
         {restaurant.match_percent && (
           <View style={styles.matchBadgeContainer}>
