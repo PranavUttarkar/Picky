@@ -20,7 +20,7 @@ export default function AdminReportsPanel({ isAdmin, onEventDeleted }: AdminRepo
   const [statusFilter, setStatusFilter] = useState<ReportStatus | null>(null);
   const [selectedReport, setSelectedReport] = useState<EventReportWithDetails | null>(null);
   const [actionLoading, setActionLoading] = useState<number | null>(null);
-  const [isExpanded, setIsExpanded] = useState(true);
+  const [isExpanded, setIsExpanded] = useState(false);
 
   const loadReports = async () => {
     if (!isAdmin) return;
