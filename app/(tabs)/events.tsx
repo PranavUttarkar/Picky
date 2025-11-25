@@ -2035,7 +2035,7 @@ export default function Home() {
     return (data ?? []) as Event[];
   };
 
-  const loadFirstPage = async () => {
+  const loadFirstPage = useCallback(async () => {
     setIsFetching(true);
     try {
       const first = await fetchPage(0);
@@ -2047,9 +2047,9 @@ export default function Home() {
     } finally {
       setIsFetching(false);
     }
-  };
+  }, []);
 
-  const loadNextPage = async () => {
+  const loadNextPage = useCallback(async () => {
     if (isFetching || !hasMore) return;
     setIsFetching(true);
     try {
@@ -2073,15 +2073,25 @@ export default function Home() {
     } finally {
       setIsFetching(false);
     }
-  };
+  }, [isFetching, hasMore, page]);
 
-  const onRefresh = async () => {
+  const onRefresh = useCallback(async () => {
     setRefreshing(true);
     setPage(0);
     setHasMore(true);
-    await loadFirstPage();
-    setRefreshing(false);
-  };
+    setIsFetching(true);
+    try {
+      const first = await fetchPage(0);
+      const hasMoreNow = first.length === PAGE_SIZE;
+      setEvents(first as Event[]);
+      setHasMore(hasMoreNow);
+      await saveCache(first as Event[]);
+      setPage(1);
+    } finally {
+      setIsFetching(false);
+      setRefreshing(false);
+    }
+  }, []);
 
   useEffect(() => {
     // Load cached first for instant paint, then fetch
@@ -2153,7 +2163,7 @@ export default function Home() {
   const listViewportHeightRef = useRef(0);
   const contentHeightRef = useRef(0);
   const fillCheckDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const maybeLoadMoreIfShort = () => {
+  const maybeLoadMoreIfShort = useCallback(() => {
     if (fillCheckDebounce.current) clearTimeout(fillCheckDebounce.current);
     fillCheckDebounce.current = setTimeout(() => {
       const vh = listViewportHeightRef.current;
@@ -2162,7 +2172,7 @@ export default function Home() {
         loadNextPage();
       }
     }, 50);
-  };
+  }, [hasMore, isFetching, loadNextPage]);
 
   const requireAuth = async (): Promise<boolean> => {
     const user = (await supabase.auth.getUser()).data.user;
