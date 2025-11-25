@@ -988,15 +988,6 @@ const AddEditEventModal = memo(function AddEditEventModal({
                             : dayjs(dateTime);
                           const merged = baseDate.hour(h24).minute(minute).second(0).millisecond(0);
                           setDateTime(merged.toISOString());
-                          if (endTimeISO) {
-                            const end = dayjs(endTimeISO);
-                            if (end.isBefore(merged)) {
-                              const bumped = merged.add(1, 'hour');
-                              setEndTimeISO(bumped.toISOString());
-                              setEndTimeInput(bumped.format('h:mm'));
-                              setEndMeridiem(bumped.format('A') as 'AM' | 'PM');
-                            }
-                          }
                         }}
                         style={{ flex: 1, color: c.text, backgroundColor: '#00000010', paddingVertical: 10, paddingHorizontal: 12, borderRadius: 10 }}
                         autoCapitalize="none"
@@ -1091,8 +1082,7 @@ const AddEditEventModal = memo(function AddEditEventModal({
                           let h24 = hour % 12;
                           if (endMeridiem === 'PM') h24 += 12;
                           const baseStart = dayjs(dateTime);
-                          let end = baseStart.hour(h24).minute(minute).second(0).millisecond(0);
-                          if (end.isBefore(baseStart)) end = end.add(1, 'hour');
+                          const end = baseStart.hour(h24).minute(minute).second(0).millisecond(0);
                           setEndTimeISO(end.toISOString());
                         }}
                         style={{ flex: 1, color: c.text, backgroundColor: '#00000010', paddingVertical: 10, paddingHorizontal: 12, borderRadius: 10 }}
@@ -1109,8 +1099,7 @@ const AddEditEventModal = memo(function AddEditEventModal({
                           const minute = m[2] ? Math.min(59, Math.max(0, parseInt(m[2], 10))) : 0;
                           let h24 = hour % 12;
                           const baseStart = dayjs(dateTime);
-                          let end = baseStart.hour(h24).minute(minute).second(0).millisecond(0);
-                          if (end.isBefore(baseStart)) end = end.add(1, 'hour');
+                          const end = baseStart.hour(h24).minute(minute).second(0).millisecond(0);
                           setEndTimeISO(end.toISOString());
                         }}
                         style={{
@@ -1133,8 +1122,7 @@ const AddEditEventModal = memo(function AddEditEventModal({
                           const minute = m[2] ? Math.min(59, Math.max(0, parseInt(m[2], 10))) : 0;
                           let h24 = (hour % 12) + 12;
                           const baseStart = dayjs(dateTime);
-                          let end = baseStart.hour(h24).minute(minute).second(0).millisecond(0);
-                          if (end.isBefore(baseStart)) end = end.add(1, 'hour');
+                          const end = baseStart.hour(h24).minute(minute).second(0).millisecond(0);
                           setEndTimeISO(end.toISOString());
                         }}
                         style={{
@@ -1151,9 +1139,6 @@ const AddEditEventModal = memo(function AddEditEventModal({
                     </View>
                   </View>
                 </View>
-                {endTimeISO && dayjs(endTimeISO).isValid() && dayjs(endTimeISO).isBefore(dayjs(dateTime)) ? (
-                  <Text style={{ color: '#ef4444', fontSize: 12 }}>End time must be after start time.</Text>
-                ) : null}
                 <Text style={{ color: c.muted, fontSize: 11 }}>
                   Start: {dayjs(dateTime).format('YYYY-MM-DD h:mm A')} {endTimeISO ? `· End: ${dayjs(endTimeISO).format('h:mm A')}` : ''}
                 </Text>
