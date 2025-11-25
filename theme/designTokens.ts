@@ -83,7 +83,7 @@ export const Colors = {
     card: '#1F2937',
     text: '#F9FAFB',
     muted: '#9CA3AF',
-    primary: '#5EC9FF',
+    primary: '#ffc494ff',
     accent: '#1E1B4B',
   },
 } as const;

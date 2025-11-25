@@ -17,7 +17,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		13B07F961A680F5B00A75B9A /* Picky.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Picky.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		13B07F961A680F5B00A75B9A /* usepicky.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = usepicky.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = Picky/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = Picky/Info.plist; sourceTree = "<group>"; };
 		4F62024FCF86D36F2CAFCF36 /* Pods-Picky.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Picky.release.xcconfig"; path = "Target Support Files/Pods-Picky/Pods-Picky.release.xcconfig"; sourceTree = "<group>"; };
@@ -108,7 +108,7 @@
 		83CBBA001A601CBA00E9B192 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				13B07F961A680F5B00A75B9A /* Picky.app */,
+				13B07F961A680F5B00A75B9A /* usepicky.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -153,7 +153,7 @@
 			);
 			name = Picky;
 			productName = Picky;
-			productReference = 13B07F961A680F5B00A75B9A /* Picky.app */;
+			productReference = 13B07F961A680F5B00A75B9A /* usepicky.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */

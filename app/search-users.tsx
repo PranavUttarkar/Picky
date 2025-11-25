@@ -22,7 +22,7 @@ import {
   checkUsernameAvailability 
 } from '@/services/friends';
 import { blockUser, getBlockStatus } from '@/services/blocking';
-import { followUser, unfollowUser, isFollowing } from '@/services/following';
+import { followUser, unfollowUser, isFollowing, getFollowing } from '@/services/following';
 import { Ionicons } from '@expo/vector-icons';
 import Avatar from '@/components/Avatar';
 import type { FriendSearchResult } from '@/types/models';
@@ -33,10 +33,16 @@ export default function SearchUsers() {
   const isWide = width >= 768;
   
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<FriendSearchResult[]>([]);
+  const [rawResults, setRawResults] = useState<FriendSearchResult[]>([]);
+  const [followedIds, setFollowedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [inviteLink, setInviteLink] = useState<string>('');
+
+  const searchResults = rawResults.map(item => ({
+    ...item,
+    is_following: followedIds.has(item.id)
+  }));
 
   // Load current user info
   useEffect(() => {
@@ -55,6 +61,14 @@ export default function SearchUsers() {
 
       setCurrentUser(userData);
 
+      // Load followed users
+      try {
+        const following = await getFollowing();
+        setFollowedIds(new Set(following.map(u => u.id)));
+      } catch (error) {
+        console.error('Error loading following:', error);
+      }
+
       // Generate invite link if user has username
       if (userData?.username) {
         try {
@@ -72,14 +86,14 @@ export default function SearchUsers() {
   // Debounced search function
   const searchUsers = useCallback(async (query: string) => {
     if (!query.trim()) {
-      setSearchResults([]);
+      setRawResults([]);
       return;
     }
 
     setLoading(true);
     try {
       const results = await searchUsersByUsername(query.trim(), 20);
-      setSearchResults(results);
+      setRawResults(results);
     } catch (error) {
       console.error('Search error:', error);
       Alert.alert('Error', 'Failed to search users');
@@ -110,16 +124,24 @@ export default function SearchUsers() {
 
   const handleFollow = async (userId: string) => {
     try {
-      const isCurrentlyFollowing = await isFollowing(userId);
+      const isCurrentlyFollowing = followedIds.has(userId);
       if (isCurrentlyFollowing) {
         await unfollowUser(userId);
+        setFollowedIds(prev => {
+          const next = new Set(prev);
+          next.delete(userId);
+          return next;
+        });
         Alert.alert('Success', 'Unfollowed user');
       } else {
         await followUser(userId);
+        setFollowedIds(prev => {
+          const next = new Set(prev);
+          next.add(userId);
+          return next;
+        });
         Alert.alert('Success', 'Following user');
       }
-      // Refresh search results
-      await searchUsers(searchQuery);
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to update follow status');
     }
@@ -224,14 +246,20 @@ export default function SearchUsers() {
                 <Pressable
                   onPress={() => handleFollow(item.id)}
                   style={{
-                    backgroundColor: c.primary,
+                    backgroundColor: item.is_following ? 'transparent' : c.primary,
                     paddingHorizontal: 12,
                     paddingVertical: 6,
                     borderRadius: 8,
+                    borderWidth: item.is_following ? 1 : 0,
+                    borderColor: c.primary,
                   }}
                 >
-                  <Text style={{ color: 'white', fontWeight: '600', fontSize: 12 }}>
-                    Follow
+                  <Text style={{ 
+                    color: item.is_following ? c.primary : 'white', 
+                    fontWeight: '600', 
+                    fontSize: 12 
+                  }}>
+                    {item.is_following ? 'Following' : 'Follow'}
                   </Text>
                 </Pressable>
               ) : isFriend ? (

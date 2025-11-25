@@ -372,7 +372,7 @@ export default function ProfileSetup() {
             </Pressable>
 
             {/* Skip Button */}
-            <Pressable
+            {/* <Pressable
               onPress={() => router.replace('/onboarding/interests')}
               style={{
                 paddingVertical: Spacing.md - 4,
@@ -387,7 +387,7 @@ export default function ProfileSetup() {
               }}>
                 Skip for now
               </Text>
-            </Pressable>
+            </Pressable> */}
           </View>
         </ScrollView>
       </AnimatedPage>

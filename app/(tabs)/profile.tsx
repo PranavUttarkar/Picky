@@ -1240,21 +1240,35 @@ export default function Profile() {
           {/* Sign Out */}
           <Pressable
             onPress={async () => {
-              Alert.alert(
-                'Sign Out',
-                'Are you sure you want to sign out?',
-                [
-                  { text: 'Cancel', style: 'cancel' },
-                  {
-                    text: 'Sign Out',
-                    style: 'destructive',
-                    onPress: async () => {
-                      trackCTA('profile_sign_out_press').catch(() => {});
-                      await supabase.auth.signOut();
+              const handleSignOut = async () => {
+                try {
+                  trackCTA('profile_sign_out_press').catch(() => {});
+                  const { error } = await supabase.auth.signOut();
+                  if (error) throw error;
+                } catch (error: any) {
+                  Alert.alert('Error', error.message || 'Failed to sign out');
+                }
+              };
+
+              if (Platform.OS === 'web') {
+                // @ts-ignore
+                if (window.confirm('Are you sure you want to sign out?')) {
+                  await handleSignOut();
+                }
+              } else {
+                Alert.alert(
+                  'Sign Out',
+                  'Are you sure you want to sign out?',
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: 'Sign Out',
+                      style: 'destructive',
+                      onPress: handleSignOut
                     }
-                  }
-                ]
-              );
+                  ]
+                );
+              }
             }}
             style={{
               backgroundColor: `${c.text}10`,

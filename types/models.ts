@@ -132,6 +132,7 @@ export interface FriendSearchResult {
   is_friend: boolean;
   is_blocked: boolean;
   friendship_status?: 'accepted' | 'pending_incoming' | 'pending_outgoing' | null;
+  is_following?: boolean;
 }
 
 export interface FriendActivityResult {

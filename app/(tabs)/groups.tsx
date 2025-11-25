@@ -28,7 +28,7 @@ import {
   removeFriend,
   type PendingFriendRequest,
 } from '@/services/friends';
-import { getFollowing, discoverOrganizations } from '@/services/following';
+import { getFollowing, discoverOrganizations, followUser, unfollowUser } from '@/services/following';
 import { useGroupDecisionNotification } from '@/utils/GroupDecisionNotificationContext';
 import { useFriendNotification } from '@/utils/FriendNotificationContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -363,6 +363,22 @@ export default function Groups() {
     }
   };
 
+  const handleFollow = async (userId: string) => {
+    try {
+      const isFollowing = following.some(f => f.id === userId);
+      if (isFollowing) {
+        await unfollowUser(userId);
+        Alert.alert('Success', 'Unfollowed organization');
+      } else {
+        await followUser(userId);
+        Alert.alert('Success', 'Following organization');
+      }
+      await loadFollowing();
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to update follow status');
+    }
+  };
+
   // Tab header component
   const TabHeader = () => (
     <View style={{
@@ -689,45 +705,56 @@ export default function Groups() {
           <FlatList
             data={organizations}
             keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <Pressable
-                style={{
-                  backgroundColor: c.card,
-                  marginHorizontal: 16,
-                  marginBottom: 8,
-                  padding: 16,
-                  borderRadius: 12,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                }}
-              >
-                <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                  <Avatar
-                    uri={item.avatar_url}
-                    size={40}
-                  />
-                  <View style={{ marginLeft: 12, flex: 1 }}>
-                    <Text style={{ color: c.text, fontWeight: '600', fontSize: 16 }}>
-                      {item.display_name || item.username}
-                    </Text>
-                    <Text style={{ color: c.muted, fontSize: 14 }}>
-                      @{item.username} • Organization
-                    </Text>
-                  </View>
-                </View>
+            renderItem={({ item }) => {
+              const isFollowing = following.some(f => f.id === item.id);
+              return (
                 <Pressable
                   style={{
-                    backgroundColor: c.primary,
-                    paddingHorizontal: 16,
-                    paddingVertical: 8,
-                    borderRadius: 8,
+                    backgroundColor: c.card,
+                    marginHorizontal: 16,
+                    marginBottom: 8,
+                    padding: 16,
+                    borderRadius: 12,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
                   }}
                 >
-                  <Text style={{ color: 'white', fontWeight: '600' }}>Follow</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                    <Avatar
+                      uri={item.avatar_url}
+                      size={40}
+                    />
+                    <View style={{ marginLeft: 12, flex: 1 }}>
+                      <Text style={{ color: c.text, fontWeight: '600', fontSize: 16 }}>
+                        {item.display_name || item.username}
+                      </Text>
+                      <Text style={{ color: c.muted, fontSize: 14 }}>
+                        @{item.username} • Organization
+                      </Text>
+                    </View>
+                  </View>
+                  <Pressable
+                    onPress={() => handleFollow(item.id)}
+                    style={{
+                      backgroundColor: isFollowing ? 'transparent' : c.primary,
+                      paddingHorizontal: 16,
+                      paddingVertical: 8,
+                      borderRadius: 8,
+                      borderWidth: isFollowing ? 1 : 0,
+                      borderColor: c.primary,
+                    }}
+                  >
+                    <Text style={{ 
+                      color: isFollowing ? c.primary : 'white', 
+                      fontWeight: '600' 
+                    }}>
+                      {isFollowing ? 'Following' : 'Follow'}
+                    </Text>
+                  </Pressable>
                 </Pressable>
-              </Pressable>
-            )}
+              );
+            }}
           />
         </View>
       )}

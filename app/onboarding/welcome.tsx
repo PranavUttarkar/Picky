@@ -171,7 +171,7 @@ export default function Welcome() {
         marginBottom: Spacing['2xl'],
         textAlign: 'center',
       }}>
-        Simple decisions. Stronger groups. More doing.
+        Find it All. Decide Fast. Have Fun Together.
       </Text>
 
       {/* Simple actions: Create account / Sign in */}

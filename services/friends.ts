@@ -196,6 +196,6 @@ export async function generateFriendInviteLink(): Promise<string> {
   }
 
   // Generate a simple invite link with username
-  const baseUrl = process.env.EXPO_PUBLIC_APP_URL || 'https://picky.app';
+  const baseUrl = process.env.EXPO_PUBLIC_APP_URL || 'https://usepicky.app';
   return `${baseUrl}/invite/friend/${userData.username}`;
 }
