@@ -777,21 +777,6 @@ const AddEditEventModal = memo(function AddEditEventModal({
     }
   };
 
-  // Keep web inputs in sync if dateTime changes from other flows
-  useEffect(() => {
-    setDateInput(dayjs(dateTime).format('YYYY-MM-DD'));
-    setTimeInput(dayjs(dateTime).format('h:mm'));
-    setStartMeridiem(dayjs(dateTime).format('A') as 'AM' | 'PM');
-  }, [dateTime]);
-
-  useEffect(() => {
-    if (endTimeISO) {
-      setEndTimeInput(dayjs(endTimeISO).format('h:mm'));
-      setEndMeridiem(dayjs(endTimeISO).format('A') as 'AM' | 'PM');
-    } else {
-      setEndTimeInput('');
-    }
-  }, [endTimeISO]);
 
   // Collapsible section state (progressive disclosure)
   const [openSections, setOpenSections] = useState<{ [k: string]: boolean }>(() => ({
