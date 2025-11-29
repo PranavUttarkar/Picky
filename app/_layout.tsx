@@ -22,6 +22,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/services/supabase';
 import { joinGroupByCode } from '@/services/groups';
 import HeaderSpacer from '@/components/HeaderSpacer';
+import { WebAnalytics } from '@/components/WebAnalytics';
 
 export default function RootLayout() {
   const scheme = useColorScheme();
@@ -79,6 +80,7 @@ export default function RootLayout() {
             <GroupDecisionNotificationProvider>
               {/* Spacer to avoid status bar overlap on iOS/Android; no-op on web */}
               <HeaderSpacer />
+              <WebAnalytics />
               <Stack screenOptions={{ headerShown: false }}>
                 <Stack.Screen name="index" />
                 <Stack.Screen name="invite" />

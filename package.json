@@ -24,6 +24,7 @@
     "@react-native-community/slider": "5.0.1",
     "@supabase/supabase-js": "^2.45.1",
     "@types/leaflet": "^1.9.21",
+    "@vercel/analytics": "^1.5.0",
     "dayjs": "^1.11.13",
     "expo": "~54.0.0",
     "expo-asset": "~12.0.9",
