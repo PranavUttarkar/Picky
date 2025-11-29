@@ -23,6 +23,7 @@ import { supabase } from '@/services/supabase';
 import { joinGroupByCode } from '@/services/groups';
 import HeaderSpacer from '@/components/HeaderSpacer';
 import { WebAnalytics } from '@/components/WebAnalytics';
+import { WebSpeedInsights } from '@/components/WebSpeedInsights';
 
 export default function RootLayout() {
   const scheme = useColorScheme();
@@ -81,6 +82,7 @@ export default function RootLayout() {
               {/* Spacer to avoid status bar overlap on iOS/Android; no-op on web */}
               <HeaderSpacer />
               <WebAnalytics />
+              <WebSpeedInsights />
               <Stack screenOptions={{ headerShown: false }}>
                 <Stack.Screen name="index" />
                 <Stack.Screen name="invite" />
