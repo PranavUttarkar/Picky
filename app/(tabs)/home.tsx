@@ -551,7 +551,7 @@ export default function HomeTab() {
           {/* Row 2: Food */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Text style={[styles.sectionTitle, { color: c.text }]}>Food</Text>
+              <Text style={[styles.sectionTitle, { color: c.text }]}>Find Food</Text>
               <Pressable
                 onPress={() => router.push('/food')}
                 style={styles.viewAllButton}

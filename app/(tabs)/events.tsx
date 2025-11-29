@@ -2126,6 +2126,17 @@ export default function Home() {
 
   // (moved) Keep a ref of the current filtered length for viewability callback
 
+  // Fix stale closure in onViewableItemsChanged
+  const loadNextPageRef = useRef(loadNextPage);
+  useEffect(() => {
+    loadNextPageRef.current = loadNextPage;
+  }, [loadNextPage]);
+
+  // Reset viewability tracking when switching views or resizing
+  useEffect(() => {
+    lastVisibleIndexRef.current = 0;
+  }, [columns]);
+
   // Prefetch the next page when user scrolls near the end
   const onViewableItemsChanged = useRef(
     ({ viewableItems }: { viewableItems: Array<{ index?: number | null }> }) => {
@@ -2138,7 +2149,7 @@ export default function Home() {
         const remaining = filteredLengthRef.current - maxIndex - 1;
         // If within 8 items from the end, start loading next page early
         if (remaining <= 8) {
-          loadNextPage();
+          loadNextPageRef.current();
         }
       }
     },
