@@ -1298,6 +1298,42 @@ export default function Profile() {
             <Ionicons name="chevron-forward" size={20} color={c.muted} />
           </Pressable>
 
+          {/* Help & Support */}
+          <Pressable
+            onPress={() => {
+              Alert.alert(
+                'Help & Support',
+                'For any questions or support, please email us at:\n\nadmin@usepicky.app',
+                [{ text: 'OK' }]
+              );
+            }}
+            style={{
+              backgroundColor: `${c.text}10`,
+              borderRadius: 12,
+              padding: 16,
+              flexDirection: 'row',
+              alignItems: 'center',
+              marginBottom: 12,
+            }}
+          >
+            <View style={{
+              backgroundColor: `${c.primary}20`,
+              borderRadius: 10,
+              padding: 8,
+              marginRight: 12,
+            }}>
+              <Ionicons name="help-buoy" size={20} color={c.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: c.text, fontSize: 16, fontWeight: '600', marginBottom: 2 }}>
+                Help & Support
+              </Text>
+              <Text style={{ color: c.muted, fontSize: 13 }}>
+                Contact us at admin@usepicky.app
+              </Text>
+            </View>
+          </Pressable>
+
           {/* Username Edit Modal */}
           <UsernameEditModal
             visible={showUsernameEdit}

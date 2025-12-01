@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { View, Text, TextInput, Pressable } from 'react-native';
+import { View, Text, TextInput, Pressable, Modal, ScrollView } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { supabase } from '@/services/supabase';
 import { ensureProfile } from '@/services/profile';
@@ -20,6 +20,7 @@ export default function Welcome() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
 
   // Check auth state to decide whether to allow sign-up UI
   useEffect(() => {
@@ -290,6 +291,28 @@ export default function Welcome() {
         })()}
       </Pressable>
 
+      {mode === 'signUp' && !isAuthed && (
+        <Text style={{
+          color: c.muted,
+          fontSize: Typography.scale.caption.fontSize,
+          fontFamily: Typography.fontFamily.body,
+          textAlign: 'center',
+          marginTop: Spacing.sm,
+          lineHeight: Typography.scale.caption.lineHeight,
+        }}>
+          By signing up, you agree to our{' '}
+          <Text
+            style={{
+              color: c.primary,
+              textDecorationLine: 'underline',
+            }}
+            onPress={() => setShowPrivacyModal(true)}
+          >
+            Privacy Policy
+          </Text>
+        </Text>
+      )}
+
       {/* Helper link to switch if needed; hide Create link for signed-in users */}
       {mode === 'signIn' ? (
         !isAuthed ? (
@@ -305,11 +328,272 @@ export default function Welcome() {
         )
       ) : (
         <Pressable onPress={startSignIn} style={{ marginTop: Spacing.md }}>
-          <Text style={{ textDecorationLine: 'underline', color: c.muted, fontSize: Typography.scale.body.fontSize, fontFamily: Typography.fontFamily.body }}>
+          <Text style={{ textDecorationLine: 'underline', color: c.muted, fontSize: Typography.scale.body.fontSize + 2, fontFamily: Typography.fontFamily.body }}>
             Already have an account? Sign in
           </Text>
         </Pressable>
       )}
+
+      {/* Privacy Policy Modal */}
+      <Modal
+        visible={showPrivacyModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowPrivacyModal(false)}
+      >
+        <View style={{
+          flex: 1,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          justifyContent: 'center',
+          alignItems: 'center',
+          padding: Spacing.lg,
+        }}>
+          <View style={{
+            backgroundColor: c.background,
+            borderRadius: BorderRadius.lg,
+            padding: Spacing.lg,
+            width: '100%',
+            maxHeight: '80%',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.25,
+            shadowRadius: 4,
+            elevation: 5,
+          }}>
+            <View style={{
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: Spacing.lg,
+            }}>
+              <Text style={{
+                color: c.text,
+                fontSize: Typography.scale.heading3.fontSize,
+                fontWeight: Typography.fontWeight.bold,
+                fontFamily: Typography.fontFamily.body,
+              }}>
+                Privacy Policy
+              </Text>
+              <Pressable
+                onPress={() => setShowPrivacyModal(false)}
+                style={{ padding: Spacing.sm }}
+              >
+                <Text style={{
+                  color: c.muted,
+                  fontSize: Typography.scale.heading3.fontSize,
+                  fontWeight: Typography.fontWeight.bold,
+                }}>
+                  ✕
+                </Text>
+              </Pressable>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={{
+                color: c.text,
+                fontSize: Typography.scale.body.fontSize,
+                fontFamily: Typography.fontFamily.body,
+                lineHeight: Typography.scale.body.lineHeight,
+                marginBottom: Spacing.md,
+              }}>
+                <Text style={{ fontWeight: Typography.fontWeight.bold }}>Last Updated: December 1, 2025</Text>
+              </Text>
+
+              <Text style={{
+                color: c.text,
+                fontSize: Typography.scale.body.fontSize,
+                fontFamily: Typography.fontFamily.body,
+                lineHeight: Typography.scale.body.lineHeight,
+                marginBottom: Spacing.md,
+              }}>
+                At Picky, we value your trust and are committed to protecting your privacy. We want you to feel comfortable and secure while discovering great experiences with your friends.
+              </Text>
+
+              <Text style={{
+                color: c.text,
+                fontSize: Typography.scale.body.fontSize,
+                fontFamily: Typography.fontFamily.body,
+                lineHeight: Typography.scale.body.lineHeight,
+                marginBottom: Spacing.md,
+                fontWeight: Typography.fontWeight.bold,
+              }}>
+                1. Information We Collect
+              </Text>
+
+              <Text style={{
+                color: c.text,
+                fontSize: Typography.scale.body.fontSize,
+                fontFamily: Typography.fontFamily.body,
+                lineHeight: Typography.scale.body.lineHeight,
+                marginBottom: Spacing.md,
+              }}>
+                We do not share or sell information you provide directly to us. We collect information you provide when you create an account, and usage data generated when you use our services.
+                {'\n\n'}• <Text style={{ fontWeight: Typography.fontWeight.bold }}>Account Information:</Text> Your name, email address, and encrypted password.
+                {'\n'}• <Text style={{ fontWeight: Typography.fontWeight.bold }}>Profile & Preferences:</Text> Your interests, dietary preferences, and location settings to help us find the best matches for you.
+                {'\n'}• <Text style={{ fontWeight: Typography.fontWeight.bold }}>Activity Data:</Text> Events you save, restaurants you like, and group polls you participate in.
+              </Text>
+
+              <Text style={{
+                color: c.text,
+                fontSize: Typography.scale.body.fontSize,
+                fontFamily: Typography.fontFamily.body,
+                lineHeight: Typography.scale.body.lineHeight,
+                marginBottom: Spacing.md,
+                fontWeight: Typography.fontWeight.bold,
+              }}>
+                2. How We Use Your Information
+              </Text>
+
+              <Text style={{
+                color: c.text,
+                fontSize: Typography.scale.body.fontSize,
+                fontFamily: Typography.fontFamily.body,
+                lineHeight: Typography.scale.body.lineHeight,
+                marginBottom: Spacing.md,
+              }}>
+                We use your data to make your experience better:
+                {'\n\n'}• To provide and improve our discovery and planning services
+                {'\n'}• To personalize your event and restaurant recommendations
+                {'\n'}• To facilitate group decision-making with your friends
+                {'\n'}• To communicate with you about your account and updates
+                {'\n'}• To analyze usage patterns and improve our platform
+              </Text>
+
+              <Text style={{
+                color: c.text,
+                fontSize: Typography.scale.body.fontSize,
+                fontFamily: Typography.fontFamily.body,
+                lineHeight: Typography.scale.body.lineHeight,
+                marginBottom: Spacing.md,
+                fontWeight: Typography.fontWeight.bold,
+              }}>
+                3. Third-Party Sharing & Protection
+              </Text>
+
+              <Text style={{
+                color: c.text,
+                fontSize: Typography.scale.body.fontSize,
+                fontFamily: Typography.fontFamily.body,
+                lineHeight: Typography.scale.body.lineHeight,
+                marginBottom: Spacing.md,
+              }}>
+                We may use third-party services (such as analytics tools) to improve our app. We ensure that any third-party partner, subsidiary, or related entity with access to user data provides the same or equal level of data protection as stated in this Privacy Policy and required by applicable guidelines. We do not sell your personal data to advertisers.
+              </Text>
+
+              <Text style={{
+                color: c.text,
+                fontSize: Typography.scale.body.fontSize,
+                fontFamily: Typography.fontFamily.body,
+                lineHeight: Typography.scale.body.lineHeight,
+                marginBottom: Spacing.md,
+                fontWeight: Typography.fontWeight.bold,
+              }}>
+                4. Data Retention & Deletion
+              </Text>
+
+              <Text style={{
+                color: c.text,
+                fontSize: Typography.scale.body.fontSize,
+                fontFamily: Typography.fontFamily.body,
+                lineHeight: Typography.scale.body.lineHeight,
+                marginBottom: Spacing.md,
+              }}>
+                We retain your personal information only for as long as your account is active or as needed to provide you with our services. You can request deletion of your account and associated data at any time through the app settings. Upon deletion, your personal data will be removed from our active databases within 30 days.
+              </Text>
+
+              <Text style={{
+                color: c.text,
+                fontSize: Typography.scale.body.fontSize,
+                fontFamily: Typography.fontFamily.body,
+                lineHeight: Typography.scale.body.lineHeight,
+                marginBottom: Spacing.md,
+                fontWeight: Typography.fontWeight.bold,
+              }}>
+                5. Data Security
+              </Text>
+
+              <Text style={{
+                color: c.text,
+                fontSize: Typography.scale.body.fontSize,
+                fontFamily: Typography.fontFamily.body,
+                lineHeight: Typography.scale.body.lineHeight,
+                marginBottom: Spacing.md,
+              }}>
+                We are committed to protecting your data and work hard to keep it secure. We protect your personal information against unauthorized access, alteration, disclosure, or destruction by implementing appropriate technical and organizational measures. Your passwords are encrypted and are never visible to any organizational members.
+              </Text>
+
+              <Text style={{
+                color: c.text,
+                fontSize: Typography.scale.body.fontSize,
+                fontFamily: Typography.fontFamily.body,
+                lineHeight: Typography.scale.body.lineHeight,
+                marginBottom: Spacing.md,
+                fontWeight: Typography.fontWeight.bold,
+              }}>
+                6. Your Rights & Consent
+              </Text>
+
+              <Text style={{
+                color: c.text,
+                fontSize: Typography.scale.body.fontSize,
+                fontFamily: Typography.fontFamily.body,
+                lineHeight: Typography.scale.body.lineHeight,
+                marginBottom: Spacing.md,
+              }}>
+                By using our app, you consent to the collection and use of your information as described in this policy. You have full control over your data and can:
+                {'\n\n'}• Access and update your personal information
+                {'\n'}• Manage your privacy settings and permissions
+                {'\n'}• Withdraw your consent by deleting your account
+                {'\n'}• Opt-out of communications
+                {'\n\n'}
+                We only request access to device permissions (like location) when relevant to the app's core functionality, and you can revoke these permissions at any time in your device settings.
+              </Text>
+
+              <Text style={{
+                color: c.text,
+                fontSize: Typography.scale.body.fontSize,
+                fontFamily: Typography.fontFamily.body,
+                lineHeight: Typography.scale.body.lineHeight,
+                marginBottom: Spacing.md,
+                fontWeight: Typography.fontWeight.bold,
+              }}>
+                7. Contact Us
+              </Text>
+
+              <Text style={{
+                color: c.text,
+                fontSize: Typography.scale.body.fontSize,
+                fontFamily: Typography.fontFamily.body,
+                lineHeight: Typography.scale.body.lineHeight,
+                marginBottom: Spacing.md,
+              }}>
+                If you have any questions about this Privacy Policy, please contact us at admin@usepicky.app
+              </Text>
+
+              <Text style={{
+                color: c.text,
+                fontSize: Typography.scale.body.fontSize,
+                fontFamily: Typography.fontFamily.body,
+                lineHeight: Typography.scale.body.lineHeight,
+                marginBottom: Spacing.md,
+                fontWeight: Typography.fontWeight.bold,
+              }}>
+                8. Changes to This Policy
+              </Text>
+
+              <Text style={{
+                color: c.text,
+                fontSize: Typography.scale.body.fontSize,
+                fontFamily: Typography.fontFamily.body,
+                lineHeight: Typography.scale.body.lineHeight,
+                marginBottom: Spacing.md,
+              }}>
+                We may update this Privacy Policy from time to time. We will notify you of any changes by posting the new Privacy Policy on this page and updating the "Last Updated" date.
+              </Text>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
