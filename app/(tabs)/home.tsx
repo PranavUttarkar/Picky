@@ -30,6 +30,20 @@ import LazyImage from '@/components/LazyImage';
 import dayjs from 'dayjs';
 import { Spacing, BorderRadius, Typography, Colors, IconSizes } from '@/theme/designTokens';
 
+// Skeleton card for loading state
+function SkeletonCard() {
+  const c = useThemeColors();
+  return (
+    <View style={[styles.compactCard, { backgroundColor: c.card, borderColor: Colors.light.neutral[300] + '20' }]}>
+      <View style={[styles.compactImageContainer, { backgroundColor: c.muted + '10' }]} />
+      <View style={{ padding: Spacing.sm, gap: 4 }}>
+        <View style={{ height: 16, width: '85%', backgroundColor: c.muted + '10', borderRadius: 4 }} />
+        <View style={{ height: 12, width: '50%', backgroundColor: c.muted + '10', borderRadius: 4 }} />
+      </View>
+    </View>
+  );
+}
+
 // Compact square card for events
 function CompactEventCard({ event, onPress }: { event: Event & { match_percent?: number }; onPress: () => void }) {
   const c = useThemeColors();
@@ -520,8 +534,10 @@ export default function HomeTab() {
               </Pressable>
             </View>
             {loadingEvents ? (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator color={c.primary} />
+              <View style={styles.compactGrid}>
+                {Array.from({ length: cardCount }).map((_, i) => (
+                  <SkeletonCard key={`skeleton-event-${i}`} />
+                ))}
               </View>
             ) : topEvents.length > 0 ? (
               <View style={styles.compactGrid}>
@@ -561,8 +577,10 @@ export default function HomeTab() {
               </Pressable>
             </View>
             {loadingFood ? (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator color={c.primary} />
+              <View style={styles.compactGrid}>
+                {Array.from({ length: cardCount }).map((_, i) => (
+                  <SkeletonCard key={`skeleton-food-${i}`} />
+                ))}
               </View>
             ) : topRestaurants.length > 0 ? (
               <View style={styles.compactGrid}>
