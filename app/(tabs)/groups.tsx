@@ -863,223 +863,6 @@ export default function Groups() {
           )}
         />
       )}
-
-      {/* Create Group Modal */}
-      <Modal visible={showCreate} transparent animationType="fade">
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={{
-            flex: 1,
-            backgroundColor: 'rgba(0,0,0,0.5)',
-            justifyContent: 'center',
-            alignItems: 'center',
-          }}
-        >
-          <View style={{
-            backgroundColor: c.background,
-            margin: 20,
-            padding: 20,
-            borderRadius: 16,
-            width: '90%',
-            maxWidth: 400,
-          }}>
-            <Text style={{
-              fontSize: Typography.scale.heading2.fontSize,
-              lineHeight: Typography.scale.heading2.lineHeight,
-              fontFamily: Typography.fontFamily.bodySemibold,
-              fontWeight: Typography.fontWeight.semibold,
-              color: c.text,
-              marginBottom: 16,
-              textAlign: 'center',
-            }}>
-              Create New Group
-            </Text>
-            
-            <TextInput
-              value={groupName}
-              onChangeText={setGroupName}
-              placeholder="Group name"
-              placeholderTextColor={c.muted}
-              style={{
-                backgroundColor: c.card,
-                padding: 16,
-                borderRadius: 12,
-                color: c.text,
-                marginBottom: 16,
-              }}
-            />
-            
-            {/* Friend Picker Button */}
-            <Pressable
-              onPress={() => setShowFriendPicker(true)}
-              style={{
-                backgroundColor: c.card,
-                padding: 16,
-                borderRadius: 12,
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                marginBottom: 16,
-                borderWidth: 1,
-                borderColor: c.muted,
-              }}
-            >
-              <View>
-                <Text style={{ color: c.text, fontWeight: '600', fontSize: 16 }}>
-                  Invite Friends
-                </Text>
-                <Text style={{ color: c.muted, fontSize: 14 }}>
-                  {selectedFriends.length === 0 
-                    ? 'Select friends to invite' 
-                    : `${selectedFriends.length} friend${selectedFriends.length !== 1 ? 's' : ''} selected`
-                  }
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color={c.muted} />
-            </Pressable>
-            
-            {/* Selected Friends Preview */}
-            {selectedFriends.length > 0 && (
-              <View style={{
-                backgroundColor: `${c.primary}20`,
-                padding: 12,
-                borderRadius: 8,
-                marginBottom: 16,
-              }}>
-                <Text style={{ 
-                  color: c.primary, 
-                  fontSize: Typography.scale.bodySmall.fontSize,
-                  fontFamily: Typography.fontFamily.bodySemibold,
-                  fontWeight: Typography.fontWeight.semibold,
-                  marginBottom: 4,
-                }}>
-                  SELECTED FRIENDS
-                </Text>
-                {selectedFriends.slice(0, 3).map((friend, index) => (
-                  <Text key={friend.id} style={{ color: c.text, fontSize: 14 }}>
-                    {friend.display_name || friend.username}
-                  </Text>
-                ))}
-                {selectedFriends.length > 3 && (
-                  <Text style={{ color: c.muted, fontSize: 14 }}>
-                    +{selectedFriends.length - 3} more
-                  </Text>
-                )}
-              </View>
-            )}
-            
-            <View style={{ flexDirection: 'row', gap: 12 }}>
-              <Pressable
-                onPress={() => setShowCreate(false)}
-                style={{
-                  flex: 1,
-                  backgroundColor: c.card,
-                  paddingVertical: 12,
-                  borderRadius: 12,
-                  alignItems: 'center',
-                }}
-              >
-                <Text style={{ color: c.text, fontWeight: '600' }}>Cancel</Text>
-              </Pressable>
-              
-              <Pressable
-                onPress={handleCreateGroup}
-                disabled={creating || !groupName.trim()}
-                style={{
-                  flex: 1,
-                  backgroundColor: creating || !groupName.trim() ? c.muted : c.primary,
-                  paddingVertical: 12,
-                  borderRadius: 12,
-                  alignItems: 'center',
-                }}
-              >
-                <Text style={{ color: 'white', fontWeight: '600' }}>
-                  {creating ? 'Creating...' : 'Create'}
-                </Text>
-              </Pressable>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
-
-      {/* Join Group Modal */}
-      <Modal visible={showJoin} transparent animationType="fade">
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={{
-            flex: 1,
-            backgroundColor: 'rgba(0,0,0,0.5)',
-            justifyContent: 'center',
-            alignItems: 'center',
-          }}
-        >
-          <View style={{
-            backgroundColor: c.background,
-            margin: 20,
-            padding: 20,
-            borderRadius: 16,
-            width: '90%',
-            maxWidth: 400,
-          }}>
-            <Text style={{
-              fontSize: Typography.scale.heading2.fontSize,
-              lineHeight: Typography.scale.heading2.lineHeight,
-              fontFamily: Typography.fontFamily.bodySemibold,
-              fontWeight: Typography.fontWeight.semibold,
-              color: c.text,
-              marginBottom: 16,
-              textAlign: 'center',
-            }}>
-              Join Group
-            </Text>
-            
-            <TextInput
-              value={inviteCode}
-              onChangeText={setInviteCode}
-              placeholder="Enter invite code"
-              placeholderTextColor={c.muted}
-              style={{
-                backgroundColor: c.card,
-                padding: 16,
-                borderRadius: 12,
-                color: c.text,
-                marginBottom: 16,
-              }}
-            />
-            
-            <View style={{ flexDirection: 'row', gap: 12 }}>
-              <Pressable
-                onPress={() => setShowJoin(false)}
-                style={{
-                  flex: 1,
-                  backgroundColor: c.card,
-                  paddingVertical: 12,
-                  borderRadius: 12,
-                  alignItems: 'center',
-                }}
-              >
-                <Text style={{ color: c.text, fontWeight: '600' }}>Cancel</Text>
-              </Pressable>
-              
-              <Pressable
-                onPress={handleJoinGroup}
-                disabled={joining || !inviteCode.trim()}
-                style={{
-                  flex: 1,
-                  backgroundColor: joining || !inviteCode.trim() ? c.muted : c.primary,
-                  paddingVertical: 12,
-                  borderRadius: 12,
-                  alignItems: 'center',
-                }}
-              >
-                <Text style={{ color: 'white', fontWeight: '600' }}>
-                  {joining ? 'Joining...' : 'Join'}
-                </Text>
-              </Pressable>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
     </View>
   );
 
@@ -1103,6 +886,223 @@ export default function Groups() {
           <TabHeader />
           {renderContent()}
         </View>
+
+        {/* Create Group Modal */}
+        <Modal visible={showCreate} transparent animationType="fade">
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={{
+              flex: 1,
+              backgroundColor: 'rgba(0,0,0,0.5)',
+              justifyContent: 'center',
+              alignItems: 'center',
+            }}
+          >
+            <View style={{
+              backgroundColor: c.background,
+              margin: 20,
+              padding: 20,
+              borderRadius: 16,
+              width: '90%',
+              maxWidth: 400,
+            }}>
+              <Text style={{
+                fontSize: Typography.scale.heading2.fontSize,
+                lineHeight: Typography.scale.heading2.lineHeight,
+                fontFamily: Typography.fontFamily.bodySemibold,
+                fontWeight: Typography.fontWeight.semibold,
+                color: c.text,
+                marginBottom: 16,
+                textAlign: 'center',
+              }}>
+                Create New Group
+              </Text>
+              
+              <TextInput
+                value={groupName}
+                onChangeText={setGroupName}
+                placeholder="Group name"
+                placeholderTextColor={c.muted}
+                style={{
+                  backgroundColor: c.card,
+                  padding: 16,
+                  borderRadius: 12,
+                  color: c.text,
+                  marginBottom: 16,
+                }}
+              />
+              
+              {/* Friend Picker Button */}
+              <Pressable
+                onPress={() => setShowFriendPicker(true)}
+                style={{
+                  backgroundColor: c.card,
+                  padding: 16,
+                  borderRadius: 12,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  marginBottom: 16,
+                  borderWidth: 1,
+                  borderColor: c.muted,
+                }}
+              >
+                <View>
+                  <Text style={{ color: c.text, fontWeight: '600', fontSize: 16 }}>
+                    Invite Friends
+                  </Text>
+                  <Text style={{ color: c.muted, fontSize: 14 }}>
+                    {selectedFriends.length === 0 
+                      ? 'Select friends to invite' 
+                      : `${selectedFriends.length} friend${selectedFriends.length !== 1 ? 's' : ''} selected`
+                    }
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={c.muted} />
+              </Pressable>
+              
+              {/* Selected Friends Preview */}
+              {selectedFriends.length > 0 && (
+                <View style={{
+                  backgroundColor: `${c.primary}20`,
+                  padding: 12,
+                  borderRadius: 8,
+                  marginBottom: 16,
+                }}>
+                  <Text style={{ 
+                    color: c.primary, 
+                    fontSize: Typography.scale.bodySmall.fontSize,
+                    fontFamily: Typography.fontFamily.bodySemibold,
+                    fontWeight: Typography.fontWeight.semibold,
+                    marginBottom: 4,
+                  }}>
+                    SELECTED FRIENDS
+                  </Text>
+                  {selectedFriends.slice(0, 3).map((friend) => (
+                    <Text key={friend.id} style={{ color: c.text, fontSize: 14 }}>
+                      {friend.display_name || friend.username}
+                    </Text>
+                  ))}
+                  {selectedFriends.length > 3 && (
+                    <Text style={{ color: c.muted, fontSize: 14 }}>
+                      +{selectedFriends.length - 3} more
+                    </Text>
+                  )}
+                </View>
+              )}
+              
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                <Pressable
+                  onPress={() => setShowCreate(false)}
+                  style={{
+                    flex: 1,
+                    backgroundColor: c.card,
+                    paddingVertical: 12,
+                    borderRadius: 12,
+                    alignItems: 'center',
+                  }}
+                >
+                  <Text style={{ color: c.text, fontWeight: '600' }}>Cancel</Text>
+                </Pressable>
+                
+                <Pressable
+                  onPress={handleCreateGroup}
+                  disabled={creating || !groupName.trim()}
+                  style={{
+                    flex: 1,
+                    backgroundColor: creating || !groupName.trim() ? c.muted : c.primary,
+                    paddingVertical: 12,
+                    borderRadius: 12,
+                    alignItems: 'center',
+                  }}
+                >
+                  <Text style={{ color: 'white', fontWeight: '600' }}>
+                    {creating ? 'Creating...' : 'Create'}
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          </KeyboardAvoidingView>
+        </Modal>
+
+        {/* Join Group Modal */}
+        <Modal visible={showJoin} transparent animationType="fade">
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={{
+              flex: 1,
+              backgroundColor: 'rgba(0,0,0,0.5)',
+              justifyContent: 'center',
+              alignItems: 'center',
+            }}
+          >
+            <View style={{
+              backgroundColor: c.background,
+              margin: 20,
+              padding: 20,
+              borderRadius: 16,
+              width: '90%',
+              maxWidth: 400,
+            }}>
+              <Text style={{
+                fontSize: Typography.scale.heading2.fontSize,
+                lineHeight: Typography.scale.heading2.lineHeight,
+                fontFamily: Typography.fontFamily.bodySemibold,
+                fontWeight: Typography.fontWeight.semibold,
+                color: c.text,
+                marginBottom: 16,
+                textAlign: 'center',
+              }}>
+                Join Group
+              </Text>
+              
+              <TextInput
+                value={inviteCode}
+                onChangeText={setInviteCode}
+                placeholder="Enter invite code"
+                placeholderTextColor={c.muted}
+                style={{
+                  backgroundColor: c.card,
+                  padding: 16,
+                  borderRadius: 12,
+                  color: c.text,
+                  marginBottom: 16,
+                }}
+              />
+              
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                <Pressable
+                  onPress={() => setShowJoin(false)}
+                  style={{
+                    flex: 1,
+                    backgroundColor: c.card,
+                    paddingVertical: 12,
+                    borderRadius: 12,
+                    alignItems: 'center',
+                  }}
+                >
+                  <Text style={{ color: c.text, fontWeight: '600' }}>Cancel</Text>
+                </Pressable>
+                
+                <Pressable
+                  onPress={handleJoinGroup}
+                  disabled={joining || !inviteCode.trim()}
+                  style={{
+                    flex: 1,
+                    backgroundColor: joining || !inviteCode.trim() ? c.muted : c.primary,
+                    paddingVertical: 12,
+                    borderRadius: 12,
+                    alignItems: 'center',
+                  }}
+                >
+                  <Text style={{ color: 'white', fontWeight: '600' }}>
+                    {joining ? 'Joining...' : 'Join'}
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          </KeyboardAvoidingView>
+        </Modal>
 
         {/* Friend actions sheet */}
         {friendActionTarget && (

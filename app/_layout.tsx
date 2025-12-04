@@ -4,15 +4,11 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { ThemeProvider } from '@/theme/ThemeProvider';
 import { useFonts, Pacifico_400Regular } from '@expo-google-fonts/pacifico';
 import {
-  Inter_400Regular,
-  Inter_500Medium,
-  Inter_600SemiBold,
-  Inter_700Bold,
-} from '@expo-google-fonts/inter';
-import {
-  PlusJakartaSans_600SemiBold,
-  PlusJakartaSans_700Bold,
-} from '@expo-google-fonts/plus-jakarta-sans';
+  NunitoSans_400Regular,
+  NunitoSans_500Medium,
+  NunitoSans_600SemiBold,
+  NunitoSans_700Bold,
+} from '@expo-google-fonts/nunito-sans';
 import { Typography } from '@/theme/designTokens';
 import { SavedNotificationProvider } from '@/utils/SavedNotificationContext';
 import { GroupDecisionNotificationProvider } from '@/utils/GroupDecisionNotificationContext';
@@ -30,12 +26,10 @@ export default function RootLayout() {
   // Load all fonts; we don't block UI on this
   const [fontsLoaded] = useFonts({
     Pacifico_400Regular,
-    Inter_400Regular,
-    Inter_500Medium,
-    Inter_600SemiBold,
-    Inter_700Bold,
-    PlusJakartaSans_600SemiBold,
-    PlusJakartaSans_700Bold,
+    NunitoSans_400Regular,
+    NunitoSans_500Medium,
+    NunitoSans_600SemiBold,
+    NunitoSans_700Bold,
   });
 
   // Note: React Native doesn't support defaultProps.style the same way

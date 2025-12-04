@@ -28,7 +28,7 @@ import { getMyGroups } from '@/services/groups';
 import type { Event, Restaurant } from '@/types/models';
 import LazyImage from '@/components/LazyImage';
 import dayjs from 'dayjs';
-import { Spacing, BorderRadius, Typography, Colors, IconSizes } from '@/theme/designTokens';
+import { Spacing, BorderRadius, Typography, Colors, IconSizes, Shadows } from '@/theme/designTokens';
 
 // Skeleton card for loading state
 function SkeletonCard() {
@@ -786,6 +786,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.light.neutral[300] + '20',
     minWidth: 100,
     maxWidth: '100%', // Ensure cards don't exceed container
+    ...Shadows.light.sm, // Slight drop shadow
   },
   viewAllCard: {
     borderStyle: 'dashed',
@@ -859,6 +860,7 @@ const styles = StyleSheet.create({
     minHeight: 100,
     borderWidth: 1,
     borderColor: Colors.light.neutral[300] + '20',
+    ...Shadows.light.sm, // Slight drop shadow
   },
   groupDecideText: {
     fontSize: 13,

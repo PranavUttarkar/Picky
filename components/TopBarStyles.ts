@@ -1,16 +1,19 @@
 import { StyleProp, ViewStyle, TextStyle } from 'react-native';
-import { Spacing, BorderRadius, Typography } from '@/theme/designTokens';
+import { Spacing, BorderRadius, Typography, Shadows } from '@/theme/designTokens';
 
 // Helper to consolidate top bar styling between tabs (events, food, etc.)
 export const topBarStyles = (c: { card: string; text: string; muted: string; background: string; primary: string }) => {
   return {
     searchContainer: {
       backgroundColor: c.card,
-      borderRadius: BorderRadius.md,
+      borderRadius: BorderRadius.full,
       paddingHorizontal: Spacing.sm + 2, // 10px (slightly more than sm for input comfort)
       paddingVertical: Spacing.sm,
       marginTop: Spacing.md - 4, // 12px
       // Horizontal spacing now handled by outer tab container (padding:16)
+      borderWidth: 1,
+      borderColor: '#E5E7EB', // Subtle grey
+      ...Shadows.light.md, // Nice drop shadow
     } as ViewStyle,
     searchRow: {
       flexDirection: 'row',

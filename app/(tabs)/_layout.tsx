@@ -173,7 +173,7 @@ export default function TabsLayout() {
       tabBarActiveTintColor: c.primary,
       tabBarInactiveTintColor: c.muted,
     }),
-    [HeaderTitle, headerRight, c.background, c.card, c.primary, c.muted, isLargeScreen], //Header hidden on small screens.
+    [HeaderTitle, headerRight, c.background, c.card, c.primary, c.muted, isLargeScreen, scheme], //Header hidden on small screens.
   );
 
   return (

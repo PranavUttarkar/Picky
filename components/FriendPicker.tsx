@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useThemeColors } from '@/theme/ThemeProvider';
+import { BorderRadius, Shadows } from '@/theme/designTokens';
 import { Ionicons } from '@expo/vector-icons';
 import { getUserFriends } from '@/services/friends';
 import Avatar from '@/components/Avatar';
@@ -204,10 +205,13 @@ export default function FriendPicker({
             backgroundColor: c.card,
             marginHorizontal: 16,
             marginBottom: 16,
-            borderRadius: 12,
+            borderRadius: BorderRadius.full,
             flexDirection: 'row',
             alignItems: 'center',
             paddingHorizontal: 16,
+            borderWidth: 1,
+            borderColor: '#E5E7EB',
+            ...Shadows.light.md,
           }}>
             <Ionicons name="search" size={20} color={c.muted} />
             <TextInput

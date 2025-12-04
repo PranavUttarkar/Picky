@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import Slider from '@react-native-community/slider';
 import { useThemeColors } from '@/theme/ThemeProvider';
+import { BorderRadius, Shadows } from '@/theme/designTokens';
 import GradientBackground from '@/components/GradientBackground';
 import GradientHeader from '@/components/GradientHeader';
 import FoodRowCard from '@/components/FoodRowCard';
@@ -24,8 +25,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { optimisticUpdate } from '@/utils/optimistic';
 import { useSavedNotification } from '@/utils/SavedNotificationContext';
 
+import { topBarStyles } from '@/components/TopBarStyles';
+
 export default function FoodExplore() {
   const c = useThemeColors();
+  const styles = topBarStyles(c);
+  const inputRef = useRef<TextInput>(null);
   const { width } = useWindowDimensions();
   const isWide = width >= 900;
   const columns = width >= 1280 ? 3 : isWide ? 2 : 1;
@@ -656,24 +661,26 @@ export default function FoodExplore() {
     <GradientBackground variant="dim">
       <View style={{ flex: 1, padding: 16 }}>
         <GradientHeader title="Food" />
-        <View
-          style={{
-            backgroundColor: c.card,
-            borderRadius: 12,
-            paddingHorizontal: 10,
-            paddingVertical: 8,
-            marginTop: 12,
-          }}
-        >
-          <TextInput
-            placeholder="Search restaurants or cuisines"
-            placeholderTextColor={c.muted}
-            value={query}
-            onChangeText={setQuery}
-            style={{ color: c.text }}
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
+        <View style={styles.searchContainer}>
+          <View style={styles.searchRow}>
+            <Pressable
+              accessibilityLabel="Focus search"
+              style={styles.searchIconPressable}
+              onPress={() => inputRef.current?.focus?.()}
+            >
+              <Ionicons name="search" size={18} color={c.muted} />
+            </Pressable>
+            <TextInput
+              ref={inputRef}
+              placeholder="Search restaurants or cuisines"
+              placeholderTextColor={c.muted}
+              value={query}
+              onChangeText={setQuery}
+              style={styles.searchInput}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+          </View>
         </View>
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
           <Pressable

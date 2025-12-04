@@ -16,9 +16,9 @@
     "ingest:restaurant-images": "node ./scripts/ingest-restaurant-images.mjs"
   },
   "dependencies": {
-    "@expo-google-fonts/inter": "^0.4.2",
+    "@expo-google-fonts/manrope": "^0.4.2",
+    "@expo-google-fonts/nunito-sans": "^0.4.2",
     "@expo-google-fonts/pacifico": "^0.4.1",
-    "@expo-google-fonts/plus-jakarta-sans": "^0.4.2",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-community/datetimepicker": "8.4.4",
     "@react-native-community/slider": "5.0.1",

@@ -11,6 +11,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { useThemeColors } from '@/theme/ThemeProvider';
+import { BorderRadius, Shadows } from '@/theme/designTokens';
 import GradientBackground from '@/components/GradientBackground';
 import AnimatedPage from '@/components/AnimatedPage';
 import { supabase } from '@/services/supabase';
@@ -364,10 +365,13 @@ export default function SearchUsers() {
             backgroundColor: c.card,
             marginHorizontal: 16,
             marginBottom: 16,
-            borderRadius: 12,
+            borderRadius: BorderRadius.full,
             flexDirection: 'row',
             alignItems: 'center',
             paddingHorizontal: 16,
+            borderWidth: 1,
+            borderColor: '#E5E7EB',
+            ...Shadows.light.md,
           }}>
             <Ionicons name="search" size={20} color={c.muted} />
             <TextInput
