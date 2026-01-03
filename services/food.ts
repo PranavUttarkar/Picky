@@ -1,7 +1,13 @@
 import { supabase } from '@/services/supabase';
 import type { Restaurant, ScoredRestaurant } from '@/types/models';
+import { createRateLimiter, RateLimitPresets } from '@/utils/rateLimiter';
+
+// Shared limiters for this service
+const searchRestaurantLimiter = createRateLimiter({ ...RateLimitPresets.search, key: 'food:search' });
+const listRestaurantLimiter = createRateLimiter({ maxRequests: 30, windowMs: 60000, key: 'food:list' });
 
 const SELECT_RESTAURANT = `
+// ... existing select ...
   place_id, google_id, restaurant_name, description, address, city, state, zipcode,
   latitude, longitude, phone, website, category, price_range,
   review_points, reviews, main_image, image_1, image_2, image_3,
@@ -63,27 +69,31 @@ export async function getRestaurantById(id: string): Promise<Restaurant | undefi
 }
 
 export async function listRestaurants(offset = 0, limit = 20): Promise<Restaurant[]> {
-  const { data, error } = await supabase
-    .from('restaurants')
-    .select(SELECT_RESTAURANT)
-    .order('reviews', { ascending: false, nullsFirst: false })
-    .range(offset, offset + limit - 1);
-  if (error) throw error;
-  return (data ?? []).map(normalize);
+  return listRestaurantLimiter.execute(async () => {
+    const { data, error } = await supabase
+      .from('restaurants')
+      .select(SELECT_RESTAURANT)
+      .order('reviews', { ascending: false, nullsFirst: false })
+      .range(offset, offset + limit - 1);
+    if (error) throw error;
+    return (data ?? []).map(normalize);
+  });
 }
 
 export async function searchRestaurants(query: string, offset = 0, limit = 20): Promise<Restaurant[]> {
-  const q = (query || '').trim();
-  if (q.length < 2) return [];
-  const like = `%${q}%`;
-  const { data, error } = await supabase
-    .from('restaurants')
-    .select(SELECT_RESTAURANT)
-    .or(`restaurant_name.ilike.${like},category.ilike.${like},address.ilike.${like},description.ilike.${like}`)
-    .order('reviews', { ascending: false, nullsFirst: false })
-    .range(offset, offset + limit - 1);
-  if (error) throw error;
-  return (data ?? []).map(normalize);
+  return searchRestaurantLimiter.execute(async () => {
+    const q = (query || '').trim();
+    if (q.length < 2) return [];
+    const like = `%${q}%`;
+    const { data, error } = await supabase
+      .from('restaurants')
+      .select(SELECT_RESTAURANT)
+      .or(`restaurant_name.ilike.${like},category.ilike.${like},address.ilike.${like},description.ilike.${like}`)
+      .order('reviews', { ascending: false, nullsFirst: false })
+      .range(offset, offset + limit - 1);
+    if (error) throw error;
+    return (data ?? []).map(normalize);
+  });
 }
 
 // Lightweight, local-only scoring. Later we can move this logic into a Supabase RPC.

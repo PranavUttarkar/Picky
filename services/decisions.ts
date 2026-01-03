@@ -1,5 +1,9 @@
 import { supabase } from '@/services/supabase';
 import type { Event } from '@/types/models';
+import { createRateLimiter } from '@/utils/rateLimiter';
+
+// Rate limiter for decision preferences
+const upsertDecisionLimiter = createRateLimiter({ maxRequests: 10, windowMs: 60000, key: 'decisions:upsert' });
 
 export type DecisionPrefs = {
   budget?: number | null; // 0..100
@@ -10,21 +14,23 @@ export type DecisionPrefs = {
 };
 
 export async function upsertDecisionPrefs(pollId: number, prefs: DecisionPrefs): Promise<void> {
-  const user = (await supabase.auth.getUser()).data.user;
-  if (!user) throw new Error('Not authenticated');
-  const payload: any = {
-    poll_id: pollId,
-    user_id: user.id,
-    budget: prefs.budget ?? null,
-    time_pref: prefs.time_pref ?? null,
-    radius_miles: prefs.radius_miles ?? null,
-    needs: prefs.needs ?? null,
-    notes: prefs.notes ?? null,
-  };
-  const { error } = await supabase.from('decision_prefs').upsert(payload, {
-    onConflict: 'poll_id,user_id',
+  return upsertDecisionLimiter.execute(async () => {
+    const user = (await supabase.auth.getUser()).data.user;
+    if (!user) throw new Error('Not authenticated');
+    const payload: any = {
+      poll_id: pollId,
+      user_id: user.id,
+      budget: prefs.budget ?? null,
+      time_pref: prefs.time_pref ?? null,
+      radius_miles: prefs.radius_miles ?? null,
+      needs: prefs.needs ?? null,
+      notes: prefs.notes ?? null,
+    };
+    const { error } = await supabase.from('decision_prefs').upsert(payload, {
+      onConflict: 'poll_id,user_id',
+    });
+    if (error) throw error;
   });
-  if (error) throw error;
 }
 
 export async function getDecisionPrefs(pollId: number): Promise<DecisionPrefs | null> {

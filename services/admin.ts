@@ -1,4 +1,8 @@
 import { supabase } from '@/services/supabase';
+import { createRateLimiter } from '@/utils/rateLimiter';
+
+// Rate limiter for admin actions (extra protection)
+const adminActionLimiter = createRateLimiter({ maxRequests: 10, windowMs: 60000, key: 'admin:action' });
 
 /**
  * Suspend a user (can login but cannot post events)
@@ -11,16 +15,18 @@ export async function suspendUser(
   reason?: string | null,
   until?: string | null // ISO string
 ): Promise<void> {
-  const { error } = await supabase
-    .from('users')
-    .update({
-      is_suspended: true,
-      suspension_reason: reason || null,
-      suspended_until: until || null,
-    })
-    .eq('id', userId);
+  return adminActionLimiter.execute(async () => {
+    const { error } = await supabase
+      .from('users')
+      .update({
+        is_suspended: true,
+        suspension_reason: reason || null,
+        suspended_until: until || null,
+      })
+      .eq('id', userId);
 
-  if (error) throw error;
+    if (error) throw error;
+  });
 }
 
 /**
@@ -29,19 +35,18 @@ export async function suspendUser(
  * @param reason Optional reason for ban
  */
 export async function banUser(userId: string, reason?: string | null): Promise<void> {
-  const { error } = await supabase
-    .from('users')
-    .update({
-      is_banned: true,
-      is_suspended: true, // Banned users are also suspended
-      suspension_reason: reason || null,
-    })
-    .eq('id', userId);
+  return adminActionLimiter.execute(async () => {
+    const { error } = await supabase
+      .from('users')
+      .update({
+        is_banned: true,
+        is_suspended: true, // Banned users are also suspended
+        suspension_reason: reason || null,
+      })
+      .eq('id', userId);
 
-  if (error) throw error;
-
-  // Note: To fully prevent login, you may need to use Supabase Auth hooks
-  // or handle this in your authentication flow
+    if (error) throw error;
+  });
 }
 
 /**
@@ -101,4 +106,3 @@ export async function checkUserStatus(userId: string): Promise<{
     suspension_reason: data?.suspension_reason || null,
   };
 }
-

@@ -1,13 +1,19 @@
 import { supabase } from './supabase';
 import type { UserProfile } from '@/types/models';
+import { createRateLimiter } from '@/utils/rateLimiter';
+
+// Rate limiter for blocking actions
+const blockActionLimiter = createRateLimiter({ maxRequests: 10, windowMs: 60000, key: 'blocking:action' });
 
 // Blocking functions
 export async function blockUser(username: string): Promise<boolean> {
-  const { data, error } = await supabase.rpc('toggle_user_block', {
-    p_username: username
+  return blockActionLimiter.execute(async () => {
+    const { data, error } = await supabase.rpc('toggle_user_block', {
+      p_username: username
+    });
+    if (error) throw error;
+    return data as boolean; // true if now blocked, false if unblocked
   });
-  if (error) throw error;
-  return data as boolean; // true if now blocked, false if unblocked
 }
 
 export async function unblockUser(username: string): Promise<boolean> {

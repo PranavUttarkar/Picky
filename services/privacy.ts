@@ -1,5 +1,9 @@
 import { supabase } from './supabase';
 import type { UserSettings } from '@/types/models';
+import { createRateLimiter } from '@/utils/rateLimiter';
+
+// Rate limiter for privacy settings updates
+const updateSettingsLimiter = createRateLimiter({ maxRequests: 10, windowMs: 60000, key: 'privacy:update' });
 
 // Privacy settings functions
 export async function getUserSettings(): Promise<UserSettings | null> {
@@ -17,42 +21,44 @@ export async function getUserSettings(): Promise<UserSettings | null> {
 }
 
 export async function updateUserSettings(settings: Partial<UserSettings>): Promise<UserSettings> {
-  const user = (await supabase.auth.getUser()).data.user;
-  if (!user) throw new Error('Not authenticated');
+  return updateSettingsLimiter.execute(async () => {
+    const user = (await supabase.auth.getUser()).data.user;
+    if (!user) throw new Error('Not authenticated');
 
-  // First try to update existing settings
-  const { data: updated, error: updateError } = await supabase
-    .from('user_settings')
-    .update(settings)
-    .eq('user_id', user.id)
-    .select()
-    .maybeSingle();
-
-  if (updateError && updateError.code !== 'PGRST116') { // PGRST116 = no rows found
-    throw updateError;
-  }
-
-  // If no existing settings, create new ones
-  if (!updated) {
-    const defaultSettings = {
-      user_id: user.id,
-      show_activity_to_friends: true,
-      show_activity_to_followers: true,
-      allow_friend_requests: true,
-      ...settings
-    };
-
-    const { data: created, error: createError } = await supabase
+    // First try to update existing settings
+    const { data: updated, error: updateError } = await supabase
       .from('user_settings')
-      .insert(defaultSettings)
+      .update(settings)
+      .eq('user_id', user.id)
       .select()
-      .single();
+      .maybeSingle();
 
-    if (createError) throw createError;
-    return created;
-  }
+    if (updateError && updateError.code !== 'PGRST116') { // PGRST116 = no rows found
+      throw updateError;
+    }
 
-  return updated;
+    // If no existing settings, create new ones
+    if (!updated) {
+      const defaultSettings = {
+        user_id: user.id,
+        show_activity_to_friends: true,
+        show_activity_to_followers: true,
+        allow_friend_requests: true,
+        ...settings
+      };
+
+      const { data: created, error: createError } = await supabase
+        .from('user_settings')
+        .insert(defaultSettings)
+        .select()
+        .single();
+
+      if (createError) throw createError;
+      return created;
+    }
+
+    return updated;
+  });
 }
 
 export async function getOrCreateUserSettings(): Promise<UserSettings> {

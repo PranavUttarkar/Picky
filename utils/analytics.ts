@@ -1,11 +1,22 @@
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/services/supabase';
+import { createRateLimiter } from './rateLimiter';
 
 // Simple, provider-agnostic analytics wrapper.
 // Defaults to no-op/console to avoid breaking the app in any environment.
 
 type Dict = Record<string, any>;
+
+// Rate limiter for analytics API calls (30 events/sec with queuing)
+const analyticsLimiter = createRateLimiter({
+  maxRequests: 30,
+  windowMs: 1000,
+  strategy: 'token-bucket',
+  key: 'analytics',
+  waitOnLimit: true,
+  maxWaitMs: 5000,
+});
 
 export type AnalyticsConfig = {
   amplitudeApiKey?: string | null; // Public key ok for client; set EXPO_PUBLIC_AMPLITUDE_KEY
@@ -94,6 +105,7 @@ class ConsoleProvider implements Provider {
 }
 
 // Minimal Amplitude HTTP API v2 provider (no SDK dependency)
+// Rate limited to prevent API throttling
 class AmplitudeHttpProvider implements Provider {
   private apiKey: string | null = null;
   async init(config: AnalyticsConfig) {
@@ -102,20 +114,22 @@ class AmplitudeHttpProvider implements Provider {
   async identify(userId: string, traits?: Dict) {
     if (!this.apiKey) return;
     try {
-      await fetch('https://api2.amplitude.com/2/httpapi', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-        body: JSON.stringify({
-          api_key: this.apiKey,
-          events: [
-            {
-              event_type: '$identify',
-              user_id: String(userId),
-              user_properties: traits ?? {},
-              time: Date.now(),
-            },
-          ],
-        }),
+      await analyticsLimiter.execute(async () => {
+        await fetch('https://api2.amplitude.com/2/httpapi', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify({
+            api_key: this.apiKey,
+            events: [
+              {
+                event_type: '$identify',
+                user_id: String(userId),
+                user_properties: traits ?? {},
+                time: Date.now(),
+              },
+            ],
+          }),
+        });
       });
     } catch {}
   }
@@ -128,23 +142,25 @@ class AmplitudeHttpProvider implements Provider {
     if (!this.apiKey) return;
     const { userId, deviceId, userTraits } = Analytics._state;
     try {
-      await fetch('https://api2.amplitude.com/2/httpapi', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-        body: JSON.stringify({
-          api_key: this.apiKey,
-          events: [
-            {
-              event_type: name,
-              user_id: userId ? String(userId) : undefined,
-              device_id: deviceId,
-              event_properties: props ?? {},
-              user_properties: userTraits ?? {},
-              platform: Platform.OS,
-              time: Date.now(),
-            },
-          ],
-        }),
+      await analyticsLimiter.execute(async () => {
+        await fetch('https://api2.amplitude.com/2/httpapi', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify({
+            api_key: this.apiKey,
+            events: [
+              {
+                event_type: name,
+                user_id: userId ? String(userId) : undefined,
+                device_id: deviceId,
+                event_properties: props ?? {},
+                user_properties: userTraits ?? {},
+                platform: Platform.OS,
+                time: Date.now(),
+              },
+            ],
+          }),
+        });
       });
     } catch {}
   }

@@ -1,5 +1,9 @@
 import { supabase } from '@/services/supabase';
 import type { EventReport, EventReportWithDetails, ReportReason, ReportStatus } from '@/types/models';
+import { createRateLimiter, RateLimitPresets } from '@/utils/rateLimiter';
+
+// Shared limiter for reports (persisted across restarts)
+const reportLimiter = createRateLimiter({ ...RateLimitPresets.report, key: 'reports:event' });
 
 /**
  * Report an event with a reason and optional description
@@ -9,30 +13,32 @@ export async function reportEvent(
   reason: ReportReason,
   description?: string | null
 ): Promise<EventReport> {
-  const { data: auth } = await supabase.auth.getUser();
-  if (!auth.user) throw new Error('Not authenticated');
+  return reportLimiter.execute(async () => {
+    const { data: auth } = await supabase.auth.getUser();
+    if (!auth.user) throw new Error('Not authenticated');
 
-  const { data, error } = await supabase
-    .from('event_reports')
-    .insert({
-      event_id: eventId,
-      reported_by: auth.user.id,
-      reason,
-      description: description?.trim() || null,
-      status: 'pending',
-    })
-    .select()
-    .single();
+    const { data, error } = await supabase
+      .from('event_reports')
+      .insert({
+        event_id: eventId,
+        reported_by: auth.user.id,
+        reason,
+        description: description?.trim() || null,
+        status: 'pending',
+      })
+      .select()
+      .single();
 
-  if (error) {
-    // Handle unique constraint violation (duplicate report)
-    if (error.code === '23505') {
-      throw new Error('You have already reported this event');
+    if (error) {
+      // Handle unique constraint violation (duplicate report)
+      if (error.code === '23505') {
+        throw new Error('You have already reported this event');
+      }
+      throw error;
     }
-    throw error;
-  }
 
-  return data as EventReport;
+    return data as EventReport;
+  });
 }
 
 /**

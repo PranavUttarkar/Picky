@@ -1,22 +1,33 @@
 import { supabase } from '@/services/supabase';
 import type { Group } from '@/types/models';
+import { createRateLimiter, RateLimitPresets } from '@/utils/rateLimiter';
+
+// Shared limiters for this service
+const groupActionLimiter = createRateLimiter({ ...RateLimitPresets.groupAction, key: 'groups:action' });
+const regenerateCodeLimiter = createRateLimiter({ maxRequests: 3, windowMs: 300000, key: 'groups:regenerate_code' });
 
 export async function createGroup(name: string): Promise<{ group_id: number; invite_code: string }> {
-  const { data, error } = await supabase.rpc('create_group', { p_name: name });
-  if (error) throw error;
-  return data?.[0] ?? data; // returns table
+  return groupActionLimiter.execute(async () => {
+    const { data, error } = await supabase.rpc('create_group', { p_name: name });
+    if (error) throw error;
+    return data?.[0] ?? data; // returns table
+  });
 }
 
 export async function joinGroupByCode(code: string): Promise<number> {
-  const { data, error } = await supabase.rpc('join_group_by_code', { p_code: code });
-  if (error) throw error;
-  return data as number;
+  return groupActionLimiter.execute(async () => {
+    const { data, error } = await supabase.rpc('join_group_by_code', { p_code: code });
+    if (error) throw error;
+    return data as number;
+  });
 }
 
 export async function regenerateInviteCode(groupId: number): Promise<string> {
-  const { data, error } = await supabase.rpc('regenerate_group_invite_code', { p_group_id: groupId });
-  if (error) throw error;
-  return data as string;
+  return regenerateCodeLimiter.execute(async () => {
+    const { data, error } = await supabase.rpc('regenerate_group_invite_code', { p_group_id: groupId });
+    if (error) throw error;
+    return data as string;
+  });
 }
 
 export async function getMyGroups(): Promise<Group[]> {

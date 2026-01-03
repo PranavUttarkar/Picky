@@ -1,5 +1,9 @@
 import { supabase } from '@/services/supabase';
 import { trackEvent } from '@/utils/analytics';
+import { createRateLimiter } from '@/utils/rateLimiter';
+
+// Rate limiter for availability updates
+const availabilityUpdateLimiter = createRateLimiter({ maxRequests: 5, windowMs: 60000, key: 'availability:replace' });
 
 export type SlotKey = string; // ISO string of slot_start in UTC (rounded to slot)
 
@@ -80,25 +84,27 @@ export async function replaceMyAvailability(
   window: AvailabilityWindow,
   slots: SlotKey[],
 ): Promise<void> {
-  const user = (await supabase.auth.getUser()).data.user;
-  if (!user) throw new Error('not authenticated');
+  return availabilityUpdateLimiter.execute(async () => {
+    const user = (await supabase.auth.getUser()).data.user;
+    if (!user) throw new Error('not authenticated');
 
-  // Delete existing rows in the window for this user+group
-  const del = await supabase
-    .from('group_availability')
-    .delete()
-    .eq('group_id', groupId)
-    .eq('user_id', user.id)
-    .gte('slot_start', window.startIso)
-    .lt('slot_start', window.endIso);
-  if (del.error) throw del.error;
+    // Delete existing rows in the window for this user+group
+    const del = await supabase
+      .from('group_availability')
+      .delete()
+      .eq('group_id', groupId)
+      .eq('user_id', user.id)
+      .gte('slot_start', window.startIso)
+      .lt('slot_start', window.endIso);
+    if (del.error) throw del.error;
 
-  if (!slots.length) return;
+    if (!slots.length) return;
 
-  const rows = slots.map((iso) => ({ group_id: groupId, user_id: user.id, slot_start: iso }));
-  const { error } = await supabase.from('group_availability').insert(rows);
-  if (error) throw error;
-  trackEvent('availability_replaced', { group_id: groupId, slots_count: slots.length, window_days: Math.max(1, Math.floor((new Date(window.endIso).getTime() - new Date(window.startIso).getTime()) / (24 * 60 * 60 * 1000))) }).catch(() => {});
+    const rows = slots.map((iso) => ({ group_id: groupId, user_id: user.id, slot_start: iso }));
+    const { error } = await supabase.from('group_availability').insert(rows);
+    if (error) throw error;
+    trackEvent('availability_replaced', { group_id: groupId, slots_count: slots.length, window_days: Math.max(1, Math.floor((new Date(window.endIso).getTime() - new Date(window.startIso).getTime()) / (24 * 60 * 60 * 1000))) }).catch(() => {});
+  });
 }
 
 export async function getGroupAvailabilitySummary(

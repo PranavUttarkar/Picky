@@ -1,8 +1,18 @@
 import { supabase } from '@/services/supabase';
 import type { Event } from '@/types/models';
 import { triggerGroupDecisionNotification } from '@/utils/notifications';
+import { createRateLimiter, RateLimitPresets } from '@/utils/rateLimiter';
+
+// Shared limiters for this service
+const createPollLimiter = createRateLimiter({ ...RateLimitPresets.create, key: 'polls:create' });
+const voteLimiter = createRateLimiter({ ...RateLimitPresets.socialAction, key: 'polls:vote' });
+const ratingLimiter = createRateLimiter({ maxRequests: 60, windowMs: 60000, key: 'polls:rating' });
+const addOptionLimiter = createRateLimiter({ maxRequests: 10, windowMs: 60000, key: 'polls:add_option' });
+const statusUpdateLimiter = createRateLimiter({ maxRequests: 5, windowMs: 60000, key: 'polls:status_update' });
+const feedbackLimiter = createRateLimiter({ maxRequests: 3, windowMs: 60000, key: 'polls:feedback' });
 
 export type PollOptionView =
+// ... existing types ...
   | ({
       kind: 'event';
       poll_id: number;
@@ -27,43 +37,45 @@ export type PollOptionView =
     });
 
 export async function createPollWithOptions(groupId: number, eventIds: number[], opts?: { title?: string | null; deadlineAt?: string | null; mode?: 'single' | 'rating' }): Promise<number> {
-  // Try v2 (with title/deadline/mode). If DB isn't migrated yet, fall back to v1.
-  try {
-    const { data, error } = await supabase.rpc('create_poll_with_options_v2', {
-      p_group_id: groupId,
-      p_event_ids: eventIds,
-      p_title: opts?.title ?? null,
-      p_deadline_at: opts?.deadlineAt ?? null,
-      p_mode: opts?.mode ?? 'single',
-    });
-    if (error) throw error;
-    
-    // Trigger notification for new group decision
-    await triggerGroupDecisionNotification();
-    
-    return data as number;
-  } catch (e: any) {
-    const code = e?.code as string | undefined;
-    const msg = (e?.message as string | undefined)?.toLowerCase() || '';
-    const shouldFallback = code === '42703' /* undefined column */
-      || code === '42883' /* undefined function */
-      || msg.includes('column "title"')
-      || msg.includes('column "deadline_at"')
-      || msg.includes('column "mode"')
-      || msg.includes('create_poll_with_options_v2');
-    if (!shouldFallback) throw e;
-    console.warn('create_poll_with_options_v2 unavailable, falling back to create_poll_with_options');
-    const { data, error } = await supabase.rpc('create_poll_with_options', {
-      p_group_id: groupId,
-      p_event_ids: eventIds,
-    });
-    if (error) throw error;
-    
-    // Trigger notification for new group decision
-    await triggerGroupDecisionNotification();
-    
-    return data as number;
-  }
+  return createPollLimiter.execute(async () => {
+    // Try v2 (with title/deadline/mode). If DB isn't migrated yet, fall back to v1.
+    try {
+      const { data, error } = await supabase.rpc('create_poll_with_options_v2', {
+        p_group_id: groupId,
+        p_event_ids: eventIds,
+        p_title: opts?.title ?? null,
+        p_deadline_at: opts?.deadlineAt ?? null,
+        p_mode: opts?.mode ?? 'single',
+      });
+      if (error) throw error;
+      
+      // Trigger notification for new group decision
+      await triggerGroupDecisionNotification();
+      
+      return data as number;
+    } catch (e: any) {
+      const code = e?.code as string | undefined;
+      const msg = (e?.message as string | undefined)?.toLowerCase() || '';
+      const shouldFallback = code === '42703' /* undefined column */
+        || code === '42883' /* undefined function */
+        || msg.includes('column "title"')
+        || msg.includes('column "deadline_at"')
+        || msg.includes('column "mode"')
+        || msg.includes('create_poll_with_options_v2');
+      if (!shouldFallback) throw e;
+      console.warn('create_poll_with_options_v2 unavailable, falling back to create_poll_with_options');
+      const { data, error } = await supabase.rpc('create_poll_with_options', {
+        p_group_id: groupId,
+        p_event_ids: eventIds,
+      });
+      if (error) throw error;
+      
+      // Trigger notification for new group decision
+      await triggerGroupDecisionNotification();
+      
+      return data as number;
+    }
+  });
 }
 
 // Create a custom text poll with free-text options
@@ -72,19 +84,21 @@ export async function createTextPoll(
   texts: string[],
   opts?: { title?: string | null; deadlineAt?: string | null }
 ): Promise<number> {
-  const cleaned = texts
-    .map((t) => t?.trim())
-    .filter((t): t is string => !!t && t.length > 0);
-  if (cleaned.length === 0) throw new Error('Provide at least one option');
-  const { data, error } = await supabase.rpc('create_text_poll', {
-    p_group_id: groupId,
-    p_texts: cleaned,
-    p_title: opts?.title ?? null,
-    p_deadline_at: opts?.deadlineAt ?? null,
+  return createPollLimiter.execute(async () => {
+    const cleaned = texts
+      .map((t) => t?.trim())
+      .filter((t): t is string => !!t && t.length > 0);
+    if (cleaned.length === 0) throw new Error('Provide at least one option');
+    const { data, error } = await supabase.rpc('create_text_poll', {
+      p_group_id: groupId,
+      p_texts: cleaned,
+      p_title: opts?.title ?? null,
+      p_deadline_at: opts?.deadlineAt ?? null,
+    });
+    if (error) throw error;
+    await triggerGroupDecisionNotification();
+    return data as number;
   });
-  if (error) throw error;
-  await triggerGroupDecisionNotification();
-  return data as number;
 }
 
 export async function closePoll(pollId: number): Promise<void> {
@@ -309,20 +323,26 @@ export async function getPoll(pollId: number): Promise<{ poll: any; options: Pol
 }
 
 export async function castVote(pollId: number, eventId: number): Promise<void> {
-  const { error } = await supabase.rpc('cast_vote', { p_poll_id: pollId, p_event_id: eventId });
-  if (error) throw error;
+  return voteLimiter.execute(async () => {
+    const { error } = await supabase.rpc('cast_vote', { p_poll_id: pollId, p_event_id: eventId });
+    if (error) throw error;
+  });
 }
 
 export async function clearMyVote(pollId: number): Promise<void> {
-  const user = (await supabase.auth.getUser()).data.user;
-  if (!user) throw new Error('Not authenticated');
-  const { error } = await supabase.from('poll_votes').delete().eq('poll_id', pollId).eq('user_id', user.id);
-  if (error) throw error;
+  return voteLimiter.execute(async () => {
+    const user = (await supabase.auth.getUser()).data.user;
+    if (!user) throw new Error('Not authenticated');
+    const { error } = await supabase.from('poll_votes').delete().eq('poll_id', pollId).eq('user_id', user.id);
+    if (error) throw error;
+  });
 }
 
 export async function recordNoVote(pollId: number): Promise<void> {
-  const { error } = await supabase.rpc('record_no_vote', { p_poll_id: pollId });
-  if (error) throw error;
+  return voteLimiter.execute(async () => {
+    const { error } = await supabase.rpc('record_no_vote', { p_poll_id: pollId });
+    if (error) throw error;
+  });
 }
 
 export function onPollRealtime(pollId: number, onChange: () => void) {
@@ -361,48 +381,64 @@ export function suggestLeader(options: PollOptionView[]): PollOptionView | undef
 }
 
 export async function castRating(pollId: number, eventId: number, rating: -1 | 0 | 1 | null): Promise<void> {
-  const { error } = await supabase.rpc('cast_rating', { p_poll_id: pollId, p_event_id: eventId, p_rating: rating });
-  if (error) throw error;
+  return ratingLimiter.execute(async () => {
+    const { error } = await supabase.rpc('cast_rating', { p_poll_id: pollId, p_event_id: eventId, p_rating: rating });
+    if (error) throw error;
+  });
 }
 
 export async function commitPoll(pollId: number, eventId: number): Promise<void> {
-  const { error } = await supabase.rpc('commit_poll', { p_poll_id: pollId, p_event_id: eventId });
-  if (error) throw error;
+  return voteLimiter.execute(async () => {
+    const { error } = await supabase.rpc('commit_poll', { p_poll_id: pollId, p_event_id: eventId });
+    if (error) throw error;
+  });
 }
 
 export async function toggleCommitment(pollId: number): Promise<void> {
-  const { error } = await supabase.rpc('toggle_commitment', { p_poll_id: pollId });
-  if (error) throw error;
+  return voteLimiter.execute(async () => {
+    const { error } = await supabase.rpc('toggle_commitment', { p_poll_id: pollId });
+    if (error) throw error;
+  });
 }
 
 // Add a new option (event) to an existing poll. Requires user to be a group member (enforced by RLS via poll_options policies).
 export async function addPollOption(pollId: number, eventId: number): Promise<void> {
-  const { error } = await supabase.from('poll_options').insert({ poll_id: pollId, event_id: eventId });
-  if (error) throw error;
+  return addOptionLimiter.execute(async () => {
+    const { error } = await supabase.from('poll_options').insert({ poll_id: pollId, event_id: eventId });
+    if (error) throw error;
+  });
 }
 
 export async function addTextPollOption(pollId: number, text: string): Promise<void> {
-  const { error } = await supabase.rpc('add_text_option', { p_poll_id: pollId, p_text: text });
-  if (error) throw error;
+  return addOptionLimiter.execute(async () => {
+    const { error } = await supabase.rpc('add_text_option', { p_poll_id: pollId, p_text: text });
+    if (error) throw error;
+  });
 }
 
 export async function castTextVote(pollId: number, textOptionId: number): Promise<void> {
-  const { error } = await supabase.rpc('cast_text_vote', { p_poll_id: pollId, p_text_option_id: textOptionId });
-  if (error) throw error;
+  return voteLimiter.execute(async () => {
+    const { error } = await supabase.rpc('cast_text_vote', { p_poll_id: pollId, p_text_option_id: textOptionId });
+    if (error) throw error;
+  });
 }
 
 export async function postStatusUpdate(pollId: number, kind: 'late_10' | 'note', message?: string): Promise<void> {
-  const user = (await supabase.auth.getUser()).data.user;
-  if (!user) throw new Error('Not authenticated');
-  const { error } = await supabase.from('poll_status_updates').insert({ poll_id: pollId, user_id: user.id, kind, message: message ?? null });
-  if (error) throw error;
+  return statusUpdateLimiter.execute(async () => {
+    const user = (await supabase.auth.getUser()).data.user;
+    if (!user) throw new Error('Not authenticated');
+    const { error } = await supabase.from('poll_status_updates').insert({ poll_id: pollId, user_id: user.id, kind, message: message ?? null });
+    if (error) throw error;
+  });
 }
 
 export async function submitFeedback(pollId: number, rating: number, comment?: string): Promise<void> {
-  const user = (await supabase.auth.getUser()).data.user;
-  if (!user) throw new Error('Not authenticated');
-  const { error } = await supabase.from('post_event_feedback').upsert({ poll_id: pollId, user_id: user.id, rating, comment: comment ?? null }, { onConflict: 'poll_id,user_id' });
-  if (error) throw error;
+  return feedbackLimiter.execute(async () => {
+    const user = (await supabase.auth.getUser()).data.user;
+    if (!user) throw new Error('Not authenticated');
+    const { error } = await supabase.from('post_event_feedback').upsert({ poll_id: pollId, user_id: user.id, rating, comment: comment ?? null }, { onConflict: 'poll_id,user_id' });
+    if (error) throw error;
+  });
 }
 
 export async function deletePoll(pollId: number): Promise<void> {
