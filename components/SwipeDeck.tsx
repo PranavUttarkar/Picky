@@ -279,7 +279,7 @@ export default function SwipeDeck<T = any>({
                 style={[
                   styles.badge,
                   {
-                    left: 16,
+                    right: 16,
                     top: 16,
                     borderColor: overlayLabels?.like?.color || '#22c55e',
                     opacity: likeOpacity,
@@ -296,7 +296,7 @@ export default function SwipeDeck<T = any>({
                 style={[
                   styles.badge,
                   {
-                    right: 16,
+                    left: 16,
                     top: 16,
                     borderColor: overlayLabels?.nope?.color || '#ef4444',
                     opacity: nopeOpacity,

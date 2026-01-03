@@ -15,7 +15,7 @@ import GradientBackground from '@/components/GradientBackground';
 import AnimatedPage from '@/components/AnimatedPage';
 import AvailabilityGrid from '@/components/AvailabilityGrid';
 import AvailabilityGridMobile from '@/components/AvailabilityGridMobile';
-import { useThemeColors } from '@/theme/ThemeProvider';
+import { useThemeColors, useTheme } from '@/theme/ThemeProvider';
 import {
   computeWindow,
   getGroupAvailability,
@@ -28,6 +28,7 @@ import dayjs from 'dayjs';
 
 export default function GroupAvailabilityScreen() {
   const c = useThemeColors();
+  const { scheme } = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const groupId = Number(id);
   const [now, setNow] = useState<Date>(() => new Date());
@@ -164,7 +165,7 @@ export default function GroupAvailabilityScreen() {
 
   return (
     <GradientBackground variant="dim">
-      <AnimatedPage>
+      <AnimatedPage style={{ flex: 1 }}>
         <ScrollView
           style={{ flex: 1 }}
           contentContainerStyle={{
@@ -202,16 +203,16 @@ export default function GroupAvailabilityScreen() {
               color: c.text,
               marginBottom: 8,
             }}>
-              Find Common Times
+              Select Common Times
             </Text>
             
-            <Text style={{
+            {/* <Text style={{
               fontSize: 16,
               color: c.muted,
               lineHeight: 24,
             }}>
               Select your available times. We'll show where everyone overlaps so you can find the best meeting time.
-            </Text>
+            </Text> */}
           </View>
 
           {/* Enhanced Summary Card */}
@@ -322,209 +323,79 @@ export default function GroupAvailabilityScreen() {
           <View style={{
             backgroundColor: c.card,
             borderRadius: 16,
-            padding: 16,
-            marginBottom: 24,
+            padding: 12,
+            marginBottom: 20,
+            borderWidth: 1,
+            borderColor: c.background,
           }}>
-            <Text style={{
-              fontSize: 16,
-              fontWeight: '700',
-              color: c.text,
-              marginBottom: 12,
-            }}>
-              Quick Actions
-            </Text>
-            
             <View style={{
-              flexDirection: isMobileLayout ? 'column' : 'row',
-              gap: 8,
-              marginBottom: 12,
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: 10,
+              paddingHorizontal: 4,
             }}>
-              <Pressable
-                onPress={() => selectTimeRange(9, 17, 'weekdays')}
-                style={({ pressed }) => ({
-                  flex: 1,
-                  backgroundColor: pressed ? `${c.primary}30` : `${c.primary}15`,
-                  borderRadius: 12,
-                  padding: 12,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 8,
-                  transform: [{ scale: pressed ? 0.98 : 1 }],
-                })}
-              >
-                <Ionicons name="sunny" size={18} color={c.primary} />
-                <Text style={{ color: c.primary, fontWeight: '600', fontSize: 14 }}>
-                  Weekdays 9AM-5PM
-                </Text>
-              </Pressable>
-              
-              <Pressable
-                onPress={() => selectTimeRange(10, 22, 'weekends')}
-                style={({ pressed }) => ({
-                  flex: 1,
-                  backgroundColor: pressed ? `${c.primary}30` : `${c.primary}15`,
-                  borderRadius: 12,
-                  padding: 12,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 8,
-                  transform: [{ scale: pressed ? 0.98 : 1 }],
-                })}
-              >
-                <Ionicons name="calendar" size={18} color={c.primary} />
-                <Text style={{ color: c.primary, fontWeight: '600', fontSize: 14 }}>
-                  Weekends 10AM-10PM
-                </Text>
-              </Pressable>
-            </View>
-            
-            <View style={{ flexDirection: 'row', gap: 8 }}>
-              <Pressable
-                onPress={() => selectTimeRange(18, 23, 'all')}
-                style={({ pressed }) => ({
-                  flex: 1,
-                  backgroundColor: pressed ? `${c.primary}30` : `${c.primary}15`,
-                  borderRadius: 12,
-                  padding: 12,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 8,
-                  transform: [{ scale: pressed ? 0.98 : 1 }],
-                })}
-              >
-                <Ionicons name="moon" size={18} color={c.primary} />
-                <Text style={{ color: c.primary, fontWeight: '600', fontSize: 14 }}>
-                  Evenings 6PM-11PM
-                </Text>
-              </Pressable>
-              
+              <Text style={{
+                fontSize: 14,
+                fontWeight: '700',
+                color: c.muted,
+                textTransform: 'uppercase',
+                letterSpacing: 0.5,
+              }}>
+                Quick Select
+              </Text>
               <Pressable
                 onPress={clearAll}
                 style={({ pressed }) => ({
-                  flex: 1,
-                  backgroundColor: pressed ? `${c.muted}35` : `${c.muted}20`,
-                  borderRadius: 12,
-                  padding: 12,
+                  opacity: pressed ? 0.6 : 1,
                   flexDirection: 'row',
                   alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 8,
-                  transform: [{ scale: pressed ? 0.98 : 1 }],
+                  gap: 4,
                 })}
               >
-                <Ionicons name="close-circle" size={18} color={c.text} />
-                <Text style={{ color: c.text, fontWeight: '600', fontSize: 14 }}>
-                  Clear All
+                <Ionicons name="trash-outline" size={14} color="#ef4444" />
+                <Text style={{ color: '#ef4444', fontWeight: '600', fontSize: 13 }}>
+                  Clear
                 </Text>
               </Pressable>
             </View>
-          </View>
-
-          {/* Week Navigation & Save */}
-          <View style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            marginBottom: 16,
-            gap: 8,
-            flexWrap: 'wrap',
-          }}>
-            <Pressable
-              onPress={() => setNow(new Date())}
-              style={({ pressed }) => ({
-                backgroundColor: pressed ? `${c.primary}20` : c.card,
-                paddingVertical: 12,
-                paddingHorizontal: 16,
-                borderRadius: 12,
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 6,
-                transform: [{ scale: pressed ? 0.97 : 1 }],
-              })}
-              accessibilityRole="button"
-              accessibilityLabel="Jump to now"
-            >
-              <Ionicons name="time" size={18} color={c.primary} />
-              <Text style={{ color: c.text, fontWeight: '600', fontSize: 14 }}>
-                Now
-              </Text>
-            </Pressable>
-            
-            <Pressable
-              onPress={() => setNow(new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000))}
-              style={({ pressed }) => ({
-                backgroundColor: pressed ? `${c.primary}20` : c.card,
-                padding: 12,
-                borderRadius: 12,
-                transform: [{ scale: pressed ? 0.95 : 1 }],
-              })}
-              accessibilityRole="button"
-              accessibilityLabel="Previous week"
-            >
-              <Ionicons name="chevron-back" size={18} color={c.text} />
-            </Pressable>
-            
-            <Pressable
-              onPress={() => setNow(new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000))}
-              style={({ pressed }) => ({
-                backgroundColor: pressed ? `${c.primary}20` : c.card,
-                padding: 12,
-                borderRadius: 12,
-                transform: [{ scale: pressed ? 0.95 : 1 }],
-              })}
-              accessibilityRole="button"
-              accessibilityLabel="Next week"
-            >
-              <Ionicons name="chevron-forward" size={18} color={c.text} />
-            </Pressable>
-            
-            <View style={{ flex: 1 }} />
             
             <View style={{
-              backgroundColor: c.card,
-              paddingHorizontal: 16,
-              paddingVertical: 8,
-              borderRadius: 12,
-              marginRight: 8,
+              flexDirection: 'row',
+              flexWrap: 'wrap',
+              gap: 6,
             }}>
-              <Text style={{ color: c.muted, fontSize: 12 }}>
-                {selectedCount} {selectedCount === 1 ? 'slot' : 'slots'} selected
-              </Text>
+              {[
+                { label: '9-5 Mon-Fri', icon: 'sunny', action: () => selectTimeRange(9, 17, 'weekdays') },
+                { label: 'All Weekend', icon: 'calendar', action: () => selectTimeRange(0, 24, 'weekends') },
+                { label: '6pm-11pm', icon: 'moon', action: () => selectTimeRange(18, 23, 'all') },
+              ].map((item, idx) => (
+                <Pressable
+                  key={idx}
+                  onPress={item.action}
+                  style={({ pressed }) => ({
+                    flex: 1,
+                    minWidth: isMobileLayout ? '30%' : '20%',
+                    backgroundColor: pressed ? `${c.primary}25` : c.background,
+                    borderRadius: 8,
+                    paddingVertical: 8,
+                    paddingHorizontal: 6,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 4,
+                    borderWidth: 1,
+                    borderColor: pressed ? c.primary : `${c.primary}20`,
+                    transform: [{ scale: pressed ? 0.94 : 1 }],
+                  })}
+                >
+                  <Ionicons name={item.icon as any} size={14} color={c.primary} />
+                  <Text style={{ color: c.primary, fontWeight: '600', fontSize: 12 }} numberOfLines={1}>
+                    {item.label}
+                  </Text>
+                </Pressable>
+              ))}
             </View>
-            
-            <Pressable
-              onPress={saving ? undefined : onSave}
-              disabled={saving}
-              style={({ pressed }) => ({
-                backgroundColor: pressed && !saving ? `${c.primary}dd` : c.primary,
-                paddingVertical: 12,
-                paddingHorizontal: 24,
-                borderRadius: 12,
-                opacity: saving ? 0.7 : 1,
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 8,
-                shadowColor: c.primary,
-                shadowOffset: { width: 0, height: 4 },
-                shadowOpacity: 0.3,
-                shadowRadius: 8,
-                elevation: 4,
-                transform: [{ scale: pressed && !saving ? 0.97 : 1 }],
-              })}
-              accessibilityRole="button"
-              accessibilityLabel="Save availability"
-            >
-              {saving ? (
-                <ActivityIndicator size="small" color="white" />
-              ) : (
-                <Ionicons name="checkmark-circle" size={20} color="white" />
-              )}
-              <Text style={{ color: 'white', fontWeight: '700', fontSize: 16 }}>
-                {saving ? 'Saving…' : 'Save'}
-              </Text>
-            </Pressable>
           </View>
 
           {/* Saved Banner */}
@@ -575,7 +446,7 @@ export default function GroupAvailabilityScreen() {
                   onToggle={onToggle}
                   counts={counts}
                   memberCount={memberCount}
-                  initialHour={8}
+                  initialHour={7}
                 />
               ) : (
                 <AvailabilityGrid
@@ -586,12 +457,121 @@ export default function GroupAvailabilityScreen() {
                   onToggle={onToggle}
                   counts={counts}
                   memberCount={memberCount}
-                  initialHour={8}
+                  initialHour={7}
                 />
               )}
             </View>
           )}
         </ScrollView>
+
+        {/* Sticky Bottom Actions */}
+        <View style={{
+          backgroundColor: c.card,
+          paddingHorizontal: 20,
+          paddingTop: 12,
+          paddingBottom: Math.max(insets.bottom, 12),
+          borderTopWidth: 1,
+          borderTopColor: c.accent ,
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 8,
+          flexWrap: 'wrap',
+        }}>
+          <Pressable
+            onPress={() => setNow(new Date())}
+            style={({ pressed }) => ({
+              backgroundColor: pressed ? `${c.primary}20` : c.background,
+              paddingVertical: 10,
+              paddingHorizontal: 14,
+              borderRadius: 10,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 6,
+              transform: [{ scale: pressed ? 0.97 : 1 }],
+            })}
+            accessibilityRole="button"
+            accessibilityLabel="Jump to now"
+          >
+            <Ionicons name="time" size={16} color={c.primary} />
+            <Text style={{ color: c.text, fontWeight: '600', fontSize: 13 }}>
+              Now
+            </Text>
+          </Pressable>
+          
+          <Pressable
+            onPress={() => setNow(new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000))}
+            style={({ pressed }) => ({
+              backgroundColor: pressed ? `${c.primary}20` : c.background,
+              padding: 10,
+              borderRadius: 10,
+              transform: [{ scale: pressed ? 0.95 : 1 }],
+            })}
+            accessibilityRole="button"
+            accessibilityLabel="Previous week"
+          >
+            <Ionicons name="chevron-back" size={16} color={c.text} />
+          </Pressable>
+          
+          <Pressable
+            onPress={() => setNow(new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000))}
+            style={({ pressed }) => ({
+              backgroundColor: pressed ? `${c.primary}20` : c.background,
+              padding: 10,
+              borderRadius: 10,
+              transform: [{ scale: pressed ? 0.95 : 1 }],
+            })}
+            accessibilityRole="button"
+            accessibilityLabel="Next week"
+          >
+            <Ionicons name="chevron-forward" size={16} color={c.text} />
+          </Pressable>
+          
+          <View style={{ flex: 1 }} />
+          
+          <View style={{
+            marginRight: 4,
+            alignItems: 'flex-end',
+          }}>
+            <Text style={{ color: c.muted, fontSize: 11, fontWeight: '500' }}>
+              {selectedCount} {selectedCount === 1 ? 'slot' : 'slots'}
+            </Text>
+            <Text style={{ color: c.muted, fontSize: 11, fontWeight: '500' }}>
+              selected
+            </Text>
+          </View>
+          
+          <Pressable
+            onPress={saving ? undefined : onSave}
+            disabled={saving}
+            style={({ pressed }) => ({
+              backgroundColor: pressed && !saving ? `${c.primary}dd` : c.primary,
+              paddingVertical: 10,
+              paddingHorizontal: 20,
+              borderRadius: 10,
+              opacity: saving ? 0.7 : 1,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 8,
+              shadowColor: c.primary,
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.3,
+              shadowRadius: 8,
+              elevation: 4,
+              transform: [{ scale: pressed && !saving ? 0.97 : 1 }],
+            })}
+            accessibilityRole="button"
+            accessibilityLabel="Save availability"
+          >
+            {saving ? (
+              <ActivityIndicator size="small" color="white" />
+            ) : (
+              <Ionicons name="checkmark-circle" size={18} color="white" />
+            )}
+            <Text style={{ color: 'white', fontWeight: '700', fontSize: 15 }}>
+              {saving ? 'Saving…' : 'Save'}
+            </Text>
+          </Pressable>
+        </View>
       </AnimatedPage>
     </GradientBackground>
   );

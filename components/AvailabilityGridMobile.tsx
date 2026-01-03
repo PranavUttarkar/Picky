@@ -1,5 +1,5 @@
-import React, { useCallback, useMemo, useState, memo } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useCallback, useMemo, useState, memo, useRef, useEffect } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useThemeColors, useTheme } from '@/theme/ThemeProvider';
 
@@ -150,23 +150,29 @@ export default function AvailabilityGridMobile({
   const slotsPerDay = Math.floor((24 * 60) / slotMinutes);
   const rowHeight = 52;
   const [dayIndex, setDayIndex] = useState(0);
-  const [startIdx, setStartIdx] = useState(() =>
-    Math.max(0, Math.min(slotsPerDay - 1, Math.round((initialHour * 60) / slotMinutes))),
-  );
-  const visibleRows = Math.min(14, slotsPerDay);
-  const stepSlots = Math.round(60 / slotMinutes);
+  const scrollRef = useRef<ScrollView>(null);
 
-  // Memoize current time to avoid recreating on every render
-  const currentTime = useMemo(() => new Date(), []);
-  const currentHour = currentTime.getHours();
-  const currentMinutes = currentTime.getMinutes();
+  // Default to 7 AM if not provided
+  const startHour = initialHour ?? 7;
+
+  // Scroll to 7 AM on mount and when day changes
+  useEffect(() => {
+    const scrollToIndex = Math.floor((startHour * 60) / slotMinutes);
+    const yOffset = scrollToIndex * rowHeight;
+    
+    // Small delay to ensure layout is ready
+    const timer = setTimeout(() => {
+      scrollRef.current?.scrollTo({ y: yOffset, animated: false });
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [dayIndex]);
 
   const dayStart = useMemo(
     () => new Date(start.getTime() + dayIndex * 24 * 60 * 60 * 1000),
     [start.getTime(), dayIndex],
   );
 
-  const dayLabel = useMemo(() => dayLongLabel(dayStart), [dayStart.getTime()]);
+  const dayLabel = useMemo(() => dayLongLabel(dayStart), [dayStart]);
 
   const timeRows = useMemo(() => {
     const arr: Date[] = [];
@@ -176,32 +182,30 @@ export default function AvailabilityGridMobile({
       arr.push(new Date(midnight.getTime() + i * slotMinutes * 60 * 1000));
     }
     return arr;
-  }, [dayStart.getTime(), slotMinutes, slotsPerDay]);
+  }, [dayStart, slotMinutes, slotsPerDay]);
 
-  // Pre-calculate visible slots data
+  // Pre-calculate all slots data for the current day
   const visibleSlots = useMemo(() => {
-    return Array.from({ length: visibleRows }).map((_, offset) => {
-      const globalIdx = startIdx + offset;
-      const slotTime = timeRows[globalIdx];
-      if (!slotTime) return null;
-      
+    return timeRows.map((slotTime) => {
       const cellTime = new Date(dayStart);
       cellTime.setHours(slotTime.getHours(), slotTime.getMinutes(), 0, 0);
       const iso = cellTime.toISOString();
-      const isPast = cellTime < currentTime;
-      const isCurrentHour = slotTime.getHours() === currentHour && 
-                            slotTime.getMinutes() <= currentMinutes + 30;
+      const isPast = cellTime < new Date();
+      const isCurrentHour = slotTime.getHours() === new Date().getHours() && 
+                            slotTime.getMinutes() <= new Date().getMinutes() + 30;
       
       return {
-        globalIdx,
         slotTime,
         cellTime,
         iso,
         isPast,
         isCurrentHour,
       };
-    }).filter(Boolean);
-  }, [startIdx, timeRows, dayStart.getTime(), currentTime.getTime(), visibleRows]);
+    });
+  }, [timeRows, dayStart]);
+
+  const goPrev = useCallback(() => setDayIndex((i) => Math.max(0, i - 1)), []);
+  const goNext = useCallback(() => setDayIndex((i) => Math.min(days - 1, i + 1)), [days]);
 
   // Heat map color calculation
   const getHeatColor = useCallback((count: number, isSelected: boolean): { bg: string; border: string } => {
@@ -231,14 +235,6 @@ export default function AvailabilityGridMobile({
     }
   }, [c.primary, memberCount, scheme]);
 
-  const goPrev = useCallback(() => setDayIndex((i) => Math.max(0, i - 1)), []);
-  const goNext = useCallback(() => setDayIndex((i) => Math.min(days - 1, i + 1)), [days]);
-  const scrollUp = useCallback(() => setStartIdx((i) => Math.max(0, i - stepSlots)), [stepSlots]);
-  const scrollDown = useCallback(() => setStartIdx((i) => Math.min(slotsPerDay - visibleRows, i + stepSlots)), [stepSlots, slotsPerDay, visibleRows]);
-
-  const canScrollUp = startIdx > 0;
-  const canScrollDown = startIdx < slotsPerDay - visibleRows;
-
   return (
     <View style={[styles.container, { backgroundColor: c.card }]}>
       {/* Header with legend */}
@@ -262,9 +258,6 @@ export default function AvailabilityGridMobile({
           <View style={styles.dayLabelContainer}>
             <Text style={[styles.dayLabelText, { color: c.text }]}>
               {dayLabel}
-            </Text>
-            <Text style={[styles.timeRangeText, { color: c.muted }]}>
-              {formatTimeLabel(getTimeAtSlot(dayStart, startIdx, slotMinutes))} - {formatTimeLabel(getTimeAtSlot(dayStart, startIdx + visibleRows, slotMinutes))}
             </Text>
           </View>
           <TouchableOpacity
@@ -290,68 +283,42 @@ export default function AvailabilityGridMobile({
         </View>
       </View>
 
-      {/* Time navigation */}
-      <View style={[
-        styles.timeNav,
-        { 
-          backgroundColor: scheme === 'dark' ? 'rgba(0,0,0,0.2)' : 'rgba(0,0,0,0.02)',
-          borderBottomColor: scheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
-        }
-      ]}>
-        <TouchableOpacity
-          onPress={scrollUp}
-          disabled={!canScrollUp}
-          activeOpacity={0.7}
-          style={[styles.timeNavButton, { backgroundColor: c.background, opacity: canScrollUp ? 1 : 0.3 }]}
+      {/* Slots list - Scrollable within the card */}
+      <View style={{ height: rowHeight * 10 }}>
+        <ScrollView 
+          ref={scrollRef}
+          nestedScrollEnabled
+          showsVerticalScrollIndicator={true}
+          contentContainerStyle={styles.slotsContainer}
         >
-          <Ionicons name="chevron-up" size={18} color={c.text} />
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={scrollDown}
-          disabled={!canScrollDown}
-          activeOpacity={0.7}
-          style={[styles.timeNavButton, { backgroundColor: c.background, opacity: canScrollDown ? 1 : 0.3 }]}
-        >
-          <Ionicons name="chevron-down" size={18} color={c.text} />
-        </TouchableOpacity>
-        <View style={styles.spacer} />
-        <Text style={[styles.currentTimeRange, { color: c.muted }]}>
-          {formatTimeLabel(getTimeAtSlot(dayStart, startIdx, slotMinutes))}
-          {' - '}
-          {formatTimeLabel(getTimeAtSlot(dayStart, startIdx + visibleRows, slotMinutes))}
-        </Text>
-      </View>
-
-      {/* Slots list */}
-      <View style={styles.slotsContainer}>
-        {visibleSlots.map((slot) => {
-          if (!slot) return null;
-          const isSelected = selected.has(slot.iso);
-          const count = counts[slot.iso] ?? 0;
-          const colors = getHeatColor(count, isSelected);
-          
-          return (
-            <TimeSlot
-              key={slot.globalIdx}
-              iso={slot.iso}
-              cellTime={slot.cellTime}
-              slotTime={slot.slotTime}
-              isSelected={isSelected}
-              count={count}
-              memberCount={memberCount}
-              isPast={slot.isPast}
-              isCurrentHour={slot.isCurrentHour}
-              onToggle={onToggle}
-              colors={colors}
-              textColor={c.text}
-              mutedColor={c.muted}
-              primaryColor={c.primary}
-              scheme={scheme}
-              rowHeight={rowHeight}
-              dayLabel={dayLabel}
-            />
-          );
-        })}
+          {visibleSlots.map((slot, idx) => {
+            const isSelected = selected.has(slot.iso);
+            const count = counts[slot.iso] ?? 0;
+            const colors = getHeatColor(count, isSelected);
+            
+            return (
+              <TimeSlot
+                key={slot.iso}
+                iso={slot.iso}
+                cellTime={slot.cellTime}
+                slotTime={slot.slotTime}
+                isSelected={isSelected}
+                count={count}
+                memberCount={memberCount}
+                isPast={slot.isPast}
+                isCurrentHour={slot.isCurrentHour}
+                onToggle={onToggle}
+                colors={colors}
+                textColor={c.text}
+                mutedColor={c.muted}
+                primaryColor={c.primary}
+                scheme={scheme}
+                rowHeight={rowHeight}
+                dayLabel={dayLabel}
+              />
+            );
+          })}
+        </ScrollView>
       </View>
     </View>
   );
@@ -365,27 +332,6 @@ const styles = StyleSheet.create({
   header: {
     padding: 12,
     borderBottomWidth: 1,
-  },
-  dayNav: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  navButton: {
-    padding: 8,
-    borderRadius: 10,
-  },
-  dayLabelContainer: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  dayLabelText: {
-    fontWeight: '700',
-    fontSize: 16,
-  },
-  timeRangeText: {
-    fontSize: 12,
-    marginTop: 2,
   },
   legend: {
     flexDirection: 'row',
@@ -406,26 +352,25 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
   },
-  timeNav: {
+  slotsContainer: {
+    paddingVertical: 0,
+  },
+  dayNav: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
-    borderBottomWidth: 1,
+    marginBottom: 12,
   },
-  timeNavButton: {
-    padding: 10,
+  navButton: {
+    padding: 8,
     borderRadius: 10,
-    marginRight: 8,
   },
-  spacer: {
+  dayLabelContainer: {
     flex: 1,
+    alignItems: 'center',
   },
-  currentTimeRange: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  slotsContainer: {
-    paddingVertical: 8,
+  dayLabelText: {
+    fontWeight: '700',
+    fontSize: 16,
   },
   slotRow: {
     flexDirection: 'row',
