@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { 
   View, 
   Text, 
@@ -50,6 +50,7 @@ export default function GroupAvailabilityScreen() {
   const savedBannerOpacity = useState(new Animated.Value(0))[0];
 
   const window = useMemo(() => computeWindow(now, 30, 7), [now]);
+  const windowStartDate = useMemo(() => new Date(window.startIso), [window.startIso]);
 
   const refresh = async () => {
     try {
@@ -98,14 +99,14 @@ export default function GroupAvailabilityScreen() {
     }
   }, [savedBanner]);
 
-  const onToggle = (iso: string) => {
+  const onToggle = useCallback((iso: string) => {
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(iso)) next.delete(iso);
       else next.add(iso);
       return next;
     });
-  };
+  }, []);
 
   const onSave = async () => {
     try {
@@ -121,24 +122,37 @@ export default function GroupAvailabilityScreen() {
   };
 
   // Quick selection helpers
-  const selectTimeRange = (startHour: number, endHour: number, days: number[]) => {
+  const selectTimeRange = (startHour: number, endHour: number, dayFilter: 'weekdays' | 'weekends' | 'all') => {
     const newSelected = new Set(selected);
-    days.forEach(dayOffset => {
-      const day = new Date(now);
-      day.setDate(day.getDate() + dayOffset);
+    const windowStart = new Date(window.startIso);
+    const windowEnd = new Date(window.endIso);
+    
+    // Iterate through all 7 days in the window
+    for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
+      const day = new Date(windowStart);
+      day.setDate(windowStart.getDate() + dayOffset);
       day.setHours(0, 0, 0, 0);
+      
+      // Get day of week (0 = Sunday, 6 = Saturday)
+      const dayOfWeek = day.getDay();
+      const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+      
+      // Filter based on dayFilter
+      if (dayFilter === 'weekdays' && isWeekend) continue;
+      if (dayFilter === 'weekends' && !isWeekend) continue;
       
       for (let hour = startHour; hour < endHour; hour++) {
         [0, 30].forEach(minutes => {
           const slotTime = new Date(day);
           slotTime.setHours(hour, minutes, 0, 0);
-          const iso = slotTime.toISOString();
-          if (slotTime >= window.startIso && slotTime < window.endIso) {
+          // Only add if within the window
+          if (slotTime >= windowStart && slotTime < windowEnd) {
+            const iso = slotTime.toISOString();
             newSelected.add(iso);
           }
         });
       }
-    });
+    }
     setSelected(newSelected);
   };
 
@@ -326,17 +340,18 @@ export default function GroupAvailabilityScreen() {
               marginBottom: 12,
             }}>
               <Pressable
-                onPress={() => selectTimeRange(9, 17, [0, 1, 2, 3, 4])}
-                style={{
+                onPress={() => selectTimeRange(9, 17, 'weekdays')}
+                style={({ pressed }) => ({
                   flex: 1,
-                  backgroundColor: `${c.primary}15`,
+                  backgroundColor: pressed ? `${c.primary}30` : `${c.primary}15`,
                   borderRadius: 12,
                   padding: 12,
                   flexDirection: 'row',
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: 8,
-                }}
+                  transform: [{ scale: pressed ? 0.98 : 1 }],
+                })}
               >
                 <Ionicons name="sunny" size={18} color={c.primary} />
                 <Text style={{ color: c.primary, fontWeight: '600', fontSize: 14 }}>
@@ -345,17 +360,18 @@ export default function GroupAvailabilityScreen() {
               </Pressable>
               
               <Pressable
-                onPress={() => selectTimeRange(10, 22, [5, 6])}
-                style={{
+                onPress={() => selectTimeRange(10, 22, 'weekends')}
+                style={({ pressed }) => ({
                   flex: 1,
-                  backgroundColor: `${c.primary}15`,
+                  backgroundColor: pressed ? `${c.primary}30` : `${c.primary}15`,
                   borderRadius: 12,
                   padding: 12,
                   flexDirection: 'row',
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: 8,
-                }}
+                  transform: [{ scale: pressed ? 0.98 : 1 }],
+                })}
               >
                 <Ionicons name="calendar" size={18} color={c.primary} />
                 <Text style={{ color: c.primary, fontWeight: '600', fontSize: 14 }}>
@@ -366,15 +382,40 @@ export default function GroupAvailabilityScreen() {
             
             <View style={{ flexDirection: 'row', gap: 8 }}>
               <Pressable
-                onPress={clearAll}
-                style={{
+                onPress={() => selectTimeRange(18, 23, 'all')}
+                style={({ pressed }) => ({
                   flex: 1,
-                  backgroundColor: `${c.muted}20`,
+                  backgroundColor: pressed ? `${c.primary}30` : `${c.primary}15`,
                   borderRadius: 12,
                   padding: 12,
+                  flexDirection: 'row',
                   alignItems: 'center',
-                }}
+                  justifyContent: 'center',
+                  gap: 8,
+                  transform: [{ scale: pressed ? 0.98 : 1 }],
+                })}
               >
+                <Ionicons name="moon" size={18} color={c.primary} />
+                <Text style={{ color: c.primary, fontWeight: '600', fontSize: 14 }}>
+                  Evenings 6PM-11PM
+                </Text>
+              </Pressable>
+              
+              <Pressable
+                onPress={clearAll}
+                style={({ pressed }) => ({
+                  flex: 1,
+                  backgroundColor: pressed ? `${c.muted}35` : `${c.muted}20`,
+                  borderRadius: 12,
+                  padding: 12,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  transform: [{ scale: pressed ? 0.98 : 1 }],
+                })}
+              >
+                <Ionicons name="close-circle" size={18} color={c.text} />
                 <Text style={{ color: c.text, fontWeight: '600', fontSize: 14 }}>
                   Clear All
                 </Text>
@@ -392,15 +433,16 @@ export default function GroupAvailabilityScreen() {
           }}>
             <Pressable
               onPress={() => setNow(new Date())}
-              style={{
-                backgroundColor: c.card,
+              style={({ pressed }) => ({
+                backgroundColor: pressed ? `${c.primary}20` : c.card,
                 paddingVertical: 12,
                 paddingHorizontal: 16,
                 borderRadius: 12,
                 flexDirection: 'row',
                 alignItems: 'center',
                 gap: 6,
-              }}
+                transform: [{ scale: pressed ? 0.97 : 1 }],
+              })}
               accessibilityRole="button"
               accessibilityLabel="Jump to now"
             >
@@ -412,11 +454,12 @@ export default function GroupAvailabilityScreen() {
             
             <Pressable
               onPress={() => setNow(new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000))}
-              style={{
-                backgroundColor: c.card,
+              style={({ pressed }) => ({
+                backgroundColor: pressed ? `${c.primary}20` : c.card,
                 padding: 12,
                 borderRadius: 12,
-              }}
+                transform: [{ scale: pressed ? 0.95 : 1 }],
+              })}
               accessibilityRole="button"
               accessibilityLabel="Previous week"
             >
@@ -425,11 +468,12 @@ export default function GroupAvailabilityScreen() {
             
             <Pressable
               onPress={() => setNow(new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000))}
-              style={{
-                backgroundColor: c.card,
+              style={({ pressed }) => ({
+                backgroundColor: pressed ? `${c.primary}20` : c.card,
                 padding: 12,
                 borderRadius: 12,
-              }}
+                transform: [{ scale: pressed ? 0.95 : 1 }],
+              })}
               accessibilityRole="button"
               accessibilityLabel="Next week"
             >
@@ -453,8 +497,8 @@ export default function GroupAvailabilityScreen() {
             <Pressable
               onPress={saving ? undefined : onSave}
               disabled={saving}
-              style={{
-                backgroundColor: c.primary,
+              style={({ pressed }) => ({
+                backgroundColor: pressed && !saving ? `${c.primary}dd` : c.primary,
                 paddingVertical: 12,
                 paddingHorizontal: 24,
                 borderRadius: 12,
@@ -467,7 +511,8 @@ export default function GroupAvailabilityScreen() {
                 shadowOpacity: 0.3,
                 shadowRadius: 8,
                 elevation: 4,
-              }}
+                transform: [{ scale: pressed && !saving ? 0.97 : 1 }],
+              })}
               accessibilityRole="button"
               accessibilityLabel="Save availability"
             >
@@ -506,7 +551,6 @@ export default function GroupAvailabilityScreen() {
           {/* Grid */}
           {loading ? (
             <View style={{ 
-              flex: 1, 
               alignItems: 'center', 
               justifyContent: 'center',
               minHeight: 400,
@@ -521,10 +565,10 @@ export default function GroupAvailabilityScreen() {
               </Text>
             </View>
           ) : (
-            <View style={{ minHeight: isMobileLayout ? 600 : 500 }}>
+            <View>
               {isMobileLayout ? (
                 <AvailabilityGridMobile
-                  start={new Date(window.startIso)}
+                  start={windowStartDate}
                   days={7}
                   slotMinutes={30}
                   selected={selected}
@@ -535,7 +579,7 @@ export default function GroupAvailabilityScreen() {
                 />
               ) : (
                 <AvailabilityGrid
-                  start={new Date(window.startIso)}
+                  start={windowStartDate}
                   days={7}
                   slotMinutes={30}
                   selected={selected}

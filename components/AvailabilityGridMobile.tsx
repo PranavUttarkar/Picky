@@ -1,5 +1,5 @@
-import React, { useMemo, useRef, useState } from 'react';
-import { View, Text, Pressable, ScrollView } from 'react-native';
+import React, { useCallback, useMemo, useState, memo } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useThemeColors, useTheme } from '@/theme/ThemeProvider';
 
@@ -28,6 +28,113 @@ function dayLongLabel(date: Date) {
   return date.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
 }
 
+// Get time at specific slot index
+function getTimeAtSlot(baseDate: Date, slotIdx: number, slotMinutes: number): Date {
+  const result = new Date(baseDate);
+  result.setHours(0, 0, 0, 0);
+  const totalMinutes = slotIdx * slotMinutes;
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  result.setHours(hours, minutes, 0, 0);
+  return result;
+}
+
+// Memoized time slot component for better performance
+const TimeSlot = memo(function TimeSlot({
+  iso,
+  cellTime,
+  slotTime,
+  isSelected,
+  count,
+  memberCount,
+  isPast,
+  isCurrentHour,
+  onToggle,
+  colors,
+  textColor,
+  mutedColor,
+  primaryColor,
+  scheme,
+  rowHeight,
+  dayLabel,
+}: {
+  iso: string;
+  cellTime: Date;
+  slotTime: Date;
+  isSelected: boolean;
+  count: number;
+  memberCount: number;
+  isPast: boolean;
+  isCurrentHour: boolean;
+  onToggle: (iso: string) => void;
+  colors: { bg: string; border: string };
+  textColor: string;
+  mutedColor: string;
+  primaryColor: string;
+  scheme: string;
+  rowHeight: number;
+  dayLabel: string;
+}) {
+  const handlePress = useCallback(() => {
+    if (!isPast) {
+      onToggle(iso);
+    }
+  }, [isPast, onToggle, iso]);
+
+  const isHighlightedTime = slotTime.getHours() % 4 === 0 && slotTime.getMinutes() === 0;
+
+  return (
+    <View style={styles.slotRow}>
+      <View style={styles.timeLabel}>
+        <Text style={[
+          styles.timeLabelText,
+          { color: isHighlightedTime ? textColor : mutedColor },
+          isHighlightedTime && styles.timeLabelBold,
+        ]}>
+          {formatTimeLabel(cellTime)}
+        </Text>
+      </View>
+      <TouchableOpacity
+        onPress={handlePress}
+        disabled={isPast}
+        activeOpacity={0.7}
+        accessibilityRole="switch"
+        accessibilityState={{ checked: isSelected }}
+        accessibilityLabel={`${isSelected ? 'Selected' : 'Not selected'} availability ${formatTimeLabel(cellTime)} on ${dayLabel}`}
+        style={[
+          styles.slotButton,
+          {
+            height: rowHeight - 8,
+            borderWidth: isSelected ? 2 : 1,
+            borderColor: isSelected ? primaryColor : colors.border,
+            backgroundColor: isPast 
+              ? (scheme === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)')
+              : colors.bg,
+            opacity: isPast ? 0.4 : 1,
+          },
+        ]}
+      >
+        {isSelected && (
+          <Ionicons name="checkmark-circle" size={18} color="white" />
+        )}
+        {count > 0 && (
+          <View style={[
+            styles.countBadge,
+            { backgroundColor: isSelected ? 'rgba(255,255,255,0.2)' : 'rgba(59, 130, 246, 0.8)' }
+          ]}>
+            <Text style={styles.countText}>
+              {count}{memberCount ? `/${memberCount}` : ''}
+            </Text>
+          </View>
+        )}
+        {isCurrentHour && !isPast && (
+          <View style={[styles.currentDot, { backgroundColor: primaryColor }]} />
+        )}
+      </TouchableOpacity>
+    </View>
+  );
+});
+
 export default function AvailabilityGridMobile({
   start,
   days = 7,
@@ -46,16 +153,20 @@ export default function AvailabilityGridMobile({
   const [startIdx, setStartIdx] = useState(() =>
     Math.max(0, Math.min(slotsPerDay - 1, Math.round((initialHour * 60) / slotMinutes))),
   );
-  const toggledDuringDrag = useRef<Set<number>>(new Set());
-  const [dragMode, setDragMode] = useState<'add' | 'remove' | null>(null);
-  const [dragging, setDragging] = useState(false);
-  const visibleRows = Math.min(14, slotsPerDay); // show ~7 hours (14 slots)
-  const stepSlots = 12; // 1 hour per press
+  const visibleRows = Math.min(14, slotsPerDay);
+  const stepSlots = Math.round(60 / slotMinutes);
+
+  // Memoize current time to avoid recreating on every render
+  const currentTime = useMemo(() => new Date(), []);
+  const currentHour = currentTime.getHours();
+  const currentMinutes = currentTime.getMinutes();
 
   const dayStart = useMemo(
     () => new Date(start.getTime() + dayIndex * 24 * 60 * 60 * 1000),
     [start.getTime(), dayIndex],
   );
+
+  const dayLabel = useMemo(() => dayLongLabel(dayStart), [dayStart.getTime()]);
 
   const timeRows = useMemo(() => {
     const arr: Date[] = [];
@@ -67,13 +178,35 @@ export default function AvailabilityGridMobile({
     return arr;
   }, [dayStart.getTime(), slotMinutes, slotsPerDay]);
 
-  // Enhanced heat map color
-  const getHeatColor = (count: number, isSelected: boolean): { bg: string; border: string } => {
-    if (isSelected) {
+  // Pre-calculate visible slots data
+  const visibleSlots = useMemo(() => {
+    return Array.from({ length: visibleRows }).map((_, offset) => {
+      const globalIdx = startIdx + offset;
+      const slotTime = timeRows[globalIdx];
+      if (!slotTime) return null;
+      
+      const cellTime = new Date(dayStart);
+      cellTime.setHours(slotTime.getHours(), slotTime.getMinutes(), 0, 0);
+      const iso = cellTime.toISOString();
+      const isPast = cellTime < currentTime;
+      const isCurrentHour = slotTime.getHours() === currentHour && 
+                            slotTime.getMinutes() <= currentMinutes + 30;
+      
       return {
-        bg: c.primary,
-        border: c.primary,
+        globalIdx,
+        slotTime,
+        cellTime,
+        iso,
+        isPast,
+        isCurrentHour,
       };
+    }).filter(Boolean);
+  }, [startIdx, timeRows, dayStart.getTime(), currentTime.getTime(), visibleRows]);
+
+  // Heat map color calculation
+  const getHeatColor = useCallback((count: number, isSelected: boolean): { bg: string; border: string } => {
+    if (isSelected) {
+      return { bg: c.primary, border: c.primary };
     }
     
     if (!memberCount || !count) {
@@ -86,306 +219,257 @@ export default function AvailabilityGridMobile({
     const ratio = Math.max(0, Math.min(1, count / memberCount));
     
     if (ratio >= 0.8) {
-      return {
-        bg: 'rgba(59, 130, 246, 0.4)',
-        border: 'rgba(59, 130, 246, 0.6)',
-      };
+      return { bg: 'rgba(59, 130, 246, 0.4)', border: 'rgba(59, 130, 246, 0.6)' };
     } else if (ratio >= 0.6) {
-      return {
-        bg: 'rgba(59, 130, 246, 0.3)',
-        border: 'rgba(59, 130, 246, 0.5)',
-      };
+      return { bg: 'rgba(59, 130, 246, 0.3)', border: 'rgba(59, 130, 246, 0.5)' };
     } else if (ratio >= 0.4) {
-      return {
-        bg: 'rgba(59, 130, 246, 0.2)',
-        border: 'rgba(59, 130, 246, 0.4)',
-      };
+      return { bg: 'rgba(59, 130, 246, 0.2)', border: 'rgba(59, 130, 246, 0.4)' };
     } else if (ratio >= 0.2) {
-      return {
-        bg: 'rgba(59, 130, 246, 0.1)',
-        border: 'rgba(59, 130, 246, 0.3)',
-      };
+      return { bg: 'rgba(59, 130, 246, 0.1)', border: 'rgba(59, 130, 246, 0.3)' };
     } else {
-      return {
-        bg: 'rgba(59, 130, 246, 0.05)',
-        border: 'rgba(59, 130, 246, 0.2)',
-      };
+      return { bg: 'rgba(59, 130, 246, 0.05)', border: 'rgba(59, 130, 246, 0.2)' };
     }
-  };
+  }, [c.primary, memberCount, scheme]);
 
-  const goPrev = () => setDayIndex((i) => Math.max(0, i - 1));
-  const goNext = () => setDayIndex((i) => Math.min(days - 1, i + 1));
+  const goPrev = useCallback(() => setDayIndex((i) => Math.max(0, i - 1)), []);
+  const goNext = useCallback(() => setDayIndex((i) => Math.min(days - 1, i + 1)), [days]);
+  const scrollUp = useCallback(() => setStartIdx((i) => Math.max(0, i - stepSlots)), [stepSlots]);
+  const scrollDown = useCallback(() => setStartIdx((i) => Math.min(slotsPerDay - visibleRows, i + stepSlots)), [stepSlots, slotsPerDay, visibleRows]);
+
+  const canScrollUp = startIdx > 0;
+  const canScrollDown = startIdx < slotsPerDay - visibleRows;
 
   return (
-    <View style={{ flex: 1, backgroundColor: c.card, borderRadius: 16, overflow: 'hidden' }}>
-      {/* Enhanced header with legend */}
-      <View style={{
-        padding: 12,
-        borderBottomWidth: 1,
-        borderBottomColor: scheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
-        backgroundColor: scheme === 'dark' ? 'rgba(0,0,0,0.2)' : 'rgba(0,0,0,0.02)',
-      }}>
+    <View style={[styles.container, { backgroundColor: c.card }]}>
+      {/* Header with legend */}
+      <View style={[
+        styles.header,
+        { 
+          borderBottomColor: scheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
+          backgroundColor: scheme === 'dark' ? 'rgba(0,0,0,0.2)' : 'rgba(0,0,0,0.02)',
+        }
+      ]}>
         {/* Day navigation */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-          <Pressable
+        <View style={styles.dayNav}>
+          <TouchableOpacity
             onPress={goPrev}
             disabled={dayIndex === 0}
-            accessibilityRole="button"
-            accessibilityLabel="Previous day"
-            style={{ 
-              opacity: dayIndex === 0 ? 0.3 : 1, 
-              padding: 8,
-              backgroundColor: c.background,
-              borderRadius: 10,
-              marginRight: 12,
-            }}
+            activeOpacity={0.7}
+            style={[styles.navButton, { backgroundColor: c.background, opacity: dayIndex === 0 ? 0.3 : 1 }]}
           >
             <Ionicons name="chevron-back" size={20} color={c.text} />
-          </Pressable>
-          <View style={{ flex: 1, alignItems: 'center' }}>
-            <Text style={{ color: c.text, fontWeight: '700', fontSize: 16 }}>
-              {dayLongLabel(dayStart)}
+          </TouchableOpacity>
+          <View style={styles.dayLabelContainer}>
+            <Text style={[styles.dayLabelText, { color: c.text }]}>
+              {dayLabel}
             </Text>
-            <Text style={{ color: c.muted, fontSize: 12, marginTop: 2 }}>
-              {formatTimeLabel(new Date(new Date(dayStart).setHours(0, startIdx * slotMinutes, 0, 0)))} - {formatTimeLabel(new Date(new Date(dayStart).setHours(0, (startIdx + visibleRows) * slotMinutes, 0, 0)))}
+            <Text style={[styles.timeRangeText, { color: c.muted }]}>
+              {formatTimeLabel(getTimeAtSlot(dayStart, startIdx, slotMinutes))} - {formatTimeLabel(getTimeAtSlot(dayStart, startIdx + visibleRows, slotMinutes))}
             </Text>
           </View>
-          <Pressable
+          <TouchableOpacity
             onPress={goNext}
             disabled={dayIndex === days - 1}
-            accessibilityRole="button"
-            accessibilityLabel="Next day"
-            style={{ 
-              opacity: dayIndex === days - 1 ? 0.3 : 1, 
-              padding: 8,
-              backgroundColor: c.background,
-              borderRadius: 10,
-              marginLeft: 12,
-            }}
+            activeOpacity={0.7}
+            style={[styles.navButton, { backgroundColor: c.background, opacity: dayIndex === days - 1 ? 0.3 : 1 }]}
           >
             <Ionicons name="chevron-forward" size={20} color={c.text} />
-          </Pressable>
+          </TouchableOpacity>
         </View>
 
         {/* Legend */}
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <View style={{
-              width: 16,
-              height: 16,
-              borderRadius: 4,
-              backgroundColor: c.primary,
-            }} />
-            <Text style={{ color: c.muted, fontSize: 11, fontWeight: '600' }}>
-              Your selection
-            </Text>
+        <View style={styles.legend}>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendColor, { backgroundColor: c.primary }]} />
+            <Text style={[styles.legendText, { color: c.muted }]}>Your selection</Text>
           </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <View style={{
-              width: 16,
-              height: 16,
-              borderRadius: 4,
-              backgroundColor: 'rgba(59, 130, 246, 0.4)',
-            }} />
-            <Text style={{ color: c.muted, fontSize: 11, fontWeight: '600' }}>
-              High overlap
-            </Text>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendColor, { backgroundColor: 'rgba(59, 130, 246, 0.4)' }]} />
+            <Text style={[styles.legendText, { color: c.muted }]}>High overlap</Text>
           </View>
         </View>
       </View>
 
       {/* Time navigation */}
-      <View style={{ 
-        flexDirection: 'row', 
-        alignItems: 'center', 
-        padding: 12,
-        backgroundColor: scheme === 'dark' ? 'rgba(0,0,0,0.2)' : 'rgba(0,0,0,0.02)',
-        borderBottomWidth: 1,
-        borderBottomColor: scheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
-      }}>
-        <Pressable
-          onPress={() => setStartIdx((i) => Math.max(0, i - stepSlots))}
-          accessibilityRole="button"
-          accessibilityLabel="Scroll up by 1 hour"
-          style={{ 
-            backgroundColor: c.background, 
-            padding: 10, 
-            borderRadius: 10,
-            marginRight: 8,
-          }}
+      <View style={[
+        styles.timeNav,
+        { 
+          backgroundColor: scheme === 'dark' ? 'rgba(0,0,0,0.2)' : 'rgba(0,0,0,0.02)',
+          borderBottomColor: scheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
+        }
+      ]}>
+        <TouchableOpacity
+          onPress={scrollUp}
+          disabled={!canScrollUp}
+          activeOpacity={0.7}
+          style={[styles.timeNavButton, { backgroundColor: c.background, opacity: canScrollUp ? 1 : 0.3 }]}
         >
           <Ionicons name="chevron-up" size={18} color={c.text} />
-        </Pressable>
-        <Pressable
-          onPress={() => setStartIdx((i) => Math.min(slotsPerDay - visibleRows, i + stepSlots))}
-          accessibilityRole="button"
-          accessibilityLabel="Scroll down by 1 hour"
-          style={{ 
-            backgroundColor: c.background, 
-            padding: 10, 
-            borderRadius: 10,
-          }}
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={scrollDown}
+          disabled={!canScrollDown}
+          activeOpacity={0.7}
+          style={[styles.timeNavButton, { backgroundColor: c.background, opacity: canScrollDown ? 1 : 0.3 }]}
         >
           <Ionicons name="chevron-down" size={18} color={c.text} />
-        </Pressable>
-        <View style={{ flex: 1 }} />
-        <Text style={{ color: c.muted, fontSize: 12, fontWeight: '600' }}>
-          {formatTimeLabel(new Date(new Date(dayStart).setHours(0, startIdx * slotMinutes, 0, 0)))}
+        </TouchableOpacity>
+        <View style={styles.spacer} />
+        <Text style={[styles.currentTimeRange, { color: c.muted }]}>
+          {formatTimeLabel(getTimeAtSlot(dayStart, startIdx, slotMinutes))}
           {' - '}
-          {formatTimeLabel(
-            new Date(new Date(dayStart).setHours(0, (startIdx + visibleRows) * slotMinutes, 0, 0)),
-          )}
+          {formatTimeLabel(getTimeAtSlot(dayStart, startIdx + visibleRows, slotMinutes))}
         </Text>
       </View>
 
-      {/* Enhanced slots list */}
-      <View
-        onStartShouldSetResponder={() => true}
-        onResponderGrant={(e) => {
-          setDragging(true);
-          toggledDuringDrag.current.clear();
-          const y = e.nativeEvent.locationY;
-          const localIdx = Math.floor(y / rowHeight);
-          const idx = Math.max(0, Math.min(visibleRows - 1, localIdx));
-          const globalIdx = startIdx + idx;
-          const slotTime = timeRows[globalIdx];
-          if (!slotTime) return;
-          const cellTime = new Date(dayStart);
-          cellTime.setHours(slotTime.getHours(), slotTime.getMinutes(), 0, 0);
-          const iso = cellTime.toISOString();
-          const initiallySelected = selected.has(iso);
-          setDragMode(initiallySelected ? 'remove' : 'add');
-          onToggle(iso);
-          toggledDuringDrag.current.add(globalIdx);
-        }}
-        onResponderMove={(e) => {
-          if (!dragging || !timeRows.length) return;
-          const y = e.nativeEvent.locationY;
-          const localIdx = Math.floor(y / rowHeight);
-          const idx = Math.max(0, Math.min(visibleRows - 1, localIdx));
-          const globalIdx = startIdx + idx;
-          if (toggledDuringDrag.current.has(globalIdx)) return;
-          const slotTime = timeRows[globalIdx];
-          if (!slotTime) return;
-          const cellTime = new Date(dayStart);
-          cellTime.setHours(slotTime.getHours(), slotTime.getMinutes(), 0, 0);
-          const iso = cellTime.toISOString();
-          const isSelected = selected.has(iso);
-          if ((dragMode === 'add' && !isSelected) || (dragMode === 'remove' && isSelected)) {
-            onToggle(iso);
-            toggledDuringDrag.current.add(globalIdx);
-          }
-        }}
-        onResponderRelease={() => {
-          setDragging(false);
-          setDragMode(null);
-          toggledDuringDrag.current.clear();
-        }}
-        style={{ 
-          height: rowHeight * visibleRows,
-          paddingVertical: 8,
-        }}
-      >
-        {Array.from({ length: visibleRows }).map((_, offset) => {
-          const globalIdx = startIdx + offset;
-          const slotTime = timeRows[globalIdx];
-          const cellTime = new Date(dayStart);
-          cellTime.setHours(slotTime.getHours(), slotTime.getMinutes(), 0, 0);
-          const iso = cellTime.toISOString();
-          const isSelected = selected.has(iso);
-          const count = counts[iso] ?? 0;
+      {/* Slots list */}
+      <View style={styles.slotsContainer}>
+        {visibleSlots.map((slot) => {
+          if (!slot) return null;
+          const isSelected = selected.has(slot.iso);
+          const count = counts[slot.iso] ?? 0;
           const colors = getHeatColor(count, isSelected);
-          const isPast = cellTime < new Date();
-          const isCurrentHour = slotTime.getHours() === new Date().getHours() && 
-                                slotTime.getMinutes() <= new Date().getMinutes() + 30;
           
           return (
-            <View 
-              key={globalIdx} 
-              style={{ 
-                flexDirection: 'row', 
-                alignItems: 'center',
-                paddingHorizontal: 12,
-                paddingVertical: 4,
-              }}
-            >
-              <View
-                style={{ 
-                  width: 80, 
-                  paddingVertical: 10, 
-                  paddingRight: 12, 
-                  alignItems: 'flex-end',
-                  justifyContent: 'center',
-                }}
-              >
-                <Text style={{ 
-                  color: slotTime.getHours() % 4 === 0 && slotTime.getMinutes() === 0 
-                    ? c.text 
-                    : c.muted,
-                  fontSize: 13,
-                  fontWeight: slotTime.getHours() % 4 === 0 && slotTime.getMinutes() === 0 
-                    ? '600' 
-                    : '400',
-                }}>
-                  {formatTimeLabel(cellTime)}
-                </Text>
-              </View>
-              <View
-                accessible
-                accessibilityRole="switch"
-                accessibilityState={{ checked: isSelected }}
-                accessibilityLabel={`${
-                  isSelected ? 'Selected' : 'Not selected'
-                } availability ${formatTimeLabel(cellTime)} on ${dayLongLabel(dayStart)}`}
-                style={{
-                  flex: 1,
-                  marginVertical: 2,
-                  height: rowHeight - 8,
-                  borderWidth: isSelected ? 2 : 1,
-                  borderColor: isSelected ? c.primary : colors.border,
-                  backgroundColor: isPast 
-                    ? (scheme === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)')
-                    : colors.bg,
-                  borderRadius: 12,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  flexDirection: 'row',
-                  gap: 8,
-                  opacity: isPast ? 0.4 : 1,
-                }}
-              >
-                {isSelected && (
-                  <Ionicons name="checkmark-circle" size={18} color="white" />
-                )}
-                {count > 0 && (
-                  <View style={{
-                    backgroundColor: isSelected ? 'rgba(255,255,255,0.2)' : 'rgba(59, 130, 246, 0.8)',
-                    borderRadius: 10,
-                    paddingHorizontal: 6,
-                    paddingVertical: 2,
-                  }}>
-                    <Text style={{ 
-                      color: 'white', 
-                      fontSize: 11, 
-                      fontWeight: '700' 
-                    }}>
-                      {count}{memberCount ? `/${memberCount}` : ''}
-                    </Text>
-                  </View>
-                )}
-                {isCurrentHour && !isPast && (
-                  <View style={{
-                    width: 6,
-                    height: 6,
-                    borderRadius: 3,
-                    backgroundColor: c.primary,
-                  }} />
-                )}
-              </View>
-            </View>
+            <TimeSlot
+              key={slot.globalIdx}
+              iso={slot.iso}
+              cellTime={slot.cellTime}
+              slotTime={slot.slotTime}
+              isSelected={isSelected}
+              count={count}
+              memberCount={memberCount}
+              isPast={slot.isPast}
+              isCurrentHour={slot.isCurrentHour}
+              onToggle={onToggle}
+              colors={colors}
+              textColor={c.text}
+              mutedColor={c.muted}
+              primaryColor={c.primary}
+              scheme={scheme}
+              rowHeight={rowHeight}
+              dayLabel={dayLabel}
+            />
           );
         })}
       </View>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  header: {
+    padding: 12,
+    borderBottomWidth: 1,
+  },
+  dayNav: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  navButton: {
+    padding: 8,
+    borderRadius: 10,
+  },
+  dayLabelContainer: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  dayLabelText: {
+    fontWeight: '700',
+    fontSize: 16,
+  },
+  timeRangeText: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  legend: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  legendColor: {
+    width: 16,
+    height: 16,
+    borderRadius: 4,
+  },
+  legendText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  timeNav: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderBottomWidth: 1,
+  },
+  timeNavButton: {
+    padding: 10,
+    borderRadius: 10,
+    marginRight: 8,
+  },
+  spacer: {
+    flex: 1,
+  },
+  currentTimeRange: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  slotsContainer: {
+    paddingVertical: 8,
+  },
+  slotRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    height: 52,
+  },
+  timeLabel: {
+    width: 80,
+    paddingVertical: 10,
+    paddingRight: 12,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+  },
+  timeLabelText: {
+    fontSize: 13,
+    fontWeight: '400',
+  },
+  timeLabelBold: {
+    fontWeight: '600',
+  },
+  slotButton: {
+    flex: 1,
+    marginVertical: 2,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
+  },
+  countBadge: {
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  countText: {
+    color: 'white',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  currentDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+});
