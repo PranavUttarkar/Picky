@@ -11,6 +11,7 @@ import {
   Modal,
   ScrollView,
   TextInput,
+  Switch,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import HeaderSpacer from '@/components/HeaderSpacer';
@@ -19,7 +20,7 @@ import GradientBackground from '@/components/GradientBackground';
 import AnimatedPage from '@/components/AnimatedPage';
 import { supabase } from '@/services/supabase';
 import { router } from 'expo-router';
-import type { Event } from '@/types/models';
+import type { Event, EventVisibility } from '@/types/models';
 import EventGridCard from '@/components/EventGridCard';
 import EventRowCard from '@/components/EventRowCard';
 import dayjs from 'dayjs';
@@ -27,6 +28,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { ThreeDButton } from '@/components/ThreeD';
 import { updateEvent, deleteEventDirect, createEvent } from '@/services/events';
 import LocationPicker from '@/components/LocationPicker';
+import { Ionicons } from '@expo/vector-icons';
 
 export default function MyEvents() {
   const c = useThemeColors();
@@ -50,7 +52,7 @@ export default function MyEvents() {
       const { data, error } = await supabase
         .from('events')
         .select(
-          'id,title,date_time,location,description,tags,image_url,image_urls,rsvp_url,created_by',
+          'id,title,date_time,location,description,tags,image_url,image_urls,rsvp_url,created_by,visibility,capacity,allow_join_requests',
         )
         .eq('created_by', user.id)
         .order('date_time', { ascending: true });
@@ -107,6 +109,11 @@ export default function MyEvents() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [saving, setSaving] = useState(false);
+  // Organizer fields
+  const [mVisibility, setMVisibility] = useState<EventVisibility>('public');
+  const [mCapacity, setMCapacity] = useState('');
+  const [mAllowJoinRequests, setMAllowJoinRequests] = useState(true);
+  const [mRsvpRequired, setMRsvpRequired] = useState(false);
 
   const openEdit = (e: Event) => {
     setEditingId(e.id);
@@ -122,6 +129,11 @@ export default function MyEvents() {
     setMLongitude(e.longitude ?? null);
     setMTagsCsv((e.tags ?? []).join(', '));
     setMRsvp((e as any).rsvp_url ?? '');
+    // Organizer fields
+    setMVisibility(e.visibility ?? 'public');
+    setMCapacity(e.capacity?.toString() ?? '');
+    setMAllowJoinRequests(e.allow_join_requests ?? true);
+    setMRsvpRequired(e.rsvp_required ?? false);
     setEditOpen(true);
   };
 
@@ -138,6 +150,11 @@ export default function MyEvents() {
     setMLongitude(null);
     setMTagsCsv('');
     setMRsvp('');
+    // Organizer fields - defaults
+    setMVisibility('public');
+    setMCapacity('');
+    setMAllowJoinRequests(true);
+    setMRsvpRequired(false);
     setEditOpen(true);
   };
 
@@ -160,6 +177,12 @@ export default function MyEvents() {
       Alert.alert('Add an image', 'Please add at least one image URL.');
       return;
     }
+    // Parse capacity
+    const capacityVal = mCapacity.trim() ? parseInt(mCapacity, 10) : null;
+    if (mCapacity.trim() && (isNaN(capacityVal!) || capacityVal! < 1)) {
+      Alert.alert('Invalid capacity', 'Capacity must be a positive number.');
+      return;
+    }
     setSaving(true);
     try {
       if (editingId) {
@@ -174,6 +197,10 @@ export default function MyEvents() {
           longitude: mLongitude,
           tags,
           rsvp_url: mRsvp.trim() || null,
+          visibility: mVisibility,
+          capacity: capacityVal,
+          allow_join_requests: mAllowJoinRequests,
+          rsvp_required: mRsvpRequired,
         });
         setEditOpen(false);
         setItems((prev) =>
@@ -190,6 +217,10 @@ export default function MyEvents() {
                     location: mLocation.trim() || null,
                     tags,
                     rsvp_url: mRsvp.trim() || null,
+                    visibility: mVisibility,
+                    capacity: capacityVal,
+                    allow_join_requests: mAllowJoinRequests,
+                    rsvp_required: mRsvpRequired,
                   } as Event)
                 : ev,
             )
@@ -208,6 +239,10 @@ export default function MyEvents() {
           longitude: mLongitude,
           tags,
           rsvp_url: mRsvp.trim() || null,
+          visibility: mVisibility,
+          capacity: capacityVal,
+          allow_join_requests: mAllowJoinRequests,
+          rsvp_required: mRsvpRequired,
         });
         setEditOpen(false);
         setItems((prev) =>
@@ -309,7 +344,9 @@ export default function MyEvents() {
             onPoll: () => router.push({ pathname: '/polls/new', params: { fromEvent: item.id } }),
             onEdit: () => openEdit(item),
             onDelete: () => confirmDelete(item.id),
+            onManage: () => router.push(`/events/${item.id}/manage`),
             isAdmin: true,
+            showVisibilityBadge: true,
           } as const;
           if (columns > 1) {
             return (
@@ -507,6 +544,120 @@ export default function MyEvents() {
                 marginBottom: 8,
               }}
             />
+
+            {/* Organizer Settings Section */}
+            <View style={{ 
+              backgroundColor: c.card, 
+              borderRadius: 12, 
+              padding: 12, 
+              marginBottom: 12,
+              marginTop: 8,
+            }}>
+              <Text style={{ color: c.text, fontSize: 14, fontWeight: '700', marginBottom: 12 }}>
+                Event Settings
+              </Text>
+
+              {/* Visibility toggle */}
+              <Text style={{ color: c.muted, fontSize: 12, marginBottom: 6 }}>
+                Event Visibility
+              </Text>
+              <View style={{ flexDirection: 'row', marginBottom: 12, gap: 8 }}>
+                {(['public', 'private'] as EventVisibility[]).map((vis) => (
+                  <Pressable
+                    key={vis}
+                    onPress={() => setMVisibility(vis)}
+                    style={{
+                      flex: 1,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: mVisibility === vis ? c.primary : '#00000010',
+                      paddingVertical: 10,
+                      borderRadius: 8,
+                      gap: 6,
+                    }}
+                  >
+                    <Ionicons
+                      name={vis === 'public' ? 'globe' : 'lock-closed'}
+                      size={16}
+                      color={mVisibility === vis ? '#000' : c.muted}
+                    />
+                    <Text style={{
+                      color: mVisibility === vis ? '#000' : c.text,
+                      fontWeight: '600',
+                      textTransform: 'capitalize',
+                    }}>
+                      {vis}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+
+              {/* Capacity */}
+              <Text style={{ color: c.muted, fontSize: 12, marginBottom: 6 }}>
+                Capacity (leave empty for unlimited)
+              </Text>
+              <TextInput
+                placeholder="Unlimited"
+                placeholderTextColor={c.muted}
+                value={mCapacity}
+                onChangeText={setMCapacity}
+                keyboardType="number-pad"
+                style={{
+                  color: c.text,
+                  backgroundColor: '#00000010',
+                  padding: 10,
+                  borderRadius: 8,
+                  marginBottom: 12,
+                }}
+              />
+
+              {/* Allow join requests (only for private events) */}
+              {mVisibility === 'private' && (
+                <View style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  marginBottom: 12,
+                }}>
+                  <View style={{ flex: 1, marginRight: 12 }}>
+                    <Text style={{ color: c.text, fontSize: 13, fontWeight: '600' }}>
+                      Allow Join Requests
+                    </Text>
+                    <Text style={{ color: c.muted, fontSize: 11 }}>
+                      Users can request to join your event
+                    </Text>
+                  </View>
+                  <Switch
+                    value={mAllowJoinRequests}
+                    onValueChange={setMAllowJoinRequests}
+                    trackColor={{ false: c.muted, true: c.primary }}
+                  />
+                </View>
+              )}
+
+              {/* RSVP Required toggle */}
+              <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}>
+                <View style={{ flex: 1, marginRight: 12 }}>
+                  <Text style={{ color: c.text, fontSize: 13, fontWeight: '600' }}>
+                    Require RSVP
+                  </Text>
+                  <Text style={{ color: c.muted, fontSize: 11 }}>
+                    Attendees must RSVP to attend this event
+                  </Text>
+                </View>
+                <Switch
+                  value={mRsvpRequired}
+                  onValueChange={setMRsvpRequired}
+                  trackColor={{ false: c.muted, true: c.primary }}
+                />
+              </View>
+            </View>
+
             <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
               <ThreeDButton title={saving ? 'Saving…' : 'Save'} onPress={submitEdit} />
               <ThreeDButton title="Cancel" onPress={() => setEditOpen(false)} />

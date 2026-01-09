@@ -70,8 +70,14 @@ export default function ProfileSetup() {
         account_type: accountType,
       });
 
-      // Continue to interests page
-      router.replace('/onboarding/interests');
+      // Route based on account type
+      if (accountType === 'organization') {
+        // Organizations go to org setup to fill in category, description, etc.
+        router.replace('/onboarding/org-setup');
+      } else {
+        // Personal accounts continue to interests
+        router.replace('/onboarding/interests');
+      }
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to update profile');
     } finally {

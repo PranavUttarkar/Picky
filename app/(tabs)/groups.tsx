@@ -28,7 +28,14 @@ import {
   removeFriend,
   type PendingFriendRequest,
 } from '@/services/friends';
-import { getFollowing, discoverOrganizations, followUser, unfollowUser } from '@/services/following';
+import { getFollowing, discoverOrganizations, followUser, unfollowUser, getFollowers } from '@/services/following';
+import { 
+  discoverOrganizationsWithProfiles, 
+  searchOrganizations, 
+  getOrganizationFollowers,
+  isOrganizationAccount,
+  type OrganizationWithProfile 
+} from '@/services/organizations';
 import { useGroupDecisionNotification } from '@/utils/GroupDecisionNotificationContext';
 import { useFriendNotification } from '@/utils/FriendNotificationContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -39,13 +46,15 @@ import { blockUser } from '@/services/blocking';
 import * as Clipboard from 'expo-clipboard';
 import { Typography, Spacing, BorderRadius } from '@/theme/designTokens';
 
-type TabType = 'friends' | 'following' | 'groups';
-const FRIEND_TABS: TabType[] = ['friends', 'following', 'groups'];
+type TabType = 'friends' | 'organizations' | 'groups';
+const FRIEND_TABS: TabType[] = ['friends', 'organizations', 'groups'];
 const FRIEND_BADGE_COLOR = '#EF4444';
 
 const parseTabParam = (value: string | string[] | undefined): TabType | null => {
   const normalized = Array.isArray(value) ? value[0] : value;
-  if (normalized === 'friends' || normalized === 'following' || normalized === 'groups') {
+  // Support legacy 'following' param for backwards compatibility
+  if (normalized === 'following') return 'organizations';
+  if (normalized === 'friends' || normalized === 'organizations' || normalized === 'groups') {
     return normalized;
   }
   return null;
@@ -71,9 +80,14 @@ export default function Groups() {
   const [showFriendActions, setShowFriendActions] = useState(false);
   const [showGroupInviteModal, setShowGroupInviteModal] = useState(false);
   
-  // Following state
+  // Organizations state
   const [following, setFollowing] = useState<UserProfile[]>([]);
-  const [organizations, setOrganizations] = useState<UserProfile[]>([]);
+  const [organizations, setOrganizations] = useState<OrganizationWithProfile[]>([]);
+  const [orgSearchQuery, setOrgSearchQuery] = useState('');
+  const [orgSearchResults, setOrgSearchResults] = useState<OrganizationWithProfile[]>([]);
+  const [searchingOrgs, setSearchingOrgs] = useState(false);
+  const [isOrgAccount, setIsOrgAccount] = useState(false);
+  const [myFollowers, setMyFollowers] = useState<UserProfile[]>([]);
   
   // Groups state
   const [groups, setGroups] = useState<Group[]>([]);
@@ -105,18 +119,51 @@ export default function Groups() {
     }
   }, [recordFriendSnapshot]);
 
-  const loadFollowing = useCallback(async () => {
+  const loadOrganizations = useCallback(async () => {
     try {
-      const [followingData, orgsData] = await Promise.all([
-        getFollowing(),
-        discoverOrganizations(10)
-      ]);
-      setFollowing(followingData);
-      setOrganizations(orgsData);
+      // Check if current user is an organization
+      const isOrg = await isOrganizationAccount();
+      setIsOrgAccount(isOrg);
+      
+      if (isOrg) {
+        // For organizations, load their followers
+        const followers = await getOrganizationFollowers();
+        setMyFollowers(followers);
+      } else {
+        // For regular users, load following and discover organizations
+        const [followingData, orgsData] = await Promise.all([
+          getFollowing(),
+          discoverOrganizationsWithProfiles(15)
+        ]);
+        setFollowing(followingData);
+        setOrganizations(orgsData);
+      }
     } catch (error) {
-      console.error('Error loading following:', error);
+      console.error('Error loading organizations:', error);
     }
   }, []);
+
+  // Search organizations with debounce
+  useEffect(() => {
+    if (!orgSearchQuery.trim() || orgSearchQuery.length < 2) {
+      setOrgSearchResults([]);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setSearchingOrgs(true);
+      try {
+        const results = await searchOrganizations(orgSearchQuery);
+        setOrgSearchResults(results);
+      } catch (error) {
+        console.error('Error searching organizations:', error);
+      } finally {
+        setSearchingOrgs(false);
+      }
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [orgSearchQuery]);
 
   const loadGroups = useCallback(async () => {
     try {
@@ -155,8 +202,8 @@ export default function Groups() {
         case 'friends':
           await loadFriends();
           break;
-        case 'following':
-          await loadFollowing();
+        case 'organizations':
+          await loadOrganizations();
           break;
         case 'groups':
           await loadGroups();
@@ -379,6 +426,13 @@ export default function Groups() {
     }
   };
 
+  // Tab labels for display
+  const TAB_LABELS: Record<TabType, string> = {
+    friends: 'Friends',
+    organizations: 'Orgs',
+    groups: 'Groups',
+  };
+
   // Tab header component
   const TabHeader = () => (
     <View style={{
@@ -408,10 +462,9 @@ export default function Groups() {
             <Text style={{
               color: activeTab === tab ? 'white' : c.text,
               fontWeight: activeTab === tab ? '600' : '400',
-              fontSize: 16,
-              textTransform: 'capitalize',
+              fontSize: 15,
             }}>
-              {tab}
+              {TAB_LABELS[tab]}
             </Text>
             {showBadge && (
               <View
@@ -620,77 +673,12 @@ export default function Groups() {
     </View>
   );
 
-  // Following section component
-  const FollowingSection = () => (
-    <View style={{ flex: 1 }}>
-      {/* Following List */}
-      <Text style={{
-        fontSize: 18,
-        fontWeight: '600',
-        color: c.text,
-        marginHorizontal: 16,
-        marginBottom: 12,
-      }}>
-        Following ({following.length})
-      </Text>
-      
-      {following.length === 0 ? (
-        <View style={{
-          alignItems: 'center',
-          justifyContent: 'center',
-          paddingVertical: 40,
-        }}>
-          <Ionicons name="business-outline" size={64} color={c.muted} />
-          <Text style={{
-            color: c.muted,
-            fontSize: 16,
-            textAlign: 'center',
-            marginTop: 16,
-            marginHorizontal: 32,
-          }}>
-            Not following any organizations yet. Discover organizations to follow their events!
-          </Text>
-        </View>
-      ) : (
-        <FlatList
-          data={following}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <Pressable
-              style={{
-                backgroundColor: c.card,
-                marginHorizontal: 16,
-                marginBottom: 8,
-                padding: 16,
-                borderRadius: 12,
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-              }}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                <Avatar
-                  uri={item.avatar_url}
-                  size={40}
-                />
-                <View style={{ marginLeft: 12, flex: 1 }}>
-                  <Text style={{ color: c.text, fontWeight: '600', fontSize: 16 }}>
-                    {item.display_name || item.username}
-                  </Text>
-                  <Text style={{ color: c.muted, fontSize: 14 }}>
-                    @{item.username} • Organization
-                  </Text>
-                </View>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color={c.muted} />
-            </Pressable>
-          )}
-        />
-      )}
-
-      {/* Discover Organizations */}
-      {organizations.length > 0 && (
-        <View style={{ marginTop: 20 }}>
+  // Organizations section component
+  const OrganizationsSection = () => {
+    // If current user is an organization, show their followers
+    if (isOrgAccount) {
+      return (
+        <View style={{ flex: 1 }}>
           <Text style={{
             fontSize: Typography.scale.heading3.fontSize,
             lineHeight: Typography.scale.heading3.lineHeight,
@@ -700,13 +688,208 @@ export default function Groups() {
             marginHorizontal: 16,
             marginBottom: 12,
           }}>
-            Discover Organizations
+            Your Followers ({myFollowers.length})
           </Text>
+          
+          {myFollowers.length === 0 ? (
+            <View style={{
+              alignItems: 'center',
+              justifyContent: 'center',
+              paddingVertical: 40,
+            }}>
+              <Ionicons name="people-outline" size={64} color={c.muted} />
+              <Text style={{
+                color: c.muted,
+                fontSize: 16,
+                textAlign: 'center',
+                marginTop: 16,
+                marginHorizontal: 32,
+              }}>
+                No followers yet. Create events to attract followers!
+              </Text>
+            </View>
+          ) : (
+            <FlatList
+              data={myFollowers}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => (
+                <View
+                  style={{
+                    backgroundColor: c.card,
+                    marginHorizontal: 16,
+                    marginBottom: 8,
+                    padding: 16,
+                    borderRadius: 12,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                  }}
+                >
+                  <Avatar uri={item.avatar_url} size={40} />
+                  <View style={{ marginLeft: 12, flex: 1 }}>
+                    <Text style={{ color: c.text, fontWeight: '600', fontSize: 16 }}>
+                      {item.display_name || item.username}
+                    </Text>
+                    <Text style={{ color: c.muted, fontSize: 14 }}>
+                      @{item.username}
+                    </Text>
+                  </View>
+                </View>
+              )}
+            />
+          )}
+        </View>
+      );
+    }
+
+    // For regular users, show organizations they follow and discovery
+    const displayOrgs = orgSearchQuery.trim().length >= 2 ? orgSearchResults : organizations;
+    
+    return (
+      <View style={{ flex: 1 }}>
+        {/* Search Bar */}
+        <View style={{
+          marginHorizontal: 16,
+          marginBottom: 16,
+        }}>
+          <View style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: c.card,
+            borderRadius: 12,
+            paddingHorizontal: 14,
+            paddingVertical: 10,
+          }}>
+            <Ionicons name="search" size={20} color={c.muted} />
+            <TextInput
+              value={orgSearchQuery}
+              onChangeText={setOrgSearchQuery}
+              placeholder="Search organizations..."
+              placeholderTextColor={c.muted}
+              style={{
+                flex: 1,
+                marginLeft: 10,
+                color: c.text,
+                fontSize: 16,
+              }}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            {searchingOrgs && (
+              <View style={{ marginLeft: 8 }}>
+                <Ionicons name="ellipsis-horizontal" size={20} color={c.muted} />
+              </View>
+            )}
+            {orgSearchQuery.length > 0 && !searchingOrgs && (
+              <Pressable onPress={() => setOrgSearchQuery('')}>
+                <Ionicons name="close-circle" size={20} color={c.muted} />
+              </Pressable>
+            )}
+          </View>
+        </View>
+
+        {/* Following List */}
+        {!orgSearchQuery.trim() && following.length > 0 && (
+          <>
+            <Text style={{
+              fontSize: Typography.scale.heading3.fontSize,
+              lineHeight: Typography.scale.heading3.lineHeight,
+              fontFamily: Typography.fontFamily.bodySemibold,
+              fontWeight: Typography.fontWeight.semibold,
+              color: c.text,
+              marginHorizontal: 16,
+              marginBottom: 12,
+            }}>
+              Following ({following.length})
+            </Text>
+            <FlatList
+              data={following}
+              keyExtractor={(item) => item.id}
+              scrollEnabled={false}
+              renderItem={({ item }) => (
+                <Pressable
+                  style={{
+                    backgroundColor: c.card,
+                    marginHorizontal: 16,
+                    marginBottom: 8,
+                    padding: 16,
+                    borderRadius: 12,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                    <Avatar uri={item.avatar_url} size={40} />
+                    <View style={{ marginLeft: 12, flex: 1 }}>
+                      <Text style={{ color: c.text, fontWeight: '600', fontSize: 16 }}>
+                        {item.display_name || item.username}
+                      </Text>
+                      <Text style={{ color: c.muted, fontSize: 14 }}>
+                        @{item.username}
+                      </Text>
+                    </View>
+                  </View>
+                  <Pressable
+                    onPress={() => handleFollow(item.id)}
+                    style={{
+                      backgroundColor: 'transparent',
+                      paddingHorizontal: 12,
+                      paddingVertical: 6,
+                      borderRadius: 8,
+                      borderWidth: 1,
+                      borderColor: c.primary,
+                    }}
+                  >
+                    <Text style={{ color: c.primary, fontWeight: '600', fontSize: 14 }}>
+                      Following
+                    </Text>
+                  </Pressable>
+                </Pressable>
+              )}
+            />
+          </>
+        )}
+
+        {/* Discover / Search Results */}
+        <Text style={{
+          fontSize: Typography.scale.heading3.fontSize,
+          lineHeight: Typography.scale.heading3.lineHeight,
+          fontFamily: Typography.fontFamily.bodySemibold,
+          fontWeight: Typography.fontWeight.semibold,
+          color: c.text,
+          marginHorizontal: 16,
+          marginTop: following.length > 0 && !orgSearchQuery.trim() ? 20 : 0,
+          marginBottom: 12,
+        }}>
+          {orgSearchQuery.trim() ? 'Search Results' : 'Discover Organizations'}
+        </Text>
+
+        {displayOrgs.length === 0 ? (
+          <View style={{
+            alignItems: 'center',
+            justifyContent: 'center',
+            paddingVertical: 40,
+          }}>
+            <Ionicons name="business-outline" size={64} color={c.muted} />
+            <Text style={{
+              color: c.muted,
+              fontSize: 16,
+              textAlign: 'center',
+              marginTop: 16,
+              marginHorizontal: 32,
+            }}>
+              {orgSearchQuery.trim() 
+                ? 'No organizations found matching your search'
+                : 'No organizations to discover yet'}
+            </Text>
+          </View>
+        ) : (
           <FlatList
-            data={organizations}
+            data={displayOrgs}
             keyExtractor={(item) => item.id}
+            scrollEnabled={false}
             renderItem={({ item }) => {
-              const isFollowing = following.some(f => f.id === item.id);
+              const isFollowingOrg = following.some(f => f.id === item.id);
               return (
                 <Pressable
                   style={{
@@ -721,45 +904,65 @@ export default function Groups() {
                   }}
                 >
                   <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                    <Avatar
-                      uri={item.avatar_url}
-                      size={40}
-                    />
+                    <Avatar uri={item.avatar_url} size={48} />
                     <View style={{ marginLeft: 12, flex: 1 }}>
-                      <Text style={{ color: c.text, fontWeight: '600', fontSize: 16 }}>
-                        {item.display_name || item.username}
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Text style={{ color: c.text, fontWeight: '600', fontSize: 16 }}>
+                          {item.display_name || item.username}
+                        </Text>
+                        {item.verified && (
+                          <Ionicons name="checkmark-circle" size={16} color="#10b981" />
+                        )}
+                      </View>
+                      <Text style={{ color: c.muted, fontSize: 13 }}>
+                        @{item.username}
                       </Text>
-                      <Text style={{ color: c.muted, fontSize: 14 }}>
-                        @{item.username} • Organization
-                      </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                        {item.category && (
+                          <View style={{
+                            backgroundColor: `${c.primary}15`,
+                            paddingHorizontal: 8,
+                            paddingVertical: 2,
+                            borderRadius: 10,
+                          }}>
+                            <Text style={{ color: c.primary, fontSize: 11, fontWeight: '500' }}>
+                              {item.category}
+                            </Text>
+                          </View>
+                        )}
+                        <Text style={{ color: c.muted, fontSize: 12 }}>
+                          {item.follower_count} follower{item.follower_count !== 1 ? 's' : ''}
+                        </Text>
+                      </View>
                     </View>
                   </View>
                   <Pressable
                     onPress={() => handleFollow(item.id)}
                     style={{
-                      backgroundColor: isFollowing ? 'transparent' : c.primary,
-                      paddingHorizontal: 16,
+                      backgroundColor: isFollowingOrg ? 'transparent' : c.primary,
+                      paddingHorizontal: 14,
                       paddingVertical: 8,
                       borderRadius: 8,
-                      borderWidth: isFollowing ? 1 : 0,
+                      borderWidth: isFollowingOrg ? 1 : 0,
                       borderColor: c.primary,
                     }}
                   >
                     <Text style={{ 
-                      color: isFollowing ? c.primary : 'white', 
-                      fontWeight: '600' 
+                      color: isFollowingOrg ? c.primary : 'white', 
+                      fontWeight: '600',
+                      fontSize: 14,
                     }}>
-                      {isFollowing ? 'Following' : 'Follow'}
+                      {isFollowingOrg ? 'Following' : 'Follow'}
                     </Text>
                   </Pressable>
                 </Pressable>
               );
             }}
           />
-        </View>
-      )}
-    </View>
-  );
+        )}
+      </View>
+    );
+  };
 
   // Groups section component (simplified from original)
   const GroupsSection = () => (
@@ -870,8 +1073,8 @@ export default function Groups() {
     switch (activeTab) {
       case 'friends':
         return <FriendsSection />;
-      case 'following':
-        return <FollowingSection />;
+      case 'organizations':
+        return <OrganizationsSection />;
       case 'groups':
         return <GroupsSection />;
       default:

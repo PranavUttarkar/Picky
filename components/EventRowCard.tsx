@@ -2,6 +2,7 @@ import React, { memo, useMemo } from 'react';
 import { View, Text, Pressable, Platform } from 'react-native';
 import { useThemeColors } from '@/theme/ThemeProvider';
 import EventImages from '@/components/EventImages';
+import Avatar from '@/components/Avatar';
 import dayjs from 'dayjs';
 import { ThreeDCard, ThreeDButton } from '@/components/ThreeD';
 import LazyImage from '@/components/LazyImage';
@@ -20,9 +21,11 @@ export interface EventRowCardProps {
   onEdit?: () => void;
   onDelete?: () => void;
   onReport?: () => void;
+  onManage?: () => void; // Navigate to manage page (organizer only)
   isAdmin?: boolean;
   matchPercent?: number; // optional external override (e.g., personalized feed)
   pollButtonTitle?: string; // optional custom title for the poll button
+  showVisibilityBadge?: boolean; // Show public/private badge
 }
 
 /**
@@ -39,9 +42,11 @@ export const EventRowCard: React.FC<EventRowCardProps> = memo(
     onEdit,
     onDelete,
     onReport,
+    onManage,
     isAdmin,
     matchPercent,
     pollButtonTitle = 'Poll',
+    showVisibilityBadge = false,
   }) => {
     const c = useThemeColors();
     const imgs: string[] = (event as any).image_urls?.length
@@ -54,6 +59,15 @@ export const EventRowCard: React.FC<EventRowCardProps> = memo(
     // Fallback to event.match_percent if matchPercent prop isn't provided
     const score = typeof matchPercent === 'number' ? matchPercent : (event as any).match_percent;
     const showScore = Number.isFinite(score);
+
+    // Visibility info
+    const isPrivate = event.visibility === 'private';
+    const hasCapacity = event.capacity !== null && event.capacity !== undefined;
+
+    // Organization info
+    const creator = event.creator;
+    const isOrgEvent = creator?.account_type === 'organization';
+    const orgName = creator?.display_name || creator?.username;
 
     return (
       <Pressable
@@ -94,17 +108,78 @@ export const EventRowCard: React.FC<EventRowCardProps> = memo(
               )}
             </View>
             <View style={{ flex: 1, minHeight: 96 }}>
-              {/* Title only in header to free space */}
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              {/* Title and badges */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                 <Text style={{ 
                   color: c.text, 
                   fontWeight: Typography.fontWeight.semibold,
                   fontSize: 13,
                   fontFamily: Typography.fontFamily.bodySemibold,
+                  flex: 1,
                 }} numberOfLines={1}>
                   {event.title}
                 </Text>
+                {/* RSVP Required badge */}
+                {event.rsvp_required && (
+                  <View style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    backgroundColor: '#f59e0b20',
+                    paddingHorizontal: 6,
+                    paddingVertical: 2,
+                    borderRadius: 10,
+                    gap: 3,
+                  }}>
+                    <Ionicons name="ticket" size={10} color="#f59e0b" />
+                    <Text style={{ color: '#f59e0b', fontSize: 9, fontWeight: '600' }}>
+                      RSVP
+                    </Text>
+                  </View>
+                )}
+                {showVisibilityBadge && (
+                  <View style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    backgroundColor: isPrivate ? '#6366f120' : '#10b98120',
+                    paddingHorizontal: 6,
+                    paddingVertical: 2,
+                    borderRadius: 10,
+                    gap: 3,
+                  }}>
+                    <Ionicons
+                      name={isPrivate ? 'lock-closed' : 'globe'}
+                      size={10}
+                      color={isPrivate ? '#6366f1' : '#10b981'}
+                    />
+                    <Text style={{
+                      color: isPrivate ? '#6366f1' : '#10b981',
+                      fontSize: 9,
+                      fontWeight: '600',
+                    }}>
+                      {isPrivate ? 'Private' : 'Public'}
+                    </Text>
+                  </View>
+                )}
               </View>
+              {/* Organization affiliation */}
+              {isOrgEvent && orgName && (
+                <View style={{ 
+                  flexDirection: 'row', 
+                  alignItems: 'center', 
+                  gap: 4,
+                  marginTop: 1,
+                }}>
+                  <Avatar uri={creator?.avatar_url} size={12} />
+                  <Text style={{ 
+                    color: c.primary, 
+                    fontSize: 10,
+                    fontFamily: Typography.fontFamily.body,
+                    fontWeight: Typography.fontWeight.medium,
+                  }} numberOfLines={1}>
+                    {orgName}
+                  </Text>
+                </View>
+              )}
               <Text style={{ 
                 color: c.muted, 
                 fontSize: Typography.scale.bodySmall.fontSize,
@@ -228,6 +303,22 @@ export const EventRowCard: React.FC<EventRowCardProps> = memo(
                   ) : null}
                   {isAdmin ? (
                     <>
+                      {onManage && (
+                        <Pressable
+                          onPress={(e: any) => {
+                            e.stopPropagation();
+                            onManage();
+                          }}
+                          accessibilityLabel="Manage event"
+                          style={{ 
+                            padding: 4,
+                            backgroundColor: c.primary + '20',
+                            borderRadius: 6,
+                          }}
+                        >
+                          <Ionicons name="settings" size={16} color={c.primary} />
+                        </Pressable>
+                      )}
                       <Pressable
                         onPress={(e: any) => {
                           e.stopPropagation();

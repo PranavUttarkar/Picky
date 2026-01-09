@@ -15,6 +15,17 @@ export interface UserProfile {
   suspension_reason?: string | null;
 }
 
+export type EventVisibility = 'public' | 'private';
+
+// Creator info for events (populated via join)
+export interface EventCreator {
+  id: string;
+  username?: string | null;
+  display_name?: string | null;
+  avatar_url?: string | null;
+  account_type?: 'personal' | 'organization' | null;
+}
+
 export interface Event {
   id: number;
   title: string;
@@ -29,6 +40,46 @@ export interface Event {
   tags?: string[];
   rsvp_url?: string | null;
   created_by?: string;
+  // Creator info (populated via join)
+  creator?: EventCreator | null;
+  // Organizer features
+  visibility?: EventVisibility;
+  capacity?: number | null;
+  allow_join_requests?: boolean;
+  rsvp_required?: boolean; // Whether RSVP is required to attend
+}
+
+// RSVP-related types
+export interface UserRSVP {
+  attendee_id: number;
+  event_id: number;
+  status: 'pending' | 'accepted' | 'declined' | 'waitlisted';
+  waitlist_position: number | null;
+  rsvp_created_at: string;
+  responded_at: string | null;
+  event_title: string;
+  event_description: string | null;
+  event_date_time: string;
+  event_end_time: string | null;
+  event_location: string | null;
+  event_image_url: string | null;
+  event_image_urls: string[] | null;
+  event_visibility: EventVisibility;
+  event_capacity: number | null;
+  event_rsvp_required: boolean;
+  organizer_id: string;
+  organizer_username: string | null;
+  organizer_display_name: string | null;
+  current_attendee_count: number;
+  waitlist_count: number;
+}
+
+export interface RSVPCounts {
+  total_rsvps: number;
+  accepted_count: number;
+  waitlisted_count: number;
+  pending_count: number;
+  upcoming_count: number;
 }
 
 export interface Group {

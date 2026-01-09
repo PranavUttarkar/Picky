@@ -11,6 +11,13 @@ const updateEventLimiter = createRateLimiter({ maxRequests: 10, windowMs: 60000,
 export type ScoredEvent = Event & { match_percent?: number };
 // ... rest of imports/types ...
 
+// Standard event select with creator info
+const EVENT_SELECT_WITH_CREATOR = `
+  id, title, description, image_url, image_urls, date_time, end_time, location, tags,
+  visibility, capacity, allow_join_requests, rsvp_required, created_by,
+  creator:users!created_by(id, username, display_name, avatar_url, account_type)
+`;
+
 export async function getTopUserMatches(limit = 4): Promise<ScoredEvent[]> {
   const nowIso = new Date().toISOString();
   const { data: scores, error: scoreErr } = await supabase.rpc('get_user_event_scores');
@@ -23,7 +30,7 @@ export async function getTopUserMatches(limit = 4): Promise<ScoredEvent[]> {
   if (ids.length === 0) return [];
   const { data: events, error: evErr } = await supabase
     .from('events')
-  .select('id,title,description,image_url,image_urls,date_time,end_time,location,tags')
+    .select(EVENT_SELECT_WITH_CREATOR)
     .in('id', ids)
     .gte('date_time', nowIso);
   if (evErr) throw evErr;
@@ -48,7 +55,7 @@ export async function getTopGroupMatches(groupId: number, limit = 4): Promise<Sc
   if (ids.length === 0) return [];
   const { data: events, error: evErr } = await supabase
     .from('events')
-  .select('id,title,description,image_url,image_urls,date_time,end_time,location,tags')
+    .select(EVENT_SELECT_WITH_CREATOR)
     .in('id', ids)
     .gte('date_time', nowIso);
   if (evErr) throw evErr;
@@ -69,7 +76,7 @@ export async function searchEvents(query: string, offset = 0, limit = 20): Promi
     const like = `%${q}%`;
     const { data, error } = await supabase
       .from('events')
-    .select('id,title,description,image_url,image_urls,date_time,end_time,location,tags')
+      .select(EVENT_SELECT_WITH_CREATOR)
       .gte('date_time', nowIso)
       .or(`title.ilike.${like},description.ilike.${like},location.ilike.${like}`)
       .order('date_time', { ascending: true })
@@ -84,7 +91,7 @@ export async function getUpcomingEvents(limit = 5): Promise<Event[]> {
   const nowIso = new Date().toISOString();
   const { data, error } = await supabase
     .from('events')
-  .select('id,title,description,image_url,image_urls,date_time,location,tags')
+    .select(EVENT_SELECT_WITH_CREATOR)
     .gte('date_time', nowIso)
     .order('date_time', { ascending: true })
     .limit(limit);
@@ -112,6 +119,11 @@ export type EventInput = {
   longitude?: number | null;
   tags?: string[] | null;
   rsvp_url?: string | null;
+  // Organizer features
+  visibility?: 'public' | 'private';
+  capacity?: number | null;
+  allow_join_requests?: boolean;
+  rsvp_required?: boolean; // Whether RSVP is required to attend
 };
 
 export async function createEvent(input: EventInput): Promise<Event> {
@@ -180,8 +192,17 @@ export async function createEvent(input: EventInput): Promise<Event> {
     const image_url = image_urls && image_urls.length ? image_urls[0] : (input.image_url ?? null);
     const { data, error } = await supabase
       .from('events')
-      .insert({ ...input, image_urls, image_url, created_by: user.id })
-      .select('id,title,description,image_url,image_urls,date_time,end_time,location,latitude,longitude,tags,rsvp_url,created_by')
+      .insert({ 
+        ...input, 
+        image_urls, 
+        image_url, 
+        created_by: user.id,
+        visibility: input.visibility ?? 'public',
+        capacity: input.capacity ?? null,
+        allow_join_requests: input.allow_join_requests ?? true,
+        rsvp_required: input.rsvp_required ?? false,
+      })
+      .select('id,title,description,image_url,image_urls,date_time,end_time,location,latitude,longitude,tags,rsvp_url,created_by,visibility,capacity,allow_join_requests,rsvp_required')
       .single();
     if (error) {
       // Handle RLS policy rejection
@@ -205,7 +226,7 @@ export async function updateEvent(eventId: number, input: Partial<EventInput>): 
       .from('events')
       .update(payload)
       .eq('id', eventId)
-      .select('id,title,description,image_url,image_urls,date_time,end_time,location,latitude,longitude,tags,rsvp_url,created_by')
+      .select('id,title,description,image_url,image_urls,date_time,end_time,location,latitude,longitude,tags,rsvp_url,created_by,visibility,capacity,allow_join_requests,rsvp_required')
       .single();
     if (error) throw error;
     return data as Event;

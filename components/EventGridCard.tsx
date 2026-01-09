@@ -4,6 +4,7 @@ import { useThemeColors } from '@/theme/ThemeProvider';
 import { ThreeDCard, ThreeDButton } from '@/components/ThreeD';
 import LazyImage from '@/components/LazyImage';
 import ImageGallery from '@/components/ImageGallery';
+import Avatar from '@/components/Avatar';
 import dayjs from 'dayjs';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -21,8 +22,10 @@ export interface EventGridCardProps {
   onEdit?: () => void;
   onDelete?: () => void;
   onReport?: () => void;
+  onManage?: () => void; // Navigate to manage page (organizer only)
   isAdmin?: boolean;
   matchPercent?: number;
+  showVisibilityBadge?: boolean; // Show public/private badge
 }
 
 /**
@@ -39,8 +42,10 @@ export const EventGridCard: React.FC<EventGridCardProps> = memo(
     onEdit,
     onDelete,
     onReport,
+    onManage,
     isAdmin,
     matchPercent,
+    showVisibilityBadge = false,
   }) => {
     const c = useThemeColors();
     // Measure width to compute a consistent total height (image 16:9 + fixed body height)
@@ -57,6 +62,14 @@ export const EventGridCard: React.FC<EventGridCardProps> = memo(
     const cover = imgs[0];
     const score = typeof matchPercent === 'number' ? matchPercent : (event as any).match_percent;
     const showScore = Number.isFinite(score);
+
+    // Visibility info
+    const isPrivate = event.visibility === 'private';
+
+    // Organization info
+    const creator = event.creator;
+    const isOrgEvent = creator?.account_type === 'organization';
+    const orgName = creator?.display_name || creator?.username;
 
     return (
       <Pressable
@@ -108,6 +121,52 @@ export const EventGridCard: React.FC<EventGridCardProps> = memo(
             </View>
 
             <View style={{ padding: 10, gap: 6, height: BODY_HEIGHT, overflow: 'hidden' }}>
+              {/* Badges row: visibility, RSVP required, capacity */}
+              {(showVisibilityBadge || event.rsvp_required) && (
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 2 }}>
+                  {showVisibilityBadge && (
+                    <View style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      backgroundColor: isPrivate ? '#6366f120' : '#10b98120',
+                      paddingHorizontal: 8,
+                      paddingVertical: 3,
+                      borderRadius: 12,
+                      gap: 4,
+                    }}>
+                      <Ionicons
+                        name={isPrivate ? 'lock-closed' : 'globe'}
+                        size={12}
+                        color={isPrivate ? '#6366f1' : '#10b981'}
+                      />
+                      <Text style={{
+                        color: isPrivate ? '#6366f1' : '#10b981',
+                        fontSize: 11,
+                        fontWeight: '600',
+                      }}>
+                        {isPrivate ? 'Private' : 'Public'}
+                        {event.capacity ? ` • ${event.capacity} spots` : ''}
+                      </Text>
+                    </View>
+                  )}
+                  {event.rsvp_required && (
+                    <View style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      backgroundColor: '#f59e0b20',
+                      paddingHorizontal: 8,
+                      paddingVertical: 3,
+                      borderRadius: 12,
+                      gap: 4,
+                    }}>
+                      <Ionicons name="ticket" size={12} color="#f59e0b" />
+                      <Text style={{ color: '#f59e0b', fontSize: 11, fontWeight: '600' }}>
+                        RSVP Required
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              )}
               <View
                 style={{
                   flexDirection: 'row',
@@ -155,6 +214,25 @@ export const EventGridCard: React.FC<EventGridCardProps> = memo(
                   </LinearGradient>
                 ) : null}
               </View>
+              {/* Organization affiliation */}
+              {isOrgEvent && orgName && (
+                <View style={{ 
+                  flexDirection: 'row', 
+                  alignItems: 'center', 
+                  gap: 6,
+                  marginTop: -2,
+                }}>
+                  <Avatar uri={creator?.avatar_url} size={16} />
+                  <Text style={{ 
+                    color: c.primary, 
+                    fontSize: Typography.scale.caption.fontSize,
+                    fontFamily: Typography.fontFamily.body,
+                    fontWeight: Typography.fontWeight.medium,
+                  }} numberOfLines={1}>
+                    {orgName}
+                  </Text>
+                </View>
+              )}
               <Text style={{ 
                 color: c.muted, 
                 fontSize: Typography.scale.bodySmall.fontSize,
@@ -261,6 +339,19 @@ export const EventGridCard: React.FC<EventGridCardProps> = memo(
                 </View>
                 {isAdmin ? (
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    {onManage && (
+                      <Pressable
+                        onPress={onManage}
+                        accessibilityLabel="Manage event"
+                        style={{ 
+                          padding: 4,
+                          backgroundColor: c.primary + '20',
+                          borderRadius: 6,
+                        }}
+                      >
+                        <Ionicons name="settings" size={16} color={c.primary} />
+                      </Pressable>
+                    )}
                     <Pressable
                       onPress={onEdit}
                       accessibilityLabel="Edit event"

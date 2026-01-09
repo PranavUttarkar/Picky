@@ -28,6 +28,13 @@ import { checkProfanity } from '@/utils/profanity';
 import Avatar from '@/components/Avatar';
 import type { UserProfile } from '@/types/models';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { 
+  getMyOrganizationProfile, 
+  getOrganizationFollowers,
+  type OrganizationProfile,
+  ORGANIZATION_CATEGORIES,
+} from '@/services/organizations';
+import { getFollowersCount } from '@/services/following';
 
 // Modern Tag Component
 const ModernTag = memo(function ModernTag({ 
@@ -526,6 +533,11 @@ export default function Profile() {
   const [savingFood, setSavingFood] = useState(false);
   // Server timestamp drives cooldown logic; stored in userProfile.username_last_changed
 
+  // Organization-specific state
+  const [orgProfile, setOrgProfile] = useState<OrganizationProfile | null>(null);
+  const [followerCount, setFollowerCount] = useState<number>(0);
+  const isOrganization = userProfile?.account_type === 'organization';
+
   // Load user profile and data
   const loadUserData = async () => {
     try {
@@ -572,6 +584,20 @@ export default function Profile() {
       const foodNames: string[] = ((foodInterests?.names as any) ?? []).map((n: string) => n.toLowerCase());
       setFoodTags(foodNames);
       setLoadingFoodInterests(false);
+
+      // Load organization-specific data if organization account
+      if (profile?.account_type === 'organization') {
+        try {
+          const [orgProfileData, followers] = await Promise.all([
+            getMyOrganizationProfile(),
+            getFollowersCount(user.id),
+          ]);
+          setOrgProfile(orgProfileData);
+          setFollowerCount(followers);
+        } catch (orgError) {
+          console.error('Error loading organization data:', orgError);
+        }
+      }
     } catch (error) {
       console.error('Error loading user data:', error);
     } finally {
@@ -973,27 +999,170 @@ export default function Profile() {
             )}
           </View>
 
+          {/* Organization Profile Info (for organizations only) */}
+          {isOrganization && (
+            <View style={{
+              backgroundColor: c.card,
+              borderRadius: 16,
+              padding: 16,
+              marginBottom: 24,
+            }}>
+              {/* Category Badge */}
+              {orgProfile?.category && (
+                <View style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 8,
+                  marginBottom: 12,
+                }}>
+                  <View style={{
+                    backgroundColor: `${c.primary}20`,
+                    paddingHorizontal: 12,
+                    paddingVertical: 6,
+                    borderRadius: 20,
+                  }}>
+                    <Text style={{ color: c.primary, fontWeight: '600', fontSize: 14 }}>
+                      {orgProfile.category}
+                    </Text>
+                  </View>
+                  {orgProfile.verified && (
+                    <Ionicons name="checkmark-circle" size={20} color="#10b981" />
+                  )}
+                </View>
+              )}
+              
+              {/* Description */}
+              {orgProfile?.description && (
+                <Text style={{
+                  color: c.text,
+                  fontSize: 15,
+                  lineHeight: 22,
+                  marginBottom: 12,
+                }}>
+                  {orgProfile.description}
+                </Text>
+              )}
+              
+              {/* Stats Row */}
+              <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 16,
+              }}>
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ color: c.text, fontSize: 20, fontWeight: '700' }}>
+                    {followerCount}
+                  </Text>
+                  <Text style={{ color: c.muted, fontSize: 13 }}>
+                    Followers
+                  </Text>
+                </View>
+                {orgProfile?.member_count && (
+                  <View style={{ alignItems: 'center' }}>
+                    <Text style={{ color: c.text, fontSize: 20, fontWeight: '700' }}>
+                      {orgProfile.member_count}
+                    </Text>
+                    <Text style={{ color: c.muted, fontSize: 13 }}>
+                      Members
+                    </Text>
+                  </View>
+                )}
+              </View>
+              
+              {/* Website link */}
+              {orgProfile?.website && (
+                <Pressable
+                  onPress={() => {
+                    const url = orgProfile.website!.startsWith('http') 
+                      ? orgProfile.website! 
+                      : `https://${orgProfile.website}`;
+                    // Use Linking to open website
+                    import('expo-linking').then(Linking => Linking.openURL(url));
+                  }}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                    marginTop: 12,
+                  }}
+                >
+                  <Ionicons name="globe-outline" size={16} color={c.primary} />
+                  <Text style={{ color: c.primary, fontSize: 14 }}>
+                    {orgProfile.website}
+                  </Text>
+                </Pressable>
+              )}
+            </View>
+          )}
+
           {/* Quick Actions */}
           <View style={{ marginBottom: 24 }}>
-            <ActionButton
-              title="View Saved"
-              subtitle="Events and restaurants you've saved"
-              icon="heart"
-              onPress={() => {
-                trackCTA('profile_view_saved_press').catch(() => {});
-                router.push('/(tabs)/saved');
-              }}
-            />
-            
-            <ActionButton
-              title="My Events"
-              subtitle="Events you've created"
-              icon="create"
-              onPress={() => {
-                trackCTA('profile_view_my_events_press').catch(() => {});
-                router.push('/(tabs)/my-events');
-              }}
-            />
+            {/* Organization-specific actions */}
+            {isOrganization ? (
+              <>
+                <ActionButton
+                  title="Manage Events"
+                  subtitle="Create, edit, and manage your events"
+                  icon="calendar"
+                  onPress={() => {
+                    trackCTA('org_manage_events_press').catch(() => {});
+                    router.push('/(tabs)/my-events');
+                  }}
+                />
+                
+                <ActionButton
+                  title="Edit Organization Profile"
+                  subtitle="Update your description, category, and details"
+                  icon="business"
+                  onPress={() => {
+                    trackCTA('org_edit_profile_press').catch(() => {});
+                    router.push('/onboarding/org-setup');
+                  }}
+                />
+                
+                <ActionButton
+                  title="View Followers"
+                  subtitle={`${followerCount} users following your organization`}
+                  icon="people"
+                  onPress={() => {
+                    trackCTA('org_view_followers_press').catch(() => {});
+                    router.push('/(tabs)/groups?tab=following');
+                  }}
+                />
+              </>
+            ) : (
+              <>
+                <ActionButton
+                  title="View Saved"
+                  subtitle="Events and restaurants you've saved"
+                  icon="heart"
+                  onPress={() => {
+                    trackCTA('profile_view_saved_press').catch(() => {});
+                    router.push('/(tabs)/saved');
+                  }}
+                />
+                
+                <ActionButton
+                  title="My Events"
+                  subtitle="Events you've created"
+                  icon="create"
+                  onPress={() => {
+                    trackCTA('profile_view_my_events_press').catch(() => {});
+                    router.push('/(tabs)/my-events');
+                  }}
+                />
+
+                <ActionButton
+                  title="My RSVPs"
+                  subtitle="Events you're attending or waitlisted"
+                  icon="ticket"
+                  onPress={() => {
+                    trackCTA('profile_view_my_rsvps_press').catch(() => {});
+                    router.push('/(tabs)/my-rsvps');
+                  }}
+                />
+              </>
+            )}
             
             <ActionButton
               title="Privacy Settings"
@@ -1071,7 +1240,8 @@ export default function Profile() {
             </View>
           </View>
 
-          {/* Interests Section */}
+          {/* Interests Section (Personal accounts only) */}
+          {!isOrganization && (
           <SectionCard
             title="Your Interests"
             subtitle="Add interests to get personalized recommendations"
@@ -1153,8 +1323,10 @@ export default function Profile() {
               </>
             )}
           </SectionCard>
+          )}
 
-          {/* Food Interests Section */}
+          {/* Food Interests Section (Personal accounts only) */}
+          {!isOrganization && (
           <SectionCard
             title="Food Preferences"
             subtitle="Tell us about your favorite cuisines and foods"
@@ -1236,6 +1408,7 @@ export default function Profile() {
               </>
             )}
           </SectionCard>
+          )}
 
           {/* Sign Out */}
           <Pressable

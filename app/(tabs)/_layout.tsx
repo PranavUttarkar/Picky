@@ -229,6 +229,8 @@ export default function TabsLayout() {
       />
       {/* Hidden route for viewing user's created events */}
       <Tabs.Screen name="my-events" options={{ href: null }} />
+      {/* Hidden route for viewing user's RSVPs */}
+      <Tabs.Screen name="my-rsvps" options={{ href: null }} />
     </Tabs>
   );
 }

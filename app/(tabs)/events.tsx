@@ -2011,12 +2011,17 @@ export default function Home() {
     const { data, error } = await supabase
       .from('events')
       .select(
-        'id,title,description,image_url,image_urls,date_time,end_time,location,tags,rsvp_url,created_by',
+        `id, title, description, image_url, image_urls, date_time, end_time, location, tags,
+         visibility, capacity, allow_join_requests, rsvp_required, created_by,
+         creator:users!created_by(id, username, display_name, avatar_url, account_type)`,
       )
       .gte('date_time', new Date().toISOString())
       .order('date_time', { ascending: true })
       .range(from, to);
-    if (error) return [] as Event[];
+    if (error) {
+      console.error('Error fetching events:', error);
+      return [] as Event[];
+    }
     return (data ?? []) as Event[];
   };
 
