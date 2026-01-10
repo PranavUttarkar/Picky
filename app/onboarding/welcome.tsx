@@ -1,15 +1,32 @@
 import { useEffect, useState } from 'react';
-import { View, Text, TextInput, Pressable, Modal, ScrollView } from 'react-native';
+import { View, Text, TextInput, Pressable, Modal, ScrollView, Platform, ActivityIndicator, Image, useWindowDimensions } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { supabase } from '@/services/supabase';
 import { ensureProfile } from '@/services/profile';
-import { useThemeColors } from '@/theme/ThemeProvider';
+import { useTheme, useThemeColors } from '@/theme/ThemeProvider';
 import { Spacing, BorderRadius, Typography, Colors } from '@/theme/designTokens';
+import * as AppleAuthentication from 'expo-apple-authentication';
+import * as WebBrowser from 'expo-web-browser';
+import * as AuthSession from 'expo-auth-session';
+
+const GOOGLE_LOGO_URL = 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Google_%22G%22_logo.svg/120px-Google_%22G%22_logo.svg.png';
+
+// Desktop breakpoint for responsive width
+const DESKTOP_BREAKPOINT = 768;
+
+// Required for web OAuth redirect
+WebBrowser.maybeCompleteAuthSession();
 
 type Mode = 'signIn' | 'signUp';
 
 export default function Welcome() {
   const c = useThemeColors();
+  const { scheme } = useTheme();
+  const { width } = useWindowDimensions();
+  const isDesktop = width >= DESKTOP_BREAKPOINT;
+  const formWidth = isDesktop ? Math.min(400, width * 0.6) : '100%';
+  const isDark = scheme === 'dark';
+  
   const params = useLocalSearchParams<{ mode?: string }>();
   const initialMode: Mode = params.mode === 'signIn' ? 'signIn' : 'signUp';
   const [mode, setMode] = useState<Mode>(initialMode);
@@ -18,9 +35,18 @@ export default function Welcome() {
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [loading, setLoading] = useState(false);
+  const [socialLoading, setSocialLoading] = useState<'google' | 'apple' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
+  const [appleAuthAvailable, setAppleAuthAvailable] = useState(false);
+
+  // Check if Apple Sign In is available (iOS 13+ only)
+  useEffect(() => {
+    if (Platform.OS === 'ios') {
+      AppleAuthentication.isAvailableAsync().then(setAppleAuthAvailable);
+    }
+  }, []);
 
   // Check auth state to decide whether to allow sign-up UI
   useEffect(() => {
@@ -65,21 +91,8 @@ export default function Welcome() {
         if (err) throw err;
         if (data.session) {
           await ensureProfile();
-          // If user already has interests saved, skip onboarding
-          const {
-            data: { user },
-          } = await supabase.auth.getUser();
-          let needsOnboarding = true;
-          if (user) {
-            const { data: uit } = await supabase
-              .from('user_interests_temp')
-              .select('names')
-              .eq('user_id', user.id)
-              .maybeSingle();
-            const names = (uit?.names as string[] | null) ?? [];
-            needsOnboarding = !Array.isArray(names) || names.length < 2;
-          }
-          router.replace(needsOnboarding ? '/onboarding/profile-setup' : '/(tabs)/home');
+          // Sign in = existing user, go straight to home
+          router.replace('/(tabs)/home');
         } else {
           // Rare: no session; show fallback message
           setInfo("Signed in. If you aren't redirected, please try again.");
@@ -131,6 +144,165 @@ export default function Welcome() {
     setInfo(null);
   };
 
+  // Handle successful social auth and redirect appropriately
+  const handleSocialAuthSuccess = async () => {
+    await ensureProfile();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    
+    if (!user) {
+      router.replace('/onboarding/welcome');
+      return;
+    }
+    
+    // Check if user has a username (existing user) or not (new user)
+    const { data: userProfile } = await supabase
+      .from('users')
+      .select('username')
+      .eq('id', user.id)
+      .maybeSingle();
+    
+    if (userProfile?.username) {
+      // Existing user - go straight to home
+      router.replace('/(tabs)/home');
+    } else {
+      // New user - start onboarding
+      router.replace('/onboarding/profile-setup');
+    }
+  };
+
+  // Sign in with Google
+  const signInWithGoogle = async () => {
+    try {
+      setError(null);
+      setInfo(null);
+      setSocialLoading('google');
+
+      // Get the redirect URL for the current platform
+      const redirectUrl = AuthSession.makeRedirectUri({
+        scheme: 'picky',
+        path: 'auth/callback',
+      });
+
+      const { data, error: signInError } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: redirectUrl,
+          skipBrowserRedirect: Platform.OS !== 'web',
+        },
+      });
+
+      if (signInError) throw signInError;
+
+      if (Platform.OS !== 'web' && data?.url) {
+        // Open the OAuth URL in a web browser
+        const result = await WebBrowser.openAuthSessionAsync(
+          data.url,
+          redirectUrl
+        );
+
+        if (result.type === 'success' && result.url) {
+          // Extract the tokens from the URL
+          const url = new URL(result.url);
+          const params = new URLSearchParams(url.hash.substring(1));
+          const accessToken = params.get('access_token');
+          const refreshToken = params.get('refresh_token');
+
+          if (accessToken && refreshToken) {
+            const { error: sessionError } = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken,
+            });
+            if (sessionError) throw sessionError;
+            await handleSocialAuthSuccess();
+          }
+        }
+      }
+      // For web, the redirect happens automatically
+    } catch (e: any) {
+      setError(e?.message || 'Failed to sign in with Google');
+    } finally {
+      setSocialLoading(null);
+    }
+  };
+
+  // Sign in with Apple (native iOS only)
+  const signInWithApple = async () => {
+    try {
+      setError(null);
+      setInfo(null);
+      setSocialLoading('apple');
+
+      if (Platform.OS === 'ios') {
+        // Native Apple Sign In for iOS
+        const credential = await AppleAuthentication.signInAsync({
+          requestedScopes: [
+            AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+            AppleAuthentication.AppleAuthenticationScope.EMAIL,
+          ],
+        });
+
+        if (credential.identityToken) {
+          const { error: signInError } = await supabase.auth.signInWithIdToken({
+            provider: 'apple',
+            token: credential.identityToken,
+          });
+
+          if (signInError) throw signInError;
+          await handleSocialAuthSuccess();
+        }
+      } else {
+        // Web/Android - use OAuth flow
+        const redirectUrl = AuthSession.makeRedirectUri({
+          scheme: 'picky',
+          path: 'auth/callback',
+        });
+
+        const { data, error: signInError } = await supabase.auth.signInWithOAuth({
+          provider: 'apple',
+          options: {
+            redirectTo: redirectUrl,
+            skipBrowserRedirect: true,
+          },
+        });
+
+        if (signInError) throw signInError;
+
+        if (data?.url) {
+          const result = await WebBrowser.openAuthSessionAsync(
+            data.url,
+            redirectUrl
+          );
+
+          if (result.type === 'success' && result.url) {
+            const url = new URL(result.url);
+            const params = new URLSearchParams(url.hash.substring(1));
+            const accessToken = params.get('access_token');
+            const refreshToken = params.get('refresh_token');
+
+            if (accessToken && refreshToken) {
+              const { error: sessionError } = await supabase.auth.setSession({
+                access_token: accessToken,
+                refresh_token: refreshToken,
+              });
+              if (sessionError) throw sessionError;
+              await handleSocialAuthSuccess();
+            }
+          }
+        }
+      }
+    } catch (e: any) {
+      // Apple sign in cancelled by user
+      if (e?.code === 'ERR_CANCELED') {
+        return;
+      }
+      setError(e?.message || 'Failed to sign in with Apple');
+    } finally {
+      setSocialLoading(null);
+    }
+  };
+
   return (
     <View
       style={{
@@ -175,164 +347,199 @@ export default function Welcome() {
         Find it All. Decide Fast. Have Fun Together.
       </Text>
 
-      {/* Simple actions: Create account / Sign in */}
-      {/* <View style={{ width: "100%", marginBottom: 8 }}>
-        <View style={{ flexDirection: "row", gap: 8, marginBottom: 8 }}>
-          <Pressable
-            onPress={startSignUp}
-            style={{
-              flex: 1,
-              backgroundColor: mode === "signUp" ? c.primary : c.card,
-              paddingVertical: 10,
-              borderRadius: 8,
-              alignItems: "center",
-            }}
-          >
-            <Text style={{ color: mode === "signUp" ? "#000" : c.text, fontWeight: "700" }}>
-              Create account
-            </Text>
-          </Pressable>
-          <Pressable
-            onPress={startSignIn}
-            style={{
-              flex: 1,
-              backgroundColor: mode === "signIn" ? c.primary : c.card,
-              paddingVertical: 10,
-              borderRadius: 8,
-              alignItems: "center",
-            }}
-          >
-            <Text style={{ color: mode === "signIn" ? "#000" : c.text, fontWeight: "700" }}>
-              Sign in
-            </Text>
-          </Pressable>
-        </View>
-      </View> */}
-
-      <TextInput
-        value={email}
-        onChangeText={setEmail}
-        autoCapitalize="none"
-        placeholder="your@email.com"
-        placeholderTextColor={c.muted}
-        keyboardType="email-address"
-        style={{
-          width: '100%',
-          padding: Spacing.md - 2,
-          backgroundColor: c.card,
-          color: c.text,
-          borderRadius: BorderRadius.md,
-          marginBottom: Spacing.md - 4,
-          fontSize: Typography.scale.body.fontSize,
-          fontFamily: Typography.fontFamily.body,
-        }}
-      />
-      <TextInput
-        value={password}
-        onChangeText={setPassword}
-        secureTextEntry
-        placeholder={mode === 'signUp' && !isAuthed ? 'Create a password' : 'Password'}
-        placeholderTextColor={c.muted}
-        style={{
-          width: '100%',
-          padding: Spacing.md - 2,
-          backgroundColor: c.card,
-          color: c.text,
-          borderRadius: BorderRadius.md,
-          marginBottom: Spacing.md - 4,
-          fontSize: Typography.scale.body.fontSize,
-          fontFamily: Typography.fontFamily.body,
-        }}
-      />
-      {mode === 'signUp' && !isAuthed && (
-        <TextInput
-          value={confirm}
-          onChangeText={setConfirm}
-          secureTextEntry
-          placeholder="Confirm password"
-          placeholderTextColor={c.muted}
+      {/* Form Container - Responsive Width */}
+      <View style={{ width: formWidth, alignItems: 'center' }}>
+        {/* Google Sign In Button - First */}
+        <Pressable
+          onPress={signInWithGoogle}
+          disabled={loading || socialLoading !== null}
           style={{
             width: '100%',
-            padding: Spacing.md - 2,
-            backgroundColor: c.card,
+            backgroundColor: isDark ? '#1F2937' : '#FFFFFF',
+            paddingVertical: Spacing.md,
+            paddingHorizontal: Spacing.lg,
+            borderRadius: BorderRadius.lg,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: Spacing.md,
+            opacity: loading || socialLoading !== null ? 0.6 : 1,
+            borderWidth: 1,
+            borderColor: isDark ? '#374151' : '#E5E7EB',
+          }}
+        >
+          {socialLoading === 'google' ? (
+            <ActivityIndicator size="small" color="#4285F4" />
+          ) : (
+            <>
+              <Image 
+                source={{ uri: GOOGLE_LOGO_URL }}
+                style={{ width: 20, height: 20 }}
+                resizeMode="contain"
+              />
+              <Text style={{ 
+                color: isDark ? '#F9FAFB' : '#1F2937', 
+                fontWeight: '600', 
+                fontSize: Typography.scale.body.fontSize, 
+                fontFamily: Typography.fontFamily.body,
+              }}>
+                Continue with Google
+              </Text>
+            </>
+          )}
+        </Pressable>
+
+        {/* OR Divider */}
+        <View style={{ 
+          flexDirection: 'row', 
+          alignItems: 'center', 
+          width: '100%', 
+          marginVertical: Spacing.lg,
+        }}>
+          <View style={{ flex: 1, height: 1, backgroundColor: c.muted, opacity: 0.3 }} />
+          <Text style={{ 
+            color: c.muted, 
+            paddingHorizontal: Spacing.lg, 
+            fontSize: Typography.scale.caption.fontSize,
+            fontFamily: Typography.fontFamily.body,
+          }}>
+            or
+          </Text>
+          <View style={{ flex: 1, height: 1, backgroundColor: c.muted, opacity: 0.3 }} />
+        </View>
+
+        {/* Email Input */}
+        <TextInput
+          value={email}
+          onChangeText={setEmail}
+          autoCapitalize="none"
+          placeholder="Enter email address"
+          placeholderTextColor={c.muted}
+          keyboardType="email-address"
+          style={{
+            width: '100%',
+            padding: Spacing.md,
+            backgroundColor: isDark ? '#1F2937' : '#FFFFFF',
             color: c.text,
-            borderRadius: BorderRadius.md,
-            marginBottom: Spacing.md - 4,
+            borderRadius: BorderRadius.lg,
+            marginBottom: Spacing.sm,
             fontSize: Typography.scale.body.fontSize,
             fontFamily: Typography.fontFamily.body,
+            borderWidth: 1,
+            borderColor: isDark ? '#374151' : '#E5E7EB',
           }}
         />
-      )}
 
-      {error && <Text style={{ color: Colors.light.accent.warning, marginBottom: Spacing.sm, fontSize: Typography.scale.body.fontSize, fontFamily: Typography.fontFamily.body }}>{error}</Text>}
-      {info && <Text style={{ color: c.muted, marginBottom: Spacing.sm, fontSize: Typography.scale.body.fontSize, fontFamily: Typography.fontFamily.body }}>{info}</Text>}
+        {/* Password Input - Only show if email is entered */}
+        {email.trim().length > 0 && (
+          <>
+            <TextInput
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              placeholder={mode === 'signUp' && !isAuthed ? 'Create a password' : 'Password'}
+              placeholderTextColor={c.muted}
+              style={{
+                width: '100%',
+                padding: Spacing.md,
+                backgroundColor: isDark ? '#1F2937' : '#FFFFFF',
+                color: c.text,
+                borderRadius: BorderRadius.lg,
+                marginBottom: Spacing.sm,
+                fontSize: Typography.scale.body.fontSize,
+                fontFamily: Typography.fontFamily.body,
+                borderWidth: 1,
+                borderColor: isDark ? '#374151' : '#E5E7EB',
+              }}
+            />
+            {mode === 'signUp' && !isAuthed && (
+              <TextInput
+                value={confirm}
+                onChangeText={setConfirm}
+                secureTextEntry
+                placeholder="Confirm password"
+                placeholderTextColor={c.muted}
+                style={{
+                  width: '100%',
+                  padding: Spacing.md,
+                  backgroundColor: isDark ? '#1F2937' : '#FFFFFF',
+                  color: c.text,
+                  borderRadius: BorderRadius.lg,
+                  marginBottom: Spacing.sm,
+                  fontSize: Typography.scale.body.fontSize,
+                  fontFamily: Typography.fontFamily.body,
+                  borderWidth: 1,
+                  borderColor: isDark ? '#374151' : '#E5E7EB',
+                }}
+              />
+            )}
+          </>
+        )}
 
-      <Pressable
-        onPress={onSubmit}
-        disabled={loading}
-        style={{
-          width: '100%',
-          backgroundColor: c.primary,
-          padding: Spacing.md - 2,
-          borderRadius: BorderRadius.md,
-          alignItems: 'center',
-        }}
-      >
-        {(() => {
-          const label = (() => {
-            if (loading) {
-              if (mode === 'signIn') return 'Signing in…';
-              return isAuthed ? 'Continuing…' : 'Signing up…';
-            }
-            if (mode === 'signIn') return 'Sign In';
-            return isAuthed ? 'Sign In' : 'Create account';
-          })();
-          return <Text style={{ color: '#FFFFFF', fontWeight: Typography.fontWeight.bold, fontSize: Typography.scale.body.fontSize, fontFamily: Typography.fontFamily.body }}>{label}</Text>;
-        })()}
-      </Pressable>
+        {/* Error/Info Messages */}
+        {error && <Text style={{ color: '#EF4444', marginBottom: Spacing.sm, fontSize: Typography.scale.body.fontSize, fontFamily: Typography.fontFamily.body, textAlign: 'center' }}>{error}</Text>}
+        {info && <Text style={{ color: c.muted, marginBottom: Spacing.sm, fontSize: Typography.scale.body.fontSize, fontFamily: Typography.fontFamily.body, textAlign: 'center' }}>{info}</Text>}
 
-      {mode === 'signUp' && !isAuthed && (
+        {/* Continue Button */}
+        <Pressable
+          onPress={onSubmit}
+          disabled={loading || socialLoading !== null}
+          style={{
+            width: '100%',
+            backgroundColor: isDark ? '#F9FAFB' : '#1F2937',
+            paddingVertical: Spacing.md,
+            borderRadius: BorderRadius.lg,
+            alignItems: 'center',
+            opacity: loading || socialLoading !== null ? 0.6 : 1,
+          }}
+        >
+          <Text style={{ 
+            color: isDark ? '#1F2937' : '#FFFFFF', 
+            fontWeight: '600', 
+            fontSize: Typography.scale.body.fontSize, 
+            fontFamily: Typography.fontFamily.body 
+          }}>
+            {loading ? (mode === 'signIn' ? 'Signing in…' : 'Creating account…') : 'Continue'}
+          </Text>
+        </Pressable>
+
+        {/* Terms & Privacy */}
         <Text style={{
           color: c.muted,
           fontSize: Typography.scale.caption.fontSize,
           fontFamily: Typography.fontFamily.body,
           textAlign: 'center',
-          marginTop: Spacing.sm,
+          marginTop: Spacing.md,
           lineHeight: Typography.scale.caption.lineHeight,
         }}>
-          By signing up, you agree to our{' '}
+          By continuing, you agree to our{' '}
+          <Text style={{ textDecorationLine: 'underline' }}>Terms</Text>
+          {' '}and{' '}
           <Text
-            style={{
-              color: c.primary,
-              textDecorationLine: 'underline',
-            }}
+            style={{ textDecorationLine: 'underline' }}
             onPress={() => setShowPrivacyModal(true)}
           >
             Privacy Policy
-          </Text>
+          </Text>.
         </Text>
-      )}
 
-      {/* Helper link to switch if needed; hide Create link for signed-in users */}
-      {mode === 'signIn' ? (
-        !isAuthed ? (
-          <Pressable onPress={startSignUp} style={{ marginTop: Spacing.md }}>
-            <Text style={{ textDecorationLine: 'underline', color: c.muted, fontSize: Typography.scale.body.fontSize, fontFamily: Typography.fontFamily.body }}>
-              {"Don't have an account? Create one"}
+        {/* Switch mode link */}
+        <Pressable 
+          onPress={mode === 'signIn' ? startSignUp : startSignIn} 
+          style={{ marginTop: Spacing.lg }}
+        >
+          <Text style={{ 
+            color: c.muted, 
+            fontSize: Typography.scale.body.fontSize, 
+            fontFamily: Typography.fontFamily.body 
+          }}>
+            {mode === 'signIn' ? "Don't have an account? " : 'Already have an account? '}
+            <Text style={{ textDecorationLine: 'underline' }}>
+              {mode === 'signIn' ? 'Sign up' : 'Sign in'}
             </Text>
-          </Pressable>
-        ) : (
-          <Pressable onPress={() => router.replace('/(tabs)/home')} style={{ marginTop: Spacing.md }}>
-            <Text style={{ color: c.muted, fontSize: Typography.scale.body.fontSize, fontFamily: Typography.fontFamily.body }}>You are signed in. Continue to Home</Text>
-          </Pressable>
-        )
-      ) : (
-        <Pressable onPress={startSignIn} style={{ marginTop: Spacing.md }}>
-          <Text style={{ textDecorationLine: 'underline', color: c.muted, fontSize: Typography.scale.body.fontSize + 2, fontFamily: Typography.fontFamily.body }}>
-            Already have an account? Sign in
           </Text>
         </Pressable>
-      )}
+      </View>
 
       {/* Privacy Policy Modal */}
       <Modal

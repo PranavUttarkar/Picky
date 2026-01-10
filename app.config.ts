@@ -14,14 +14,21 @@ export default (): ExpoConfig => ({
     bundleIdentifier: 'com.yourcompany.picky',
     // iOS buildNumber (string). Increment for each App Store build.
     buildNumber: '1',
+    // Required for Apple Sign In
+    usesAppleSignIn: true,
   },
-  android: {},
+  android: {
+    // Required for Google Sign In on Android - replace with your actual package name
+    package: 'com.yourcompany.picky',
+  },
   web: { bundler: 'metro', output: 'static', favicon: './assets/branding/P.png' },
   plugins: [
     ['expo-router'],
     ['expo-notifications'],
     ['expo-calendar'],
     'expo-font',
+    // Apple Sign In plugin
+    'expo-apple-authentication',
   ],
   experiments: { tsconfigPaths: true },
 });

@@ -64,7 +64,8 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     storage: isServer ? undefined : (AsyncStorage as any),
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: false,
+    // Enable detecting session from URL hash for OAuth callbacks (web)
+    detectSessionInUrl: typeof window !== 'undefined',
   },
   global: {
     fetch: customFetch,
