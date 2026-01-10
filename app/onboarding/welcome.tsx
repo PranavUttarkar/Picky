@@ -172,6 +172,23 @@ export default function Welcome() {
     }
   };
 
+  // Get the appropriate redirect URL for OAuth
+  const getOAuthRedirectUrl = () => {
+    if (Platform.OS === 'web') {
+      // For web, redirect back to the current page - Supabase will handle the tokens
+      const win = typeof globalThis !== 'undefined' ? (globalThis as any).window : undefined;
+      if (win?.location?.origin) {
+        // Use the origin only - Supabase adds tokens to the URL hash
+        return win.location.origin;
+      }
+    }
+    // For native apps, use the app scheme
+    return AuthSession.makeRedirectUri({
+      scheme: 'picky',
+      path: 'auth/callback',
+    });
+  };
+
   // Sign in with Google
   const signInWithGoogle = async () => {
     try {
@@ -179,11 +196,7 @@ export default function Welcome() {
       setInfo(null);
       setSocialLoading('google');
 
-      // Get the redirect URL for the current platform
-      const redirectUrl = AuthSession.makeRedirectUri({
-        scheme: 'picky',
-        path: 'auth/callback',
-      });
+      const redirectUrl = getOAuthRedirectUrl();
 
       const { data, error: signInError } = await supabase.auth.signInWithOAuth({
         provider: 'google',
