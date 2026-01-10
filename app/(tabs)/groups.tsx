@@ -212,7 +212,7 @@ export default function Groups() {
     };
 
     checkAuth();
-  }, [activeTab, loadFriends, loadFollowing, loadGroups]);
+  }, [activeTab, loadFriends, loadOrganizations, loadGroups]);
 
   // Clear friend notification when user views the friends tab
   useEffect(() => {
@@ -420,7 +420,7 @@ export default function Groups() {
         await followUser(userId);
         Alert.alert('Success', 'Following organization');
       }
-      await loadFollowing();
+      await loadOrganizations();
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to update follow status');
     }
