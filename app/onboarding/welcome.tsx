@@ -61,6 +61,30 @@ export default function Welcome() {
     })();
   }, []);
 
+  // Handle OAuth redirect completion (especially for web)
+  // When OAuth redirects back, Supabase automatically parses tokens and establishes session
+  // We need to detect this and route the user appropriately
+  // Only applies to web - native handles this explicitly after setSession()
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+      // Only handle sign-in events from OAuth (SIGNED_IN covers OAuth completion)
+      // Check for OAuth provider to avoid triggering on email/password sign-in
+      if (event === 'SIGNED_IN' && session?.user) {
+        const provider = session.user.app_metadata?.provider;
+        // Only trigger for OAuth providers (google, apple), not email
+        if (provider && provider !== 'email') {
+          await handleSocialAuthSuccess();
+        }
+      }
+    });
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
+  }, []);
+
   const onSubmit = async () => {
     setError(null);
     setInfo(null);
@@ -91,8 +115,20 @@ export default function Welcome() {
         if (err) throw err;
         if (data.session) {
           await ensureProfile();
-          // Sign in = existing user, go straight to home
-          router.replace('/(tabs)/home');
+          // Check if user has completed onboarding (has username)
+          const { data: userProfile } = await supabase
+            .from('users')
+            .select('username')
+            .eq('id', data.session.user.id)
+            .maybeSingle();
+          
+          if (userProfile?.username) {
+            // Existing user with completed profile - go to home
+            router.replace('/(tabs)/home');
+          } else {
+            // User never completed onboarding - send to profile setup
+            router.replace('/onboarding/profile-setup');
+          }
         } else {
           // Rare: no session; show fallback message
           setInfo("Signed in. If you aren't redirected, please try again.");
@@ -175,11 +211,11 @@ export default function Welcome() {
   // Get the appropriate redirect URL for OAuth
   const getOAuthRedirectUrl = () => {
     if (Platform.OS === 'web') {
-      // For web, redirect back to the current page - Supabase will handle the tokens
+      // For web, redirect back to the welcome page so auth listener can handle routing
       const win = typeof globalThis !== 'undefined' ? (globalThis as any).window : undefined;
       if (win?.location?.origin) {
-        // Use the origin only - Supabase adds tokens to the URL hash
-        return win.location.origin;
+        // Redirect to welcome page - Supabase adds tokens to the URL hash
+        return `${win.location.origin}/onboarding/welcome`;
       }
     }
     // For native apps, use the app scheme
