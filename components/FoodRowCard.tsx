@@ -7,6 +7,7 @@ import type { Restaurant } from '@/types/models';
 import { Ionicons } from '@expo/vector-icons';
 import { Typography } from '@/theme/designTokens';
 import { getRestaurantStatus } from '@/utils/restaurantHours';
+import { LinearGradient } from 'expo-linear-gradient';
 
 export interface FoodRowCardProps {
   item: Restaurant;
@@ -153,18 +154,32 @@ const FoodRowCard: React.FC<FoodRowCardProps> = memo(
                 }}
               >
                 {showScore ? (
-                  <View
-                    style={{
-                      backgroundColor: c.card,
-                      paddingHorizontal: 10,
-                      paddingVertical: 4,
-                      borderRadius: 999,
-                    }}
+                  <LinearGradient
+                    colors={['#34d399', '#3b82f6']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={{ padding: 1, borderRadius: 999 }}
                   >
-                    <Text style={{ color: c.text, fontSize: 11, fontWeight: '800' }}>
-                      {score}% Match
-                    </Text>
-                  </View>
+                    <View
+                      style={{
+                        backgroundColor: c.card,
+                        paddingHorizontal: 10,
+                        paddingVertical: 4,
+                        borderRadius: 999,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Text style={{ 
+                        color: c.text, 
+                        fontSize: Typography.scale.caption.fontSize,
+                        fontFamily: Typography.fontFamily.bodyBold,
+                        fontWeight: Typography.fontWeight.bold,
+                      }}>
+                        {score}% Match{score > 72 ? '!' : ''}
+                      </Text>
+                    </View>
+                  </LinearGradient>
                 ) : (
                   <View />
                 )}
