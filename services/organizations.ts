@@ -67,6 +67,46 @@ export interface OrganizationProfileInput {
   member_count?: OrganizationSize | null;
 }
 
+// Organization tags type
+export interface OrganizationTags {
+  user_id: string;
+  tags: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+// Get organization tags
+export async function getOrganizationTags(userId?: string): Promise<string[]> {
+  const targetUserId = userId || (await supabase.auth.getUser()).data.user?.id;
+  if (!targetUserId) return [];
+
+  const { data, error } = await supabase
+    .from('organization_tags')
+    .select('tags')
+    .eq('user_id', targetUserId)
+    .maybeSingle();
+
+  if (error) return [];
+  return data?.tags || [];
+}
+
+// Update organization tags
+export async function updateOrganizationTags(tags: string[]): Promise<void> {
+  return profileLimiter.execute(async () => {
+    const { data: auth } = await supabase.auth.getUser();
+    if (!auth.user) throw new Error('Not authenticated');
+
+    const { error } = await supabase
+      .from('organization_tags')
+      .upsert({
+        user_id: auth.user.id,
+        tags: tags.slice(0, 5), // Limit to 5 tags
+      }, { onConflict: 'user_id' });
+
+    if (error) throw error;
+  });
+}
+
 // Create organization profile
 export async function createOrganizationProfile(input: OrganizationProfileInput): Promise<OrganizationProfile> {
   return profileLimiter.execute(async () => {

@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import HeaderSpacer from '@/components/HeaderSpacer';
+import FloatingAddButton from '@/components/FloatingAddButton';
 import { useTheme, useThemeColors } from '@/theme/ThemeProvider';
 import GradientBackground from '@/components/GradientBackground';
 import AnimatedPage from '@/components/AnimatedPage';
@@ -25,6 +26,7 @@ import EventGridCard from '@/components/EventGridCard';
 import EventRowCard from '@/components/EventRowCard';
 import dayjs from 'dayjs';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { BlurView } from 'expo-blur';
 import { ThreeDButton } from '@/components/ThreeD';
 import { updateEvent, deleteEventDirect, createEvent } from '@/services/events';
 import LocationPicker from '@/components/LocationPicker';
@@ -280,33 +282,71 @@ export default function MyEvents() {
 
   return (
     <Container>
-      {/* Top controls: layout toggle */}
+      <HeaderSpacer />
+      {/* Modern Header with gradient */}
       <View
         style={{
-          flexDirection: 'row',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: 8,
+          backgroundColor: c.card,
+          borderRadius: 16,
+          padding: 16,
+          marginBottom: 16,
+          borderWidth: 1,
+          borderColor: '#00000010',
+          shadowColor: '#000',
+          shadowOpacity: 0.05,
+          shadowRadius: 10,
+          shadowOffset: { width: 0, height: 2 },
+          elevation: 2,
         }}
       >
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <Text style={{ color: c.text, fontWeight: '800', fontSize: 16 }}>My Events</Text>
+        <View
+          style={{
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: 12,
+          }}
+        >
+          <View>
+            <Text style={{ color: c.text, fontWeight: '800', fontSize: 24 }}>My Events</Text>
+            <Text style={{ color: c.muted, fontSize: 14, marginTop: 4 }}>
+              {items.length} {items.length === 1 ? 'event' : 'events'}
+            </Text>
+          </View>
           <Pressable
             onPress={openAdd}
             style={{
               backgroundColor: c.primary,
-              paddingHorizontal: 12,
-              paddingVertical: 8,
-              borderRadius: 10,
+              paddingHorizontal: 16,
+              paddingVertical: 10,
+              borderRadius: 12,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 6,
+              shadowColor: c.primary,
+              shadowOpacity: 0.3,
+              shadowRadius: 8,
+              shadowOffset: { width: 0, height: 2 },
+              elevation: 4,
             }}
           >
-            <Text style={{ color: '#000', fontWeight: '800' }}>Add Event</Text>
+            <Ionicons name="add-circle" size={18} color="#000" />
+            <Text style={{ color: '#000', fontWeight: '800', fontSize: 15 }}>Create</Text>
           </Pressable>
         </View>
-        <View style={{ flexDirection: 'row', backgroundColor: c.card, borderRadius: 10 }}>
+        
+        {/* View mode toggle */}
+        <View
+          style={{
+            flexDirection: 'row',
+            backgroundColor: scheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)',
+            borderRadius: 10,
+            padding: 4,
+          }}
+        >
           {[
-            { k: 'row', label: 'List' },
-            { k: 'grid', label: 'Grid' },
+            { k: 'row', label: 'List', icon: 'list' },
+            { k: 'grid', label: 'Grid', icon: 'grid' },
           ].map((opt) => {
             const active = viewMode === (opt.k as any);
             return (
@@ -314,13 +354,23 @@ export default function MyEvents() {
                 key={opt.k}
                 onPress={() => setViewMode(opt.k as any)}
                 style={{
+                  flex: 1,
                   paddingHorizontal: 12,
-                  paddingVertical: 8,
-                  borderRadius: 10,
+                  paddingVertical: 10,
+                  borderRadius: 8,
                   backgroundColor: active ? c.primary : 'transparent',
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
                 }}
               >
-                <Text style={{ color: active ? '#000' : c.text, fontWeight: '700' }}>
+                <Ionicons
+                  name={opt.icon as any}
+                  size={16}
+                  color={active ? '#000' : c.muted}
+                />
+                <Text style={{ color: active ? '#000' : c.text, fontWeight: '700', fontSize: 14 }}>
                   {opt.label}
                 </Text>
               </Pressable>
@@ -328,6 +378,7 @@ export default function MyEvents() {
           })}
         </View>
       </View>
+      
       <FlatList
         data={items}
         key={`layout-${columns}`}
@@ -358,25 +409,94 @@ export default function MyEvents() {
           return <EventRowCard {...cardProps} />;
         }}
         ListEmptyComponent={
-          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-            <Text style={{ color: c.muted, fontSize: 16, marginBottom: 8 }}>
-              You haven’t created any events yet.
-            </Text>
-            <Pressable
-              onPress={() => router.replace('/(tabs)/events')}
+          <View
+            style={{
+              flex: 1,
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 32,
+              minHeight: 400,
+            }}
+          >
+            <View
               style={{
-                backgroundColor: c.primary,
-                paddingHorizontal: 14,
-                paddingVertical: 10,
-                borderRadius: 12,
+                backgroundColor: scheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)',
+                borderRadius: 80,
+                width: 120,
+                height: 120,
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: 24,
               }}
             >
-              <Text style={{ color: '#000', fontWeight: '800' }}>Browse Events</Text>
-            </Pressable>
+              <Ionicons name="calendar-outline" size={56} color={c.muted} />
+            </View>
+            <Text
+              style={{
+                color: c.text,
+                fontSize: 20,
+                fontWeight: '800',
+                marginBottom: 8,
+                textAlign: 'center',
+              }}
+            >
+              No Events Yet
+            </Text>
+            <Text
+              style={{
+                color: c.muted,
+                fontSize: 15,
+                marginBottom: 24,
+                textAlign: 'center',
+                maxWidth: 300,
+                lineHeight: 22,
+              }}
+            >
+              Create your first event to start connecting with your community
+            </Text>
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              <Pressable
+                onPress={openAdd}
+                style={{
+                  backgroundColor: c.primary,
+                  paddingHorizontal: 20,
+                  paddingVertical: 14,
+                  borderRadius: 12,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 8,
+                  shadowColor: c.primary,
+                  shadowOpacity: 0.3,
+                  shadowRadius: 8,
+                  shadowOffset: { width: 0, height: 2 },
+                  elevation: 4,
+                }}
+              >
+                <Ionicons name="add-circle" size={20} color="#000" />
+                <Text style={{ color: '#000', fontWeight: '800', fontSize: 16 }}>Create Event</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => router.replace('/(tabs)/events')}
+                style={{
+                  backgroundColor: c.card,
+                  paddingHorizontal: 20,
+                  paddingVertical: 14,
+                  borderRadius: 12,
+                  borderWidth: 2,
+                  borderColor: c.primary + '40',
+                }}
+              >
+                <Text style={{ color: c.text, fontWeight: '700', fontSize: 16 }}>Browse Events</Text>
+              </Pressable>
+            </View>
           </View>
         }
       />
-
+      {/* Floating Add Button */}
+      <FloatingAddButton
+        onPress={openAdd}
+        accessibilityLabel="Add Event"
+      />
       {/* Edit Event Modal */}
       <Modal
         visible={editOpen}
@@ -385,10 +505,48 @@ export default function MyEvents() {
       >
         <SafeAreaView edges={['bottom']} style={{ flex: 1, backgroundColor: c.background }}>
           <HeaderSpacer />
+          {/* Modern Modal Header */}
+          <BlurView
+            intensity={30}
+            tint={scheme === 'dark' ? 'dark' : 'light'}
+            style={{
+              paddingHorizontal: 16,
+              paddingVertical: 14,
+              borderBottomWidth: 1,
+              borderBottomColor: '#00000010',
+            }}
+          >
+            <View
+              style={{
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}
+            >
+              <View>
+                <Text style={{ color: c.text, fontSize: 22, fontWeight: '800' }}>
+                  {editingId ? 'Edit Event' : 'Create Event'}
+                </Text>
+                <Text style={{ color: c.muted, fontSize: 13, marginTop: 2 }}>
+                  {editingId ? 'Update your event details' : 'Share something amazing with your community'}
+                </Text>
+              </View>
+              <Pressable
+                onPress={() => !saving && setEditOpen(false)}
+                style={{
+                  backgroundColor: scheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
+                  width: 36,
+                  height: 36,
+                  borderRadius: 18,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Ionicons name="close" size={22} color={c.text} />
+              </Pressable>
+            </View>
+          </BlurView>
           <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 32 }}>
-            <Text style={{ color: c.text, fontSize: 18, fontWeight: '800', marginBottom: 12 }}>
-              Edit event
-            </Text>
             <TextInput
               placeholder="Title"
               placeholderTextColor={c.muted}

@@ -398,7 +398,7 @@ export default function Welcome() {
 
       {/* Form Container - Responsive Width */}
       <View style={{ width: formWidth, alignItems: 'center' }}>
-        {/* Google Sign In Button - First */}
+        {/* Google Sign In Button */}
         <Pressable
           onPress={signInWithGoogle}
           disabled={loading || socialLoading !== null}
@@ -562,11 +562,16 @@ export default function Welcome() {
           lineHeight: Typography.scale.caption.lineHeight,
         }}>
           By continuing, you agree to our{' '}
-          <Text style={{ textDecorationLine: 'underline' }}>Terms</Text>
+          <Text 
+            style={{ textDecorationLine: 'underline' }}
+            onPress={() => router.push('/terms')}
+          >
+            Terms
+          </Text>
           {' '}and{' '}
           <Text
             style={{ textDecorationLine: 'underline' }}
-            onPress={() => setShowPrivacyModal(true)}
+            onPress={() => router.push('/privacy')}
           >
             Privacy Policy
           </Text>.

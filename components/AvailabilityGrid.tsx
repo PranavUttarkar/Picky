@@ -170,6 +170,12 @@ export default function AvailabilityGrid({
     return arr;
   }, [start.getTime(), slotMinutes, slotsPerDay]);
 
+  // Initial vertical scroll offset so that a specific hour is at the top
+  const initialScrollY = useMemo(() => {
+    const idx = Math.max(0, Math.min(slotsPerDay - 1, Math.floor((initialHour * 60) / slotMinutes)));
+    return idx * rowHeight;
+  }, [initialHour, slotsPerDay, slotMinutes, rowHeight]);
+
   // Heat map color calculation
   const getHeatColor = useCallback((count: number, isSelected: boolean): { bg: string; border: string } => {
     if (isSelected) {
@@ -270,8 +276,13 @@ export default function AvailabilityGrid({
             ))}
           </View>
 
-          {/* Grid rows */}
-          <View style={{ paddingBottom: rowHeight * 2 + 24 }}>
+          {/* Grid rows (vertical scroll) */}
+          <ScrollView
+            nestedScrollEnabled
+            showsVerticalScrollIndicator
+            contentOffset={{ y: initialScrollY }}
+          >
+            <View style={{ paddingBottom: rowHeight * 2 + 24 }}>
             {timeRows.map((rowBase, rowIdx) => {
               const isHighlightedTime = rowBase.getHours() % 4 === 0 && rowBase.getMinutes() === 0;
               
@@ -345,7 +356,8 @@ export default function AvailabilityGrid({
                 </View>
               );
             })}
-          </View>
+            </View>
+          </ScrollView>
         </View>
       </ScrollView>
     </View>

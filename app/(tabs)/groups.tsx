@@ -807,6 +807,7 @@ export default function Groups() {
               scrollEnabled={false}
               renderItem={({ item }) => (
                 <Pressable
+                  onPress={() => router.push(`/(tabs)/organizations/${item.id}`)}
                   style={{
                     backgroundColor: c.card,
                     marginHorizontal: 16,
@@ -830,7 +831,7 @@ export default function Groups() {
                     </View>
                   </View>
                   <Pressable
-                    onPress={() => handleFollow(item.id)}
+                    onPress={(e) => { e.stopPropagation(); handleFollow(item.id); }}
                     style={{
                       backgroundColor: 'transparent',
                       paddingHorizontal: 12,
@@ -892,6 +893,7 @@ export default function Groups() {
               const isFollowingOrg = following.some(f => f.id === item.id);
               return (
                 <Pressable
+                  onPress={() => router.push(`/(tabs)/organizations/${item.id}`)}
                   style={{
                     backgroundColor: c.card,
                     marginHorizontal: 16,
@@ -937,7 +939,7 @@ export default function Groups() {
                     </View>
                   </View>
                   <Pressable
-                    onPress={() => handleFollow(item.id)}
+                    onPress={(e) => { e.stopPropagation(); handleFollow(item.id); }}
                     style={{
                       backgroundColor: isFollowingOrg ? 'transparent' : c.primary,
                       paddingHorizontal: 14,

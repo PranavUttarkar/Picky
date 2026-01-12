@@ -15,6 +15,33 @@ import {
   type OrganizationSize,
 } from '@/services/organizations';
 
+// Organization tags for better discoverability
+const ORGANIZATION_TAGS = [
+  'Campus Events',
+  'Networking',
+  'Social',
+  'Professional Development',
+  'Community Service',
+  'Workshops',
+  'Conferences',
+  'Sports',
+  'Arts & Culture',
+  'Tech',
+  'Science',
+  'Health & Wellness',
+  'Environment',
+  'Diversity & Inclusion',
+  'Career Fair',
+  'Music',
+  'Dance',
+  'Theater',
+  'Gaming',
+  'Volunteer',
+];
+
+// Maximum number of tags an org can select
+const MAX_TAGS = 10;
+
 export default function OrgSetup() {
   const c = useThemeColors();
   const [category, setCategory] = useState<OrganizationCategory>('Student Club');
@@ -22,6 +49,9 @@ export default function OrgSetup() {
   const [website, setWebsite] = useState('');
   const [contactEmail, setContactEmail] = useState('');
   const [memberCount, setMemberCount] = useState<OrganizationSize | null>(null);
+  const [foundedYear, setFoundedYear] = useState('');
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [customTagInput, setCustomTagInput] = useState('');
   const [loading, setLoading] = useState(false);
 
   // Check if user is authenticated and is an organization
@@ -48,24 +78,64 @@ export default function OrgSetup() {
     checkAuth();
   }, []);
 
+  const toggleTag = (tag: string) => {
+    if (selectedTags.includes(tag)) {
+      setSelectedTags(selectedTags.filter(t => t !== tag));
+    } else if (selectedTags.length < MAX_TAGS) {
+      setSelectedTags([...selectedTags, tag]);
+    }
+  };
+
+  const addCustomTag = () => {
+    const tag = customTagInput.trim();
+    if (tag && !selectedTags.includes(tag) && selectedTags.length < MAX_TAGS) {
+      setSelectedTags([...selectedTags, tag]);
+      setCustomTagInput('');
+    }
+  };
+
+  const removeTag = (tag: string) => {
+    setSelectedTags(selectedTags.filter(t => t !== tag));
+  };
+
   const handleContinue = async () => {
+    // Validate required fields
     if (!category) {
-      Alert.alert('Error', 'Please select a category for your organization');
+      Alert.alert('Required', 'Please select a category for your organization');
+      return;
+    }
+    if (!description.trim()) {
+      Alert.alert('Required', 'Please add a description for your organization');
       return;
     }
 
+    // Save everything
     setLoading(true);
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      // Save organization profile
       await upsertOrganizationProfile({
         category,
         description: description.trim() || null,
         website: website.trim() || null,
         contact_email: contactEmail.trim() || null,
         member_count: memberCount,
+        founded_year: foundedYear ? parseInt(foundedYear) : null,
       });
 
-      // Organizations can skip interests or go to a simplified version
-      // For now, redirect to home
+      // Save organization tags
+      if (selectedTags.length > 0) {
+        await supabase
+          .from('organization_tags')
+          .upsert({
+            user_id: user.id,
+            tags: selectedTags,
+          }, { onConflict: 'user_id' });
+      }
+
+      // Complete onboarding
       router.replace('/(tabs)/home');
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to save organization profile');
@@ -73,6 +143,401 @@ export default function OrgSetup() {
       setLoading(false);
     }
   };
+
+  const handleBack = () => {
+    router.back();
+  };
+
+  const renderForm = () => (
+    <View style={{ flex: 1 }}>
+      {/* Header */}
+      <View style={{ alignItems: 'center', marginBottom: Spacing.xl }}>
+        <View style={{
+          backgroundColor: c.primary,
+          borderRadius: BorderRadius.full,
+          padding: Spacing.lg - 4,
+          marginBottom: Spacing.lg - 4,
+        }}>
+          <Ionicons name="business" size={32} color="white" />
+        </View>
+        <Text style={{
+          fontSize: Typography.scale.display.fontSize,
+          lineHeight: Typography.scale.display.lineHeight,
+          fontWeight: Typography.fontWeight.bold,
+          fontFamily: Typography.fontFamily.body,
+          color: c.text,
+          textAlign: 'center',
+          marginBottom: Spacing.sm,
+        }}>
+          Tell us about your org
+        </Text>
+        <Text style={{
+          fontSize: Typography.scale.bodyLarge.fontSize,
+          lineHeight: Typography.scale.bodyLarge.lineHeight,
+          fontFamily: Typography.fontFamily.body,
+          color: c.muted,
+          textAlign: 'center',
+        }}>
+          Help users discover you by providing details
+        </Text>
+      </View>
+
+      {/* Category Selection */}
+      <View style={{ marginBottom: Spacing.lg }}>
+        <Text style={{
+          fontSize: Typography.scale.bodyLarge.fontSize,
+          lineHeight: Typography.scale.bodyLarge.lineHeight,
+          fontFamily: Typography.fontFamily.body,
+          fontWeight: Typography.fontWeight.semibold,
+          color: c.text,
+          marginBottom: Spacing.sm,
+        }}>
+          Category *
+        </Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm }}>
+          {ORGANIZATION_CATEGORIES.map((cat) => (
+            <Pressable
+              key={cat}
+              onPress={() => setCategory(cat)}
+              style={{
+                paddingVertical: Spacing.sm + 2,
+                paddingHorizontal: Spacing.md,
+                borderRadius: BorderRadius.full,
+                backgroundColor: category === cat ? c.primary : c.card,
+                borderWidth: 1,
+                borderColor: category === cat ? c.primary : Colors.light.neutral[300] + '40',
+              }}
+            >
+              <Text style={{
+                color: category === cat ? '#FFFFFF' : c.text,
+                fontSize: Typography.scale.body.fontSize,
+                fontFamily: Typography.fontFamily.body,
+                fontWeight: category === cat ? Typography.fontWeight.semibold : Typography.fontWeight.regular,
+              }}>
+                {cat}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      </View>
+
+      {/* Organization Size */}
+      <View style={{ marginBottom: Spacing.lg }}>
+        <Text style={{
+          fontSize: Typography.scale.bodyLarge.fontSize,
+          lineHeight: Typography.scale.bodyLarge.lineHeight,
+          fontFamily: Typography.fontFamily.body,
+          fontWeight: Typography.fontWeight.semibold,
+          color: c.text,
+          marginBottom: Spacing.sm,
+        }}>
+          Organization Size (optional)
+        </Text>
+        <View style={{ flexDirection: 'row', gap: Spacing.sm }}>
+          {ORGANIZATION_SIZES.map((size) => (
+            <Pressable
+              key={size}
+              onPress={() => setMemberCount(memberCount === size ? null : size)}
+              style={{
+                flex: 1,
+                paddingVertical: Spacing.md,
+                paddingHorizontal: Spacing.sm,
+                borderRadius: BorderRadius.md,
+                backgroundColor: memberCount === size ? c.primary : c.card,
+                borderWidth: 1,
+                borderColor: memberCount === size ? c.primary : Colors.light.neutral[300] + '40',
+                alignItems: 'center',
+              }}
+            >
+              <Text style={{
+                color: memberCount === size ? '#FFFFFF' : c.text,
+                fontSize: Typography.scale.body.fontSize,
+                fontFamily: Typography.fontFamily.body,
+                fontWeight: memberCount === size ? Typography.fontWeight.semibold : Typography.fontWeight.regular,
+              }}>
+                {size}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      </View>
+
+      {/* Description */}
+      <View style={{ marginBottom: Spacing.lg }}>
+        <Text style={{
+          fontSize: Typography.scale.bodyLarge.fontSize,
+          lineHeight: Typography.scale.bodyLarge.lineHeight,
+          fontFamily: Typography.fontFamily.body,
+          fontWeight: Typography.fontWeight.semibold,
+          color: c.text,
+          marginBottom: Spacing.sm,
+        }}>
+          About Your Organization *
+        </Text>
+        <TextInput
+          value={description}
+          onChangeText={setDescription}
+          placeholder="Tell users about your organization's mission, activities, and what makes you unique..."
+          placeholderTextColor={c.muted}
+          multiline
+          numberOfLines={5}
+          style={{
+            backgroundColor: c.card,
+            padding: Spacing.md,
+            borderRadius: BorderRadius.md,
+            color: c.text,
+            fontSize: Typography.scale.body.fontSize,
+            fontFamily: Typography.fontFamily.body,
+            minHeight: 140,
+            textAlignVertical: 'top',
+            borderWidth: 1,
+            borderColor: c.card,
+          }}
+        />
+        <Text style={{
+          fontSize: Typography.scale.bodySmall.fontSize,
+          fontFamily: Typography.fontFamily.body,
+          color: c.muted,
+          marginTop: Spacing.xs,
+          textAlign: 'right',
+        }}>
+          {description.length}/500
+        </Text>
+      </View>
+
+      {/* Tags Selection */}
+      <View style={{ marginBottom: Spacing.lg }}>
+        <Text style={{
+          fontSize: Typography.scale.bodyLarge.fontSize,
+          lineHeight: Typography.scale.bodyLarge.lineHeight,
+          fontFamily: Typography.fontFamily.body,
+          fontWeight: Typography.fontWeight.semibold,
+          color: c.text,
+          marginBottom: Spacing.xs,
+        }}>
+          {`Tags (up to ${MAX_TAGS})`}
+        </Text>
+        <Text style={{
+          fontSize: Typography.scale.body.fontSize,
+          fontFamily: Typography.fontFamily.body,
+          color: c.muted,
+          marginBottom: Spacing.sm,
+        }}>
+          Select tags to help users find your events
+        </Text>
+
+        {/* Selected Tags */}
+        {selectedTags.length > 0 && (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: Spacing.sm }}>
+            {selectedTags.map((tag) => (
+              <View key={tag} style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: `${c.primary}20`,
+                borderWidth: 1,
+                borderColor: `${c.primary}40`,
+                paddingHorizontal: 12,
+                paddingVertical: 6,
+                borderRadius: 20,
+                gap: 6,
+              }}>
+                <Text style={{ color: c.primary, fontSize: 13, fontWeight: '600' }}>
+                  {tag}
+                </Text>
+                <Pressable onPress={() => removeTag(tag)} hitSlop={8}>
+                  <Ionicons name="close" size={14} color={c.primary} />
+                </Pressable>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* Tag Options */}
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm }}>
+          {ORGANIZATION_TAGS.filter(t => !selectedTags.includes(t)).map((tag) => (
+            <Pressable
+              key={tag}
+              onPress={() => toggleTag(tag)}
+              disabled={selectedTags.length >= MAX_TAGS}
+              style={{
+                paddingVertical: 6,
+                paddingHorizontal: 12,
+                borderRadius: BorderRadius.full,
+                backgroundColor: c.card,
+                borderWidth: 1,
+                borderColor: Colors.light.neutral[300] + '40',
+                opacity: selectedTags.length >= MAX_TAGS ? 0.5 : 1,
+              }}
+            >
+              <Text style={{
+                color: c.text,
+                fontSize: Typography.scale.bodySmall.fontSize,
+                fontFamily: Typography.fontFamily.body,
+              }}>
+                {tag}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+
+        {/* Custom Tag Input */}
+        <View style={{ flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.md }}>
+          <TextInput
+            value={customTagInput}
+            onChangeText={setCustomTagInput}
+            placeholder="Add custom tag..."
+            placeholderTextColor={c.muted}
+            onSubmitEditing={addCustomTag}
+            style={{
+              flex: 1,
+              backgroundColor: c.card,
+              padding: Spacing.md,
+              borderRadius: BorderRadius.md,
+              color: c.text,
+              fontSize: Typography.scale.body.fontSize,
+              fontFamily: Typography.fontFamily.body,
+            }}
+          />
+          <Pressable
+            onPress={addCustomTag}
+            disabled={!customTagInput.trim() || selectedTags.length >= MAX_TAGS}
+            style={{
+              backgroundColor: customTagInput.trim() && selectedTags.length < MAX_TAGS ? c.primary : c.muted,
+              paddingHorizontal: Spacing.md,
+              borderRadius: BorderRadius.md,
+              justifyContent: 'center',
+            }}
+          >
+            <Ionicons name="add" size={24} color="#fff" />
+          </Pressable>
+        </View>
+      </View>
+      {/* Website */}
+      <View style={{ marginBottom: Spacing.lg }}>
+        <Text style={{
+          fontSize: Typography.scale.bodyLarge.fontSize,
+          lineHeight: Typography.scale.bodyLarge.lineHeight,
+          fontFamily: Typography.fontFamily.body,
+          fontWeight: Typography.fontWeight.semibold,
+          color: c.text,
+          marginBottom: Spacing.sm,
+        }}>
+          Website (optional)
+        </Text>
+        <View style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          backgroundColor: c.card,
+          borderRadius: BorderRadius.md,
+          borderWidth: 1,
+          borderColor: c.card,
+        }}>
+          <View style={{ paddingLeft: Spacing.md }}>
+            <Ionicons name="globe-outline" size={20} color={c.muted} />
+          </View>
+          <TextInput
+            value={website}
+            onChangeText={setWebsite}
+            placeholder="https://yourorganization.com"
+            placeholderTextColor={c.muted}
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="url"
+            style={{
+              flex: 1,
+              padding: Spacing.md,
+              color: c.text,
+              fontSize: Typography.scale.body.fontSize,
+              fontFamily: Typography.fontFamily.body,
+            }}
+          />
+        </View>
+      </View>
+
+      {/* Contact Email */}
+      <View style={{ marginBottom: Spacing.lg }}>
+        <Text style={{
+          fontSize: Typography.scale.bodyLarge.fontSize,
+          lineHeight: Typography.scale.bodyLarge.lineHeight,
+          fontFamily: Typography.fontFamily.body,
+          fontWeight: Typography.fontWeight.semibold,
+          color: c.text,
+          marginBottom: Spacing.sm,
+        }}>
+          Contact Email (optional)
+        </Text>
+        <View style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          backgroundColor: c.card,
+          borderRadius: BorderRadius.md,
+          borderWidth: 1,
+          borderColor: c.card,
+        }}>
+          <View style={{ paddingLeft: Spacing.md }}>
+            <Ionicons name="mail-outline" size={20} color={c.muted} />
+          </View>
+          <TextInput
+            value={contactEmail}
+            onChangeText={setContactEmail}
+            placeholder="contact@yourorganization.com"
+            placeholderTextColor={c.muted}
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="email-address"
+            style={{
+              flex: 1,
+              padding: Spacing.md,
+              color: c.text,
+              fontSize: Typography.scale.body.fontSize,
+              fontFamily: Typography.fontFamily.body,
+            }}
+          />
+        </View>
+      </View>
+
+      {/* Founded Year */}
+      <View style={{ marginBottom: Spacing.lg }}>
+        <Text style={{
+          fontSize: Typography.scale.bodyLarge.fontSize,
+          lineHeight: Typography.scale.bodyLarge.lineHeight,
+          fontFamily: Typography.fontFamily.body,
+          fontWeight: Typography.fontWeight.semibold,
+          color: c.text,
+          marginBottom: Spacing.sm,
+        }}>
+          Founded Year (optional)
+        </Text>
+        <View style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          backgroundColor: c.card,
+          borderRadius: BorderRadius.md,
+          borderWidth: 1,
+          borderColor: c.card,
+        }}>
+          <View style={{ paddingLeft: Spacing.md }}>
+            <Ionicons name="calendar-outline" size={20} color={c.muted} />
+          </View>
+          <TextInput
+            value={foundedYear}
+            onChangeText={(text) => setFoundedYear(text.replace(/[^0-9]/g, '').slice(0, 4))}
+            placeholder="2024"
+            placeholderTextColor={c.muted}
+            keyboardType="number-pad"
+            maxLength={4}
+            style={{
+              flex: 1,
+              padding: Spacing.md,
+              color: c.text,
+              fontSize: Typography.scale.body.fontSize,
+              fontFamily: Typography.fontFamily.body,
+            }}
+          />
+        </View>
+      </View>
+    </View>
+  );
 
   return (
     <GradientBackground>
@@ -91,227 +556,41 @@ export default function OrgSetup() {
             alignSelf: 'center',
             width: '100%',
           }}>
-            {/* Header */}
-            <View style={{ alignItems: 'center', marginBottom: Spacing.xl }}>
-              <View style={{
-                backgroundColor: c.primary,
-                borderRadius: BorderRadius.full,
-                padding: Spacing.lg - 4,
-                marginBottom: Spacing.lg - 4,
-              }}>
-                <Ionicons name="business" size={32} color="white" />
-              </View>
+            {/* Back Button */}
+            <Pressable
+              onPress={handleBack}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                marginBottom: Spacing.md,
+              }}
+            >
+              <Ionicons name="chevron-back" size={24} color={c.text} />
               <Text style={{
-                fontSize: Typography.scale.display.fontSize,
-                lineHeight: Typography.scale.display.lineHeight,
-                fontWeight: Typography.fontWeight.bold,
-                fontFamily: Typography.fontFamily.body,
                 color: c.text,
-                textAlign: 'center',
-                marginBottom: Spacing.sm,
-              }}>
-                Set Up Your Organization
-              </Text>
-              <Text style={{
-                fontSize: Typography.scale.bodyLarge.fontSize,
-                lineHeight: Typography.scale.bodyLarge.lineHeight,
+                fontSize: Typography.scale.body.fontSize,
                 fontFamily: Typography.fontFamily.body,
-                color: c.muted,
-                textAlign: 'center',
+                marginLeft: 4,
               }}>
-                Tell us about your organization so users can discover you
+                Cancel
               </Text>
-            </View>
+            </Pressable>
 
-            {/* Category Selection */}
-            <View style={{ marginBottom: Spacing.lg }}>
-              <Text style={{
-                fontSize: Typography.scale.bodyLarge.fontSize,
-                lineHeight: Typography.scale.bodyLarge.lineHeight,
-                fontFamily: Typography.fontFamily.body,
-                fontWeight: Typography.fontWeight.semibold,
-                color: c.text,
-                marginBottom: Spacing.sm,
-              }}>
-                Category *
-              </Text>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm }}>
-                {ORGANIZATION_CATEGORIES.map((cat) => (
-                  <Pressable
-                    key={cat}
-                    onPress={() => setCategory(cat)}
-                    style={{
-                      paddingVertical: Spacing.sm,
-                      paddingHorizontal: Spacing.md,
-                      borderRadius: BorderRadius.full,
-                      backgroundColor: category === cat ? c.primary : c.card,
-                      borderWidth: 1,
-                      borderColor: category === cat ? c.primary : Colors.light.neutral[300] + '40',
-                    }}
-                  >
-                    <Text style={{
-                      color: category === cat ? '#FFFFFF' : c.text,
-                      fontSize: Typography.scale.body.fontSize,
-                      fontFamily: Typography.fontFamily.body,
-                      fontWeight: category === cat ? Typography.fontWeight.semibold : Typography.fontWeight.regular,
-                    }}>
-                      {cat}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-            </View>
-
-            {/* Description */}
-            <View style={{ marginBottom: Spacing.lg }}>
-              <Text style={{
-                fontSize: Typography.scale.bodyLarge.fontSize,
-                lineHeight: Typography.scale.bodyLarge.lineHeight,
-                fontFamily: Typography.fontFamily.body,
-                fontWeight: Typography.fontWeight.semibold,
-                color: c.text,
-                marginBottom: Spacing.sm,
-              }}>
-                Description
-              </Text>
-              <TextInput
-                value={description}
-                onChangeText={setDescription}
-                placeholder="Tell users about your organization..."
-                placeholderTextColor={c.muted}
-                multiline
-                numberOfLines={4}
-                style={{
-                  backgroundColor: c.card,
-                  padding: Spacing.md,
-                  borderRadius: BorderRadius.md,
-                  color: c.text,
-                  fontSize: Typography.scale.body.fontSize,
-                  fontFamily: Typography.fontFamily.body,
-                  minHeight: 100,
-                  textAlignVertical: 'top',
-                  borderWidth: 1,
-                  borderColor: c.card,
-                }}
-              />
-            </View>
-
-            {/* Organization Size */}
-            <View style={{ marginBottom: Spacing.lg }}>
-              <Text style={{
-                fontSize: Typography.scale.bodyLarge.fontSize,
-                lineHeight: Typography.scale.bodyLarge.lineHeight,
-                fontFamily: Typography.fontFamily.body,
-                fontWeight: Typography.fontWeight.semibold,
-                color: c.text,
-                marginBottom: Spacing.sm,
-              }}>
-                Organization Size
-              </Text>
-              <View style={{ flexDirection: 'row', gap: Spacing.sm }}>
-                {ORGANIZATION_SIZES.map((size) => (
-                  <Pressable
-                    key={size}
-                    onPress={() => setMemberCount(memberCount === size ? null : size)}
-                    style={{
-                      flex: 1,
-                      paddingVertical: Spacing.md,
-                      paddingHorizontal: Spacing.sm,
-                      borderRadius: BorderRadius.md,
-                      backgroundColor: memberCount === size ? c.primary : c.card,
-                      borderWidth: 1,
-                      borderColor: memberCount === size ? c.primary : Colors.light.neutral[300] + '40',
-                      alignItems: 'center',
-                    }}
-                  >
-                    <Text style={{
-                      color: memberCount === size ? '#FFFFFF' : c.text,
-                      fontSize: Typography.scale.body.fontSize,
-                      fontFamily: Typography.fontFamily.body,
-                      fontWeight: memberCount === size ? Typography.fontWeight.semibold : Typography.fontWeight.regular,
-                    }}>
-                      {size}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-            </View>
-
-            {/* Website */}
-            <View style={{ marginBottom: Spacing.lg }}>
-              <Text style={{
-                fontSize: Typography.scale.bodyLarge.fontSize,
-                lineHeight: Typography.scale.bodyLarge.lineHeight,
-                fontFamily: Typography.fontFamily.body,
-                fontWeight: Typography.fontWeight.semibold,
-                color: c.text,
-                marginBottom: Spacing.sm,
-              }}>
-                Website (optional)
-              </Text>
-              <TextInput
-                value={website}
-                onChangeText={setWebsite}
-                placeholder="https://yourorganization.com"
-                placeholderTextColor={c.muted}
-                autoCapitalize="none"
-                autoCorrect={false}
-                keyboardType="url"
-                style={{
-                  backgroundColor: c.card,
-                  padding: Spacing.md,
-                  borderRadius: BorderRadius.md,
-                  color: c.text,
-                  fontSize: Typography.scale.body.fontSize,
-                  fontFamily: Typography.fontFamily.body,
-                  borderWidth: 1,
-                  borderColor: c.card,
-                }}
-              />
-            </View>
-
-            {/* Contact Email */}
-            <View style={{ marginBottom: Spacing.xl }}>
-              <Text style={{
-                fontSize: Typography.scale.bodyLarge.fontSize,
-                lineHeight: Typography.scale.bodyLarge.lineHeight,
-                fontFamily: Typography.fontFamily.body,
-                fontWeight: Typography.fontWeight.semibold,
-                color: c.text,
-                marginBottom: Spacing.sm,
-              }}>
-                Contact Email (optional)
-              </Text>
-              <TextInput
-                value={contactEmail}
-                onChangeText={setContactEmail}
-                placeholder="contact@yourorganization.com"
-                placeholderTextColor={c.muted}
-                autoCapitalize="none"
-                autoCorrect={false}
-                keyboardType="email-address"
-                style={{
-                  backgroundColor: c.card,
-                  padding: Spacing.md,
-                  borderRadius: BorderRadius.md,
-                  color: c.text,
-                  fontSize: Typography.scale.body.fontSize,
-                  fontFamily: Typography.fontFamily.body,
-                  borderWidth: 1,
-                  borderColor: c.card,
-                }}
-              />
-            </View>
+            {/* Form Content */}
+            {renderStep1()}
 
             {/* Continue Button */}
             <Pressable
               onPress={handleContinue}
-              disabled={loading || !category}
+              disabled={loading || !category || !description.trim()}
               style={{
-                backgroundColor: (loading || !category) ? c.muted : c.primary,
+                backgroundColor: (loading || !category || !description.trim()) 
+                  ? c.muted 
+                  : c.primary,
                 paddingVertical: Spacing.md,
                 borderRadius: BorderRadius.md,
                 alignItems: 'center',
+                marginTop: Spacing.lg,
                 marginBottom: Spacing.md,
               }}
             >
@@ -349,4 +628,3 @@ export default function OrgSetup() {
     </GradientBackground>
   );
 }
-

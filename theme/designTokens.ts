@@ -267,7 +267,7 @@ export const Animation = {
 // ============================================================================
 
 export const Gradients = {
-  primary: ['#4F46E5', '#6366F1'] as const,
+  primary: ['#f78e3fff', '#f8b312ff'] as const,
   success: ['#10B981', '#34D399'] as const,
   background: {
     light: ['#F9FAFB', '#F3F4F6'] as const,

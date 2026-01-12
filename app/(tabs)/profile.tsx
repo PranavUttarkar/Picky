@@ -1101,6 +1101,27 @@ export default function Profile() {
             {isOrganization ? (
               <>
                 <ActionButton
+                  title="My Organization Profile"
+                  subtitle="View and edit your public profile"
+                  icon="business"
+                  variant="primary"
+                  onPress={() => {
+                    trackCTA('org_profile_press').catch(() => {});
+                    router.push('/(tabs)/organizer-profile');
+                  }}
+                />
+
+                <ActionButton
+                  title="View Public Profile"
+                  subtitle="See how others view your organization"
+                  icon="eye"
+                  onPress={() => {
+                    trackCTA('org_view_public_press').catch(() => {});
+                    router.push(`/(tabs)/organizations/${userProfile?.id}`);
+                  }}
+                />
+
+                <ActionButton
                   title="Manage Events"
                   subtitle="Create, edit, and manage your events"
                   icon="calendar"
@@ -1111,22 +1132,12 @@ export default function Profile() {
                 />
                 
                 <ActionButton
-                  title="Edit Organization Profile"
-                  subtitle="Update your description, category, and details"
-                  icon="business"
-                  onPress={() => {
-                    trackCTA('org_edit_profile_press').catch(() => {});
-                    router.push('/onboarding/org-setup');
-                  }}
-                />
-                
-                <ActionButton
                   title="View Followers"
                   subtitle={`${followerCount} users following your organization`}
                   icon="people"
                   onPress={() => {
                     trackCTA('org_view_followers_press').catch(() => {});
-                    router.push('/(tabs)/groups?tab=following');
+                    router.push('/(tabs)/groups?tab=organizations');
                   }}
                 />
               </>

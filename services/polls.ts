@@ -445,3 +445,21 @@ export async function deletePoll(pollId: number): Promise<void> {
   const { error } = await supabase.rpc('delete_poll', { p_poll_id: pollId });
   if (error) throw error;
 }
+
+/**
+ * Get the latest active poll for a group (used for late joiners)
+ */
+export async function getLatestGroupPoll(groupId: number): Promise<{ pollId: number; title?: string } | null> {
+  const { data, error } = await supabase
+    .from('polls')
+    .select('id, title')
+    .eq('group_id', groupId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  
+  if (error) throw error;
+  if (!data) return null;
+  
+  return { pollId: data.id, title: data.title };
+}

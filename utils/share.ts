@@ -51,3 +51,27 @@ export async function shareGroup(group: { name?: string | null; invite_code: str
   }
   return { appUrl, webUrl };
 }
+
+// Quick Pick sessions: build and share invite links with quick pick flag
+export function buildQuickPickShareLinks(inviteCode: string) {
+  const path = `/invite?code=${encodeURIComponent(inviteCode)}&quickPick=true`;
+  const appUrl = Linking.createURL(path);
+  const webUrl = `${WEB_BASE}${path}`;
+  return { appUrl, webUrl };
+}
+
+export async function shareQuickPickSession(session: { name?: string | null; inviteCode: string }, inviterName?: string) {
+  const who = inviterName ? `${inviterName} invited you` : "You're invited";
+  const title = `🤝 ${who} to make a quick decision!`;
+  const { appUrl, webUrl } = buildQuickPickShareLinks(session.inviteCode);
+  const link = Platform.select({ web: webUrl, default: appUrl });
+  
+  const message = `${title}\n\nJoin "${session.name || 'Quick Pick'}" on Picky - find the perfect plan in 60 seconds!\n\n${link}`;
+  
+  try {
+    await Share.share({ message, url: appUrl, title });
+  } catch (e) {
+    console.warn('Share failed', e);
+  }
+  return { appUrl, webUrl };
+}
