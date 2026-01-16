@@ -35,6 +35,8 @@ import {
   ORGANIZATION_CATEGORIES,
 } from '@/services/organizations';
 import { getFollowersCount } from '@/services/following';
+import { getEventReports, resolveReport } from '@/services/reports';
+import type { EventReportWithDetails } from '@/types/models';
 
 // Modern Tag Component
 const ModernTag = memo(function ModernTag({ 
@@ -519,6 +521,12 @@ export default function Profile() {
   // Username Edit State
   const [showUsernameEdit, setShowUsernameEdit] = useState(false);
   
+  // Reports Modal State
+  const [showReportsModal, setShowReportsModal] = useState(false);
+  const [reports, setReports] = useState<EventReportWithDetails[]>([]);
+  const [loadingReports, setLoadingReports] = useState(false);
+  const [reportsFilter, setReportsFilter] = useState<'pending' | 'reviewed' | 'resolved' | 'all'>('pending');
+  
   // Interests State
   const [tags, setTags] = useState<string[]>([]);
   const [newTagInput, setNewTagInput] = useState('');
@@ -776,6 +784,27 @@ export default function Profile() {
     const timer = setTimeout(() => saveInterests(true), 1000);
     return () => clearTimeout(timer);
   }, [foodTags, loadingFoodInterests]);
+
+  // Load reports when modal opens
+  const loadReports = async (status: 'pending' | 'reviewed' | 'resolved' | null = null) => {
+    if (!isAdmin) return;
+    setLoadingReports(true);
+    try {
+      const reportsData = await getEventReports(status);
+      setReports(reportsData);
+    } catch (error) {
+      console.error('Error loading reports:', error);
+      Alert.alert('Error', 'Failed to load reports');
+    } finally {
+      setLoadingReports(false);
+    }
+  };
+
+  useEffect(() => {
+    if (showReportsModal && isAdmin) {
+      loadReports(reportsFilter === 'all' ? null : reportsFilter);
+    }
+  }, [showReportsModal, isAdmin]);
 
   if (loadingProfile) {
     return (
@@ -1186,12 +1215,20 @@ export default function Profile() {
             />
             
             {isAdmin && (
-              <ActionButton
-                title="Admin Analytics"
-                subtitle="View app analytics and insights"
-                icon="stats-chart"
-                onPress={() => router.push('/admin/analytics')}
-              />
+              <>
+                <ActionButton
+                  title="Event Reports"
+                  subtitle="Review and manage reported events"
+                  icon="flag"
+                  onPress={() => setShowReportsModal(true)}
+                />
+                <ActionButton
+                  title="Admin Analytics"
+                  subtitle="View app analytics and insights"
+                  icon="stats-chart"
+                  onPress={() => router.push('/admin/analytics')}
+                />
+              </>
             )}
           </View>
 
@@ -1527,6 +1564,257 @@ export default function Profile() {
             canEditUsername={canEditUsername}
             nextAllowedDate={nextAllowedDate}
           />
+
+          {/* Reports Modal */}
+          {isAdmin && (
+            <Modal
+              visible={showReportsModal}
+              transparent
+              animationType="slide"
+              onRequestClose={() => setShowReportsModal(false)}
+            >
+              <View style={{
+                flex: 1,
+                backgroundColor: 'rgba(0,0,0,0.5)',
+              }}>
+                <View style={{
+                  flex: 1,
+                  backgroundColor: c.background,
+                  marginTop: 60,
+                  borderTopLeftRadius: 20,
+                  borderTopRightRadius: 20,
+                }}>
+                  {/* Header */}
+                  <View style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: 16,
+                    borderBottomWidth: 1,
+                    borderBottomColor: c.muted + '30',
+                  }}>
+                    <Text style={{ color: c.text, fontSize: 20, fontWeight: '700' }}>
+                      Event Reports
+                    </Text>
+                    <Pressable
+                      onPress={() => setShowReportsModal(false)}
+                      style={{ padding: 4 }}
+                    >
+                      <Ionicons name="close" size={24} color={c.text} />
+                    </Pressable>
+                  </View>
+
+                  {/* Filter Tabs */}
+                  <View style={{
+                    flexDirection: 'row',
+                    paddingHorizontal: 16,
+                    paddingVertical: 12,
+                    borderBottomWidth: 1,
+                    borderBottomColor: c.muted + '20',
+                    gap: 8,
+                  }}>
+                    {(['pending', 'reviewed', 'resolved', 'all'] as const).map((filter) => (
+                      <Pressable
+                        key={filter}
+                        onPress={() => {
+                          setReportsFilter(filter);
+                          loadReports(filter === 'all' ? null : filter);
+                        }}
+                        style={{
+                          paddingHorizontal: 12,
+                          paddingVertical: 6,
+                          borderRadius: 16,
+                          backgroundColor: reportsFilter === filter ? c.primary : c.card,
+                        }}
+                      >
+                        <Text style={{
+                          color: reportsFilter === filter ? '#000' : c.text,
+                          fontSize: 13,
+                          fontWeight: '600',
+                          textTransform: 'capitalize',
+                        }}>
+                          {filter}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+
+                  {/* Reports List */}
+                  <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16 }}>
+                    {loadingReports ? (
+                      <View style={{ alignItems: 'center', padding: 32 }}>
+                        <ActivityIndicator size="large" color={c.primary} />
+                        <Text style={{ color: c.muted, marginTop: 12 }}>Loading reports...</Text>
+                      </View>
+                    ) : reports.length === 0 ? (
+                      <View style={{ alignItems: 'center', padding: 32 }}>
+                        <Ionicons name="checkmark-circle-outline" size={48} color={c.muted} />
+                        <Text style={{ color: c.muted, marginTop: 12, fontSize: 16 }}>
+                          No {reportsFilter === 'all' ? '' : reportsFilter} reports found
+                        </Text>
+                      </View>
+                    ) : (
+                      reports.map((report) => (
+                        <View
+                          key={report.id}
+                          style={{
+                            backgroundColor: c.card,
+                            borderRadius: 12,
+                            padding: 16,
+                            marginBottom: 12,
+                            borderLeftWidth: 4,
+                            borderLeftColor:
+                              report.status === 'pending' ? '#f59e0b' :
+                              report.status === 'reviewed' ? '#6366f1' : '#10b981',
+                          }}
+                        >
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+                            <View style={{ flex: 1 }}>
+                              <Text style={{ color: c.text, fontSize: 16, fontWeight: '700', marginBottom: 4 }}>
+                                {report.event_title}
+                              </Text>
+                              <Text style={{ color: c.muted, fontSize: 12 }}>
+                                Reported by {report.reporter_display_name || report.reporter_username || 'Unknown'}
+                                {' • '}
+                                {dayjs(report.created_at).format('MMM D, YYYY h:mm A')}
+                              </Text>
+                            </View>
+                            <View style={{
+                              backgroundColor:
+                                report.status === 'pending' ? '#f59e0b20' :
+                                report.status === 'reviewed' ? '#6366f120' : '#10b98120',
+                              paddingHorizontal: 8,
+                              paddingVertical: 4,
+                              borderRadius: 12,
+                            }}>
+                              <Text style={{
+                                color:
+                                  report.status === 'pending' ? '#f59e0b' :
+                                  report.status === 'reviewed' ? '#6366f1' : '#10b981',
+                                fontSize: 12,
+                                fontWeight: '600',
+                                textTransform: 'capitalize',
+                              }}>
+                                {report.status}
+                              </Text>
+                            </View>
+                          </View>
+
+                          <View style={{ marginBottom: 8 }}>
+                            <Text style={{ color: c.muted, fontSize: 13, marginBottom: 4 }}>
+                              Reason:
+                            </Text>
+                            <Text style={{ color: c.text, fontSize: 14, fontWeight: '600', textTransform: 'capitalize' }}>
+                              {report.reason}
+                            </Text>
+                          </View>
+
+                          {report.description && (
+                            <View style={{ marginBottom: 8 }}>
+                              <Text style={{ color: c.muted, fontSize: 13, marginBottom: 4 }}>
+                                Description:
+                              </Text>
+                              <Text style={{ color: c.text, fontSize: 14, lineHeight: 20 }}>
+                                {report.description}
+                              </Text>
+                            </View>
+                          )}
+
+                          {report.creator_display_name || report.creator_username ? (
+                            <View style={{ marginBottom: 12 }}>
+                              <Text style={{ color: c.muted, fontSize: 13, marginBottom: 4 }}>
+                                Event Creator:
+                              </Text>
+                              <Text style={{ color: c.text, fontSize: 14 }}>
+                                {report.creator_display_name || report.creator_username}
+                              </Text>
+                            </View>
+                          ) : null}
+
+                          <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                            <Pressable
+                              onPress={() => router.push(`/events/${report.event_id}`)}
+                              style={{
+                                flex: 1,
+                                backgroundColor: c.primary,
+                                paddingVertical: 10,
+                                borderRadius: 8,
+                                alignItems: 'center',
+                              }}
+                            >
+                              <Text style={{ color: '#000', fontSize: 14, fontWeight: '600' }}>
+                                View Event
+                              </Text>
+                            </Pressable>
+                            {report.status === 'pending' && (
+                              <>
+                                <Pressable
+                                  onPress={async () => {
+                                    try {
+                                      await resolveReport(report.id, 'reviewed');
+                                      Alert.alert('Success', 'Report marked as reviewed');
+                                      loadReports(reportsFilter === 'all' ? null : reportsFilter);
+                                    } catch (error: any) {
+                                      Alert.alert('Error', error.message || 'Failed to update report');
+                                    }
+                                  }}
+                                  style={{
+                                    flex: 1,
+                                    backgroundColor: '#6366f1',
+                                    paddingVertical: 10,
+                                    borderRadius: 8,
+                                    alignItems: 'center',
+                                  }}
+                                >
+                                  <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>
+                                    Mark Reviewed
+                                  </Text>
+                                </Pressable>
+                                <Pressable
+                                  onPress={async () => {
+                                    Alert.alert(
+                                      'Resolve Report',
+                                      'Mark this report as resolved?',
+                                      [
+                                        { text: 'Cancel', style: 'cancel' },
+                                        {
+                                          text: 'Resolve',
+                                          onPress: async () => {
+                                            try {
+                                              await resolveReport(report.id, 'resolved');
+                                              Alert.alert('Success', 'Report marked as resolved');
+                                              loadReports(reportsFilter === 'all' ? null : reportsFilter);
+                                            } catch (error: any) {
+                                              Alert.alert('Error', error.message || 'Failed to update report');
+                                            }
+                                          },
+                                        },
+                                      ]
+                                    );
+                                  }}
+                                  style={{
+                                    flex: 1,
+                                    backgroundColor: '#10b981',
+                                    paddingVertical: 10,
+                                    borderRadius: 8,
+                                    alignItems: 'center',
+                                  }}
+                                >
+                                  <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>
+                                    Resolve
+                                  </Text>
+                                </Pressable>
+                              </>
+                            )}
+                          </View>
+                        </View>
+                      ))
+                    )}
+                  </ScrollView>
+                </View>
+              </View>
+            </Modal>
+          )}
         </ScrollView>
       </AnimatedPage>
     </GradientBackground>

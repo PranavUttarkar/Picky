@@ -655,7 +655,7 @@ export default function HomeTab() {
           {/* Footer with Privacy Policy link */}
           <View style={{ paddingHorizontal: Spacing.md, marginTop: Spacing.xl, marginBottom: Spacing.lg, alignItems: 'center' }}>
             <Pressable
-              onPress={() => router.push('/privacy')}
+              onPress={() => Linking.openURL('https://usepicky.app/privacy')}
               style={({ pressed }) => ({
                 opacity: pressed ? 0.6 : 1,
               })}

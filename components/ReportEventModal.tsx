@@ -1,45 +1,65 @@
-import React, { useState } from 'react';
-import { View, Text, Modal, Pressable, TextInput, Alert, ActivityIndicator } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { useState } from 'react';
+import {
+  View,
+  Text,
+  Pressable,
+  Modal,
+  TextInput,
+  ScrollView,
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+} from 'react-native';
 import { useThemeColors } from '@/theme/ThemeProvider';
+import { Ionicons } from '@expo/vector-icons';
 import { reportEvent } from '@/services/reports';
 import type { ReportReason } from '@/types/models';
-import HeaderSpacer from '@/components/HeaderSpacer';
-import { BlurView } from 'expo-blur';
-import { useColorScheme } from 'react-native';
 
 interface ReportEventModalProps {
   visible: boolean;
+  onClose: () => void;
   eventId: number;
   eventTitle: string;
-  onClose: () => void;
-  onSuccess?: () => void;
 }
 
-const REPORT_REASONS: { value: ReportReason; label: string }[] = [
-  { value: 'inappropriate', label: 'Inappropriate Content' },
-  { value: 'spam', label: 'Spam' },
-  { value: 'misinformation', label: 'Misinformation' },
-  { value: 'other', label: 'Other' },
+const REPORT_REASONS: { value: ReportReason; label: string; description: string }[] = [
+  {
+    value: 'inappropriate',
+    label: 'Inappropriate Content',
+    description: 'Contains offensive, harmful, or inappropriate material',
+  },
+  {
+    value: 'spam',
+    label: 'Spam',
+    description: 'Promotional content or repeated posts',
+  },
+  {
+    value: 'misinformation',
+    label: 'Misinformation',
+    description: 'Contains false or misleading information',
+  },
+  {
+    value: 'other',
+    label: 'Other',
+    description: 'Something else that violates our guidelines',
+  },
 ];
 
 export default function ReportEventModal({
   visible,
+  onClose,
   eventId,
   eventTitle,
-  onClose,
-  onSuccess,
 }: ReportEventModalProps) {
   const c = useThemeColors();
-  const scheme = useColorScheme();
   const [selectedReason, setSelectedReason] = useState<ReportReason | null>(null);
   const [description, setDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async () => {
     if (!selectedReason) {
-      Alert.alert('Required', 'Please select a reason for reporting this event');
+      Alert.alert('Required', 'Please select a reason for reporting this event.');
       return;
     }
 
@@ -47,16 +67,11 @@ export default function ReportEventModal({
     try {
       await reportEvent(eventId, selectedReason, description.trim() || null);
       Alert.alert('Report Submitted', 'Thank you for your report. We will review it shortly.', [
-        {
-          text: 'OK',
-          onPress: () => {
-            setSelectedReason(null);
-            setDescription('');
-            onClose();
-            onSuccess?.();
-          },
-        },
+        { text: 'OK', onPress: onClose },
       ]);
+      // Reset form
+      setSelectedReason(null);
+      setDescription('');
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to submit report. Please try again.');
     } finally {
@@ -65,119 +80,202 @@ export default function ReportEventModal({
   };
 
   const handleClose = () => {
-    if (!submitting) {
-      setSelectedReason(null);
-      setDescription('');
-      onClose();
-    }
+    if (submitting) return;
+    setSelectedReason(null);
+    setDescription('');
+    onClose();
   };
 
   return (
-    <Modal visible={visible} animationType="slide" onRequestClose={handleClose} transparent>
-      <SafeAreaView edges={['bottom']} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' }}>
-        <HeaderSpacer />
-        <Pressable style={{ flex: 1 }} onPress={handleClose}>
-          <View style={{ flex: 1 }} />
-        </Pressable>
-        <BlurView intensity={30} tint={scheme === 'dark' ? 'dark' : 'light'}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={handleClose}
+    >
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{
+          flex: 1,
+          backgroundColor: 'rgba(0,0,0,0.5)',
+          justifyContent: 'flex-end',
+        }}
+      >
+        <View
+          style={{
+            backgroundColor: c.background,
+            borderTopLeftRadius: 20,
+            borderTopRightRadius: 20,
+            maxHeight: '90%',
+            paddingBottom: Platform.OS === 'ios' ? 34 : 16,
+          }}
+        >
+          {/* Header */}
           <View
             style={{
-              backgroundColor: c.card,
-              borderTopLeftRadius: 20,
-              borderTopRightRadius: 20,
-              padding: 20,
-              maxHeight: '90%',
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: 16,
+              borderBottomWidth: 1,
+              borderBottomColor: c.muted + '30',
             }}
           >
-            {/* Header */}
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <Text style={{ color: c.text, fontSize: 20, fontWeight: '800' }}>Report Event</Text>
-              <Pressable onPress={handleClose} disabled={submitting} style={{ padding: 4 }}>
-                <Ionicons name="close" size={24} color={c.text} />
-              </Pressable>
-            </View>
+            <Text style={{ color: c.text, fontSize: 20, fontWeight: '700' }}>
+              Report Event
+            </Text>
+            <Pressable onPress={handleClose} disabled={submitting} style={{ padding: 4 }}>
+              <Ionicons name="close" size={24} color={c.text} />
+            </Pressable>
+          </View>
 
-            {/* Event Title */}
-            <Text style={{ color: c.muted, fontSize: 14, marginBottom: 4 }}>Event:</Text>
-            <Text style={{ color: c.text, fontSize: 16, fontWeight: '600', marginBottom: 20 }}>{eventTitle}</Text>
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={{ padding: 16 }}
+            keyboardShouldPersistTaps="handled"
+          >
+            {/* Event Info */}
+            <View
+              style={{
+                backgroundColor: c.card,
+                padding: 12,
+                borderRadius: 12,
+                marginBottom: 20,
+              }}
+            >
+              <Text style={{ color: c.muted, fontSize: 13, marginBottom: 4 }}>
+                Reporting:
+              </Text>
+              <Text style={{ color: c.text, fontSize: 16, fontWeight: '600' }}>
+                {eventTitle}
+              </Text>
+            </View>
 
             {/* Reason Selection */}
-            <Text style={{ color: c.text, fontSize: 16, fontWeight: '600', marginBottom: 12 }}>Reason *</Text>
-            <View style={{ gap: 8, marginBottom: 20 }}>
-              {REPORT_REASONS.map((reason) => (
-                <Pressable
-                  key={reason.value}
-                  onPress={() => setSelectedReason(reason.value)}
-                  disabled={submitting}
+            <Text style={{ color: c.text, fontSize: 16, fontWeight: '600', marginBottom: 12 }}>
+              Why are you reporting this event?
+            </Text>
+
+            {REPORT_REASONS.map((reason) => (
+              <Pressable
+                key={reason.value}
+                onPress={() => setSelectedReason(reason.value)}
+                disabled={submitting}
+                style={{
+                  backgroundColor: c.card,
+                  padding: 16,
+                  borderRadius: 12,
+                  marginBottom: 12,
+                  borderWidth: 2,
+                  borderColor:
+                    selectedReason === reason.value ? c.primary : 'transparent',
+                }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                  <View
+                    style={{
+                      width: 20,
+                      height: 20,
+                      borderRadius: 10,
+                      borderWidth: 2,
+                      borderColor: selectedReason === reason.value ? c.primary : c.muted,
+                      backgroundColor:
+                        selectedReason === reason.value ? c.primary : 'transparent',
+                      marginRight: 12,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    {selectedReason === reason.value && (
+                      <Ionicons name="checkmark" size={12} color="#000" />
+                    )}
+                  </View>
+                  <Text style={{ color: c.text, fontSize: 16, fontWeight: '600', flex: 1 }}>
+                    {reason.label}
+                  </Text>
+                </View>
+                <Text
                   style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    padding: 12,
-                    borderRadius: 12,
-                    backgroundColor: selectedReason === reason.value ? c.primary + '20' : '#00000010',
-                    borderWidth: 1,
-                    borderColor: selectedReason === reason.value ? c.primary : 'transparent',
+                    color: c.muted,
+                    fontSize: 13,
+                    marginLeft: 32,
+                    lineHeight: 18,
                   }}
                 >
-                  <Ionicons
-                    name={selectedReason === reason.value ? 'radio-button-on' : 'radio-button-off'}
-                    size={20}
-                    color={selectedReason === reason.value ? c.primary : c.muted}
-                  />
-                  <Text style={{ color: c.text, marginLeft: 12, fontSize: 15 }}>{reason.label}</Text>
-                </Pressable>
-              ))}
-            </View>
+                  {reason.description}
+                </Text>
+              </Pressable>
+            ))}
 
-            {/* Description */}
-            <Text style={{ color: c.text, fontSize: 16, fontWeight: '600', marginBottom: 12 }}>Additional Details (Optional)</Text>
+            {/* Additional Details */}
+            <Text style={{ color: c.text, fontSize: 16, fontWeight: '600', marginTop: 8, marginBottom: 12 }}>
+              Additional Details (Optional)
+            </Text>
             <TextInput
               value={description}
               onChangeText={setDescription}
-              placeholder="Provide any additional information..."
+              placeholder="Provide any additional context that might help us review this report..."
               placeholderTextColor={c.muted}
               multiline
               numberOfLines={4}
               editable={!submitting}
               style={{
-                color: c.text,
-                backgroundColor: '#00000010',
+                backgroundColor: c.card,
                 borderRadius: 12,
-                padding: 12,
+                padding: 16,
+                color: c.text,
+                fontSize: 15,
                 minHeight: 100,
                 textAlignVertical: 'top',
-                fontSize: 15,
-                marginBottom: 20,
+                borderWidth: 1,
+                borderColor: c.muted + '30',
               }}
             />
+          </ScrollView>
 
-            {/* Submit Button */}
+          {/* Footer */}
+          <View
+            style={{
+              padding: 16,
+              borderTopWidth: 1,
+              borderTopColor: c.muted + '30',
+              gap: 12,
+            }}
+          >
             <Pressable
               onPress={handleSubmit}
-              disabled={submitting || !selectedReason}
+              disabled={!selectedReason || submitting}
               style={{
-                backgroundColor: submitting || !selectedReason ? c.muted + '40' : c.primary,
-                paddingVertical: 14,
+                backgroundColor: selectedReason && !submitting ? '#ef4444' : c.muted,
+                paddingVertical: 16,
                 borderRadius: 12,
                 alignItems: 'center',
                 justifyContent: 'center',
-                flexDirection: 'row',
-                gap: 8,
+                opacity: selectedReason && !submitting ? 1 : 0.6,
               }}
             >
               {submitting ? (
-                <>
-                  <ActivityIndicator color="#000" size="small" />
-                  <Text style={{ color: '#000', fontWeight: '700', fontSize: 16 }}>Submitting...</Text>
-                </>
+                <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={{ color: '#000', fontWeight: '700', fontSize: 16 }}>Submit Report</Text>
+                <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>
+                  Submit Report
+                </Text>
               )}
             </Pressable>
+            <Pressable
+              onPress={handleClose}
+              disabled={submitting}
+              style={{
+                paddingVertical: 12,
+                alignItems: 'center',
+                opacity: submitting ? 0.5 : 1,
+              }}
+            >
+              <Text style={{ color: c.muted, fontSize: 15 }}>Cancel</Text>
+            </Pressable>
           </View>
-        </BlurView>
-      </SafeAreaView>
+        </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
-

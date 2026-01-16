@@ -28,6 +28,7 @@ import {
   type EventStats,
 } from '@/services/organizer';
 import { deleteEventDirect } from '@/services/events';
+import ReportEventModal from '@/components/ReportEventModal';
 
 export default function EventDetails() {
   const c = useThemeColors();
@@ -45,6 +46,7 @@ export default function EventDetails() {
   const [actionLoading, setActionLoading] = useState(false);
   const [showTicketModal, setShowTicketModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
 
   // Load event and user status
   const loadData = useCallback(async () => {
@@ -759,6 +761,22 @@ export default function EventDetails() {
               <Ionicons name="bar-chart" size={16} color={c.text} />
               <Text style={{ color: c.text, fontWeight: '700' }}>Start a poll</Text>
             </Pressable>
+            {!canDelete && (
+              <Pressable
+                onPress={() => setShowReportModal(true)}
+                style={{ 
+                  backgroundColor: '#00000030', 
+                  padding: 12, 
+                  borderRadius: 12,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                }}
+              >
+                <Ionicons name="flag-outline" size={16} color={c.text} />
+                <Text style={{ color: c.text, fontWeight: '700' }}>Report</Text>
+              </Pressable>
+            )}
           </View>
         </View>
       </ScrollView>
@@ -863,6 +881,14 @@ export default function EventDetails() {
           </View>
         </View>
       </Modal>
+
+      {/* Report Event Modal */}
+      <ReportEventModal
+        visible={showReportModal}
+        onClose={() => setShowReportModal(false)}
+        eventId={eventId}
+        eventTitle={event.title}
+      />
     </SafeAreaView>
   );
 }
