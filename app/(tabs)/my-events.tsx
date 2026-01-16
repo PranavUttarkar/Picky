@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback, memo } from 'react';
 import {
   View,
   Text,
@@ -12,8 +12,9 @@ import {
   ScrollView,
   TextInput,
   Switch,
+  Image,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import HeaderSpacer from '@/components/HeaderSpacer';
 import FloatingAddButton from '@/components/FloatingAddButton';
 import { useTheme, useThemeColors } from '@/theme/ThemeProvider';
@@ -28,9 +29,10 @@ import dayjs from 'dayjs';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { BlurView } from 'expo-blur';
 import { ThreeDButton } from '@/components/ThreeD';
-import { updateEvent, deleteEventDirect, createEvent } from '@/services/events';
-import LocationPicker from '@/components/LocationPicker';
+import { updateEvent, deleteEventDirect } from '@/services/events';
 import { Ionicons } from '@expo/vector-icons';
+import CreateEventModal from '@/components/CreateEventModal';
+import LocationPicker from '@/components/LocationPicker';
 
 export default function MyEvents() {
   const c = useThemeColors();
@@ -94,7 +96,7 @@ export default function MyEvents() {
     </GradientBackground>
   );
 
-  // Edit modal state
+  // Edit modal state - keeping for editing existing events
   const [editOpen, setEditOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [mTitle, setMTitle] = useState('');
@@ -139,25 +141,11 @@ export default function MyEvents() {
     setEditOpen(true);
   };
 
+  // Add Event Modal state (new create event functionality)
+  const [addEventModalOpen, setAddEventModalOpen] = useState(false);
+
   const openAdd = () => {
-    setEditingId(null);
-    setMTitle('');
-    setMDesc('');
-    setMImage1('');
-    setMImage2('');
-    setMImage3('');
-    setMDateTime(dayjs().add(2, 'day').hour(18).minute(0).second(0).toISOString());
-    setMLocation('');
-    setMLatitude(null);
-    setMLongitude(null);
-    setMTagsCsv('');
-    setMRsvp('');
-    // Organizer fields - defaults
-    setMVisibility('public');
-    setMCapacity('');
-    setMAllowJoinRequests(true);
-    setMRsvpRequired(false);
-    setEditOpen(true);
+    setAddEventModalOpen(true);
   };
 
   const submitEdit = async () => {
@@ -229,30 +217,6 @@ export default function MyEvents() {
             .sort((a, b) => dayjs(a.date_time).valueOf() - dayjs(b.date_time).valueOf()),
         );
         Alert.alert('Updated', 'Your event was updated.');
-      } else {
-        const created = await createEvent({
-          title: titleVal,
-          description: mDesc.trim() || null,
-          image_urls: imageUrls,
-          image_url: imageUrls[0] || null,
-          date_time: dtIso,
-          location: mLocation.trim() || null,
-          latitude: mLatitude,
-          longitude: mLongitude,
-          tags,
-          rsvp_url: mRsvp.trim() || null,
-          visibility: mVisibility,
-          capacity: capacityVal,
-          allow_join_requests: mAllowJoinRequests,
-          rsvp_required: mRsvpRequired,
-        });
-        setEditOpen(false);
-        setItems((prev) =>
-          [...prev, created].sort(
-            (a, b) => dayjs(a.date_time).valueOf() - dayjs(b.date_time).valueOf(),
-          ),
-        );
-        Alert.alert('Created', 'Your event was created.');
       }
     } catch (e: any) {
       Alert.alert('Error', e?.message ?? 'Failed to update event');
@@ -331,7 +295,7 @@ export default function MyEvents() {
             }}
           >
             <Ionicons name="add-circle" size={18} color="#000" />
-            <Text style={{ color: '#000', fontWeight: '800', fontSize: 15 }}>Create</Text>
+            <Text style={{ color: '#000', fontWeight: '600', fontSize: 15 }}>Create</Text>
           </Pressable>
         </View>
         
@@ -435,7 +399,7 @@ export default function MyEvents() {
               style={{
                 color: c.text,
                 fontSize: 20,
-                fontWeight: '800',
+                fontWeight: '600',
                 marginBottom: 8,
                 textAlign: 'center',
               }}
@@ -473,7 +437,7 @@ export default function MyEvents() {
                 }}
               >
                 <Ionicons name="add-circle" size={20} color="#000" />
-                <Text style={{ color: '#000', fontWeight: '800', fontSize: 16 }}>Create Event</Text>
+                <Text style={{ color: '#000', fontWeight: '600', fontSize: 16 }}>Create Event</Text>
               </Pressable>
               <Pressable
                 onPress={() => router.replace('/(tabs)/events')}
@@ -496,6 +460,9 @@ export default function MyEvents() {
       <FloatingAddButton
         onPress={openAdd}
         accessibilityLabel="Add Event"
+        size={isWide ? 80 : 56}
+        right={isWide ? 40 : 20}
+        bottom={90}
       />
       {/* Edit Event Modal */}
       <Modal
@@ -524,7 +491,7 @@ export default function MyEvents() {
               }}
             >
               <View>
-                <Text style={{ color: c.text, fontSize: 22, fontWeight: '800' }}>
+                <Text style={{ color: c.text, fontSize: 22, fontWeight: '600' }}>
                   {editingId ? 'Edit Event' : 'Create Event'}
                 </Text>
                 <Text style={{ color: c.muted, fontSize: 13, marginTop: 2 }}>
@@ -662,7 +629,7 @@ export default function MyEvents() {
               value={mLocation}
               latitude={mLatitude}
               longitude={mLongitude}
-              onLocationChange={(loc, lat, lng) => {
+              onLocationChange={(loc: string, lat: number | null, lng: number | null) => {
                 setMLocation(loc);
                 setMLatitude(lat);
                 setMLongitude(lng);
@@ -823,6 +790,21 @@ export default function MyEvents() {
           </ScrollView>
         </SafeAreaView>
       </Modal>
+
+      {/* Add Event Modal - New Create Event Functionality */}
+      <CreateEventModal
+        visible={addEventModalOpen}
+        onClose={() => setAddEventModalOpen(false)}
+        onSaved={(newEvent) => {
+          if (newEvent) {
+            setItems((prev) =>
+              [...prev, newEvent].sort(
+                (a, b) => dayjs(a.date_time).valueOf() - dayjs(b.date_time).valueOf(),
+              ),
+            );
+          }
+        }}
+      />
     </Container>
   );
 }

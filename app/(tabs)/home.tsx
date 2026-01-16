@@ -526,7 +526,7 @@ export default function HomeTab() {
             <View style={styles.sectionHeader}>
               <Text style={[styles.sectionTitle, { color: c.text }]}>Discover Events</Text>
               <Pressable
-                onPress={() => router.push('/events')}
+                onPress={() => router.push('/(tabs)/discover?mode=events')}
                 style={styles.viewAllButton}
               >
                 <Text style={[styles.viewAllText, { color: c.primary }]}>View All</Text>
@@ -550,7 +550,7 @@ export default function HomeTab() {
                 ))}
                 {showViewAllButton && (
                   <ViewAllCard
-                    onPress={() => router.push('/events')}
+                    onPress={() => router.push('/(tabs)/discover?mode=events')}
                     label="View All"
                   />
                 )}
@@ -569,7 +569,7 @@ export default function HomeTab() {
             <View style={styles.sectionHeader}>
               <Text style={[styles.sectionTitle, { color: c.text }]}>Find Food</Text>
               <Pressable
-                onPress={() => router.push('/food')}
+                onPress={() => router.push('/(tabs)/discover?mode=food')}
                 style={styles.viewAllButton}
               >
                 <Text style={[styles.viewAllText, { color: c.primary }]}>View All</Text>
@@ -593,7 +593,7 @@ export default function HomeTab() {
                 ))}
                 {showViewAllButton && (
                   <ViewAllCard
-                    onPress={() => router.push('/food')}
+                    onPress={() => router.push('/(tabs)/discover?mode=food')}
                     label="View All"
                   />
                 )}
@@ -650,6 +650,30 @@ export default function HomeTab() {
               >
                 Smart Picks. Faster Plans. Greatest Hangouts!
               </Text>
+          </View>
+
+          {/* Footer with Privacy Policy link */}
+          <View style={{ paddingHorizontal: Spacing.md, marginTop: Spacing.xl, marginBottom: Spacing.lg, alignItems: 'center' }}>
+            <Pressable
+              onPress={() => router.push('/privacy')}
+              style={({ pressed }) => ({
+                opacity: pressed ? 0.6 : 1,
+              })}
+            >
+              <Text
+                style={{
+                  color: c.muted,
+                  fontSize: Typography.scale.bodySmall.fontSize,
+                  lineHeight: Typography.scale.bodySmall.lineHeight,
+                  fontFamily: Typography.fontFamily.body,
+                  fontWeight: Typography.fontWeight.regular,
+                  textAlign: 'center',
+                  textDecorationLine: 'underline',
+                }}
+              >
+                Privacy Policy
+              </Text>
+            </Pressable>
           </View>
         </ScrollView>
 

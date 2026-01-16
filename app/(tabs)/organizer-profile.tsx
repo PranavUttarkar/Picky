@@ -36,6 +36,7 @@ import { getFollowersCount } from '@/services/following';
 import type { UserProfile, Event } from '@/types/models';
 import * as ImagePicker from 'expo-image-picker';
 import { updateUserProfile } from '@/services/friends';
+import CreateEventModal from '@/components/CreateEventModal';
 
 // Organization tags
 const ORGANIZATION_TAGS = [
@@ -313,6 +314,7 @@ export default function OrganizerProfile() {
   const [editCategoryVisible, setEditCategoryVisible] = useState(false);
   const [editContactVisible, setEditContactVisible] = useState(false);
   const [editTagsVisible, setEditTagsVisible] = useState(false);
+  const [createEventModalVisible, setCreateEventModalVisible] = useState(false);
 
   // Edit form state
   const [editDescription, setEditDescription] = useState('');
@@ -820,7 +822,7 @@ export default function OrganizerProfile() {
           {/* Quick Actions */}
           <View style={{ marginTop: Spacing.md }}>
             <Pressable
-              onPress={() => router.push('/(tabs)/my-events')}
+              onPress={() => setCreateEventModalVisible(true)}
               style={{
                 backgroundColor: c.primary,
                 borderRadius: BorderRadius.md,
@@ -941,9 +943,25 @@ export default function OrganizerProfile() {
 
       {/* Floating Add Event Button */}
       <FloatingAddButton
-        onPress={() => router.push('/(tabs)/my-events')}
+        onPress={() => setCreateEventModalVisible(true)}
         accessibilityLabel="Create Event"
         size={isWide ? 80 : 56}
+        right={isWide ? 40 : 20}
+        bottom={90}
+      />
+
+      {/* Create Event Modal */}
+      <CreateEventModal
+        visible={createEventModalVisible}
+        onClose={() => setCreateEventModalVisible(false)}
+        onSaved={async () => {
+          // Refresh event count after creating event
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            const events = await getAllOrganizationEvents(user.id, 100);
+            setEventCount(events.length);
+          }
+        }}
       />
 
       {/* Edit About Modal */}

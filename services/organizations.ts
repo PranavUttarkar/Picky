@@ -353,3 +353,17 @@ export async function isOrganizationAccount(): Promise<boolean> {
   return data?.account_type === 'organization';
 }
 
+// Check if organization has Stripe connected
+export async function hasStripeConnected(userId?: string): Promise<boolean> {
+  const targetUserId = userId || (await supabase.auth.getUser()).data.user?.id;
+  if (!targetUserId) return false;
+
+  const { data, error } = await supabase
+    .from('organization_profiles')
+    .select('stripe_connected')
+    .eq('user_id', targetUserId)
+    .maybeSingle();
+
+  if (error) return false;
+  return data?.stripe_connected === true;
+}

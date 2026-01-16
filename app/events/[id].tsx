@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { View, Text, Pressable, Linking, ScrollView, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, Pressable, Linking, ScrollView, Alert, ActivityIndicator, Modal } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import HeaderSpacer from '@/components/HeaderSpacer';
 import EventImages from '@/components/EventImages';
@@ -14,6 +14,8 @@ import { router } from 'expo-router';
 import { shareEvent } from '@/utils/share';
 import { Ionicons } from '@expo/vector-icons';
 import type { Event } from '@/types/models';
+import TicketPurchaseModal from '@/components/TicketPurchaseModal';
+import TicketEventCard from '@/components/TicketEventCard';
 import {
   getUserEventStatus,
   rsvpToEvent,
@@ -25,6 +27,7 @@ import {
   type EventInvite,
   type EventStats,
 } from '@/services/organizer';
+import { deleteEventDirect } from '@/services/events';
 
 export default function EventDetails() {
   const c = useThemeColors();
@@ -34,11 +37,14 @@ export default function EventDetails() {
   
   const [event, setEvent] = useState<Event | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState<boolean>(false);
   const [attendeeStatus, setAttendeeStatus] = useState<EventAttendee | null>(null);
   const [inviteStatus, setInviteStatus] = useState<EventInvite | null>(null);
   const [stats, setStats] = useState<EventStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
+  const [showTicketModal, setShowTicketModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   // Load event and user status
   const loadData = useCallback(async () => {
@@ -52,6 +58,14 @@ export default function EventDetails() {
       }
       setUserId(auth.user.id);
 
+      // Load admin status
+      const { data: userData } = await supabase
+        .from('users')
+        .select('is_admin')
+        .eq('id', auth.user.id)
+        .single();
+      setIsAdmin(!!userData?.is_admin);
+
       // Load event
       const { data: eventData } = await supabase
         .from('events')
@@ -61,7 +75,7 @@ export default function EventDetails() {
       
       if (!eventData) {
         Alert.alert('Not Found', 'This event does not exist or you do not have access.');
-        router.back();
+        router.replace('/(tabs)/home');
         return;
       }
       setEvent(eventData as Event);
@@ -176,8 +190,72 @@ export default function EventDetails() {
     Alert.alert('Added', 'Event added to your calendar!');
   };
 
-  // Check if current user is the organizer
+  // Check if current user is the organizer or admin
   const isOrganizer = event?.created_by === userId;
+  const canDelete = isOrganizer || isAdmin;
+
+  // Handle delete confirmation and execution
+  const executeDelete = async () => {
+    console.log('[EventDetails] Delete confirmed, starting deletion...');
+    setActionLoading(true);
+    try {
+      console.log('[EventDetails] Calling deleteEventDirect for event:', eventId);
+      console.log('[EventDetails] Current user ID:', userId);
+      console.log('[EventDetails] Event created_by:', event?.created_by);
+      
+      await deleteEventDirect(eventId);
+      
+      console.log('[EventDetails] deleteEventDirect completed without error');
+      
+      // Verify deletion by trying to fetch the event
+      const { data: verifyData } = await supabase
+        .from('events')
+        .select('id')
+        .eq('id', eventId)
+        .single();
+      
+      if (verifyData) {
+        console.warn('[EventDetails] Event still exists after deletion attempt!');
+        throw new Error('Event was not deleted. Please try again or contact support.');
+      }
+      
+      console.log('[EventDetails] Event deletion verified - event no longer exists');
+      
+              console.log('[EventDetails] Navigating to home after successful deletion');
+              // Navigate to home instead of back (more reliable)
+              router.replace('/(tabs)/home');
+    } catch (error: any) {
+      console.error('[EventDetails] Error deleting event:', error);
+      console.error('[EventDetails] Error stack:', error?.stack);
+      const errorMessage = error?.message || error?.toString() || 'Failed to delete event';
+      Alert.alert('Error', errorMessage);
+      setActionLoading(false);
+    }
+  };
+
+  // Handle delete event button click
+  const handleDeleteEvent = () => {
+    console.log('[EventDetails] Delete button clicked');
+    console.log('[EventDetails] event:', event);
+    console.log('[EventDetails] isOrganizer:', isOrganizer);
+    console.log('[EventDetails] userId:', userId);
+    console.log('[EventDetails] event?.created_by:', event?.created_by);
+    
+    if (!event) {
+      Alert.alert('Error', 'Event not loaded yet. Please try again.');
+      console.warn('[EventDetails] Cannot delete: no event');
+      return;
+    }
+    
+    if (!canDelete) {
+      Alert.alert('Error', 'You do not have permission to delete this event.');
+      console.warn('[EventDetails] Cannot delete: not organizer or admin');
+      return;
+    }
+    
+    console.log('[EventDetails] Showing delete confirmation modal for event:', eventId);
+    setShowDeleteModal(true);
+  };
 
   // Render RSVP status section
   const renderRSVPSection = () => {
@@ -230,7 +308,7 @@ export default function EventDetails() {
           </View>
           
           {/* RSVP Required badge */}
-          {event.rsvp_required && (
+          {event.rsvp_required && !event.is_ticketed && (
             <View style={{
               flexDirection: 'row',
               alignItems: 'center',
@@ -243,6 +321,24 @@ export default function EventDetails() {
               <Ionicons name="ticket" size={14} color="#f59e0b" />
               <Text style={{ color: '#f59e0b', fontWeight: '600', fontSize: 13 }}>
                 RSVP Required
+              </Text>
+            </View>
+          )}
+          
+          {/* Ticketed Event badge */}
+          {event.is_ticketed && (
+            <View style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: '#6366f120',
+              paddingHorizontal: 10,
+              paddingVertical: 6,
+              borderRadius: 16,
+              gap: 6,
+            }}>
+              <Ionicons name="card" size={14} color="#6366f1" />
+              <Text style={{ color: '#6366f1', fontWeight: '600', fontSize: 13 }}>
+                Ticketed Event
               </Text>
             </View>
           )}
@@ -271,25 +367,56 @@ export default function EventDetails() {
           </View>
         )}
 
-        {/* Organizer view */}
-        {isOrganizer ? (
-          <Pressable
-            onPress={() => router.push(`/events/${eventId}/manage`)}
-            style={{
-              backgroundColor: c.primary,
-              paddingVertical: 14,
-              borderRadius: 10,
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 8,
-            }}
-          >
-            <Ionicons name="settings" size={18} color="#000" />
-            <Text style={{ color: '#000', fontWeight: '700', fontSize: 15 }}>
-              Manage Event
-            </Text>
-          </Pressable>
+        {/* Organizer/Admin view */}
+        {canDelete ? (
+          <View style={{ gap: 12 }}>
+            <Pressable
+              onPress={() => router.push(`/events/${eventId}/manage`)}
+              style={{
+                backgroundColor: c.primary,
+                paddingVertical: 14,
+                borderRadius: 10,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+              }}
+            >
+              <Ionicons name="settings" size={18} color="#000" />
+              <Text style={{ color: '#000', fontWeight: '700', fontSize: 15 }}>
+                Manage Event
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={(e) => {
+                console.log('[EventDetails] Delete button onPress triggered', e);
+                handleDeleteEvent();
+              }}
+              disabled={actionLoading}
+              style={({ pressed }) => ({
+                backgroundColor: '#ef444420',
+                paddingVertical: 14,
+                borderRadius: 10,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                opacity: actionLoading ? 0.7 : pressed ? 0.8 : 1,
+              })}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              {actionLoading ? (
+                <ActivityIndicator color="#ef4444" size="small" />
+              ) : (
+                <>
+                  <Ionicons name="trash-outline" size={18} color="#ef4444" />
+                  <Text style={{ color: '#ef4444', fontWeight: '700', fontSize: 15 }}>
+                    Delete Event
+                  </Text>
+                </>
+              )}
+            </Pressable>
+          </View>
         ) : (
           <>
             {/* Pending invite - show accept/decline */}
@@ -441,10 +568,25 @@ export default function EventDetails() {
               </View>
             )}
 
-            {/* No status yet - show RSVP or request button */}
+            {/* No status yet - show ticket purchase, RSVP or request button */}
             {!attendeeStatus && !inviteStatus && (
               <>
-                {event.visibility === 'private' ? (
+                {event.is_ticketed ? (
+                  // Ticketed event - show purchase button
+                  <Pressable
+                    onPress={() => setShowTicketModal(true)}
+                    style={{
+                      backgroundColor: c.primary,
+                      paddingVertical: 14,
+                      borderRadius: 10,
+                      alignItems: 'center',
+                    }}
+                  >
+                    <Text style={{ color: '#000', fontWeight: '700', fontSize: 15 }}>
+                      Purchase Tickets
+                    </Text>
+                  </Pressable>
+                ) : event.visibility === 'private' ? (
                   // Private event - request to join
                   event.allow_join_requests ? (
                     <Pressable
@@ -551,8 +693,15 @@ export default function EventDetails() {
           </View>
           <Text style={{ color: c.text, marginTop: 12 }}>{event.description}</Text>
 
-          {/* RSVP Section */}
-          {renderRSVPSection()}
+          {/* Ticket Info for Ticketed Events */}
+          {event.is_ticketed && (
+            <View style={{ marginBottom: 16 }}>
+              <TicketEventCard event={event} onPress={() => setShowTicketModal(true)} />
+            </View>
+          )}
+
+          {/* RSVP Section (only for non-ticketed events) */}
+          {!event.is_ticketed && renderRSVPSection()}
 
           {/* Action buttons */}
           <View style={{ flexDirection: 'row', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
@@ -613,6 +762,107 @@ export default function EventDetails() {
           </View>
         </View>
       </ScrollView>
+
+      {/* Ticket Purchase Modal */}
+      {event && event.is_ticketed && (
+        <TicketPurchaseModal
+          visible={showTicketModal}
+          event={event}
+          onClose={() => setShowTicketModal(false)}
+          onPurchaseComplete={() => {
+            setShowTicketModal(false);
+            loadData();
+          }}
+        />
+      )}
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        visible={showDeleteModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => !actionLoading && setShowDeleteModal(false)}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 16,
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: c.card,
+              padding: 24,
+              borderRadius: 16,
+              width: '100%',
+              maxWidth: 420,
+              borderWidth: 1,
+              borderColor: '#00000020',
+            }}
+          >
+            <Text style={{ color: c.text, fontSize: 20, fontWeight: '800', marginBottom: 12 }}>
+              Delete Event
+            </Text>
+            <Text style={{ color: c.muted, fontSize: 15, lineHeight: 22, marginBottom: 24 }}>
+              Are you sure you want to delete "{event?.title}"? This action cannot be undone.
+            </Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 12 }}>
+              <Pressable
+                onPress={() => {
+                  if (!actionLoading) {
+                    setShowDeleteModal(false);
+                  }
+                }}
+                disabled={actionLoading}
+                style={{
+                  paddingVertical: 12,
+                  paddingHorizontal: 20,
+                  borderRadius: 10,
+                  backgroundColor: '#00000010',
+                  opacity: actionLoading ? 0.5 : 1,
+                }}
+              >
+                <Text style={{ color: c.text, fontWeight: '600', fontSize: 15 }}>
+                  Cancel
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  console.log('[EventDetails] Delete confirmed in modal, calling executeDelete...');
+                  setShowDeleteModal(false);
+                  executeDelete().catch((err) => {
+                    console.error('[EventDetails] Unhandled error in executeDelete:', err);
+                    setActionLoading(false);
+                  });
+                }}
+                disabled={actionLoading}
+                style={{
+                  paddingVertical: 12,
+                  paddingHorizontal: 20,
+                  borderRadius: 10,
+                  backgroundColor: '#ef4444',
+                  opacity: actionLoading ? 0.5 : 1,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 8,
+                }}
+              >
+                {actionLoading ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Ionicons name="trash-outline" size={18} color="#fff" />
+                )}
+                <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>
+                  {actionLoading ? 'Deleting...' : 'Delete'}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }

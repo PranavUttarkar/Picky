@@ -145,6 +145,11 @@ export default function EventRSVPButton({ event, onRSVPChange }: EventRSVPButton
     ]);
   };
 
+  // Don't show RSVP button for ticketed events (they use ticket purchase instead)
+  if (event.is_ticketed) {
+    return null;
+  }
+
   if (!event.capacity && !event.rsvp_required) {
     return null; // No RSVP system enabled
   }

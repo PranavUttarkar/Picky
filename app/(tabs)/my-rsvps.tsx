@@ -125,6 +125,9 @@ const RSVPCard = memo(function RSVPCard({ rsvp, onPress, onCancel }: RSVPCardPro
               {rsvp.waitlist_count > 0 && ` • ${rsvp.waitlist_count} waitlisted`}
             </Text>
           )}
+          
+          {/* Ticket purchase indicator - would need to be added to UserRSVP type and query */}
+          {/* This is a placeholder - in production, you'd query ticket_purchases and show ticket info */}
         </View>
       </View>
 

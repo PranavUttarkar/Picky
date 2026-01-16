@@ -15,6 +15,7 @@ export type ScoredEvent = Event & { match_percent?: number };
 const EVENT_SELECT_WITH_CREATOR = `
   id, title, description, image_url, image_urls, date_time, end_time, location, tags,
   visibility, capacity, allow_join_requests, rsvp_required, created_by,
+  is_ticketed, ticket_customization,
   creator:users!created_by(id, username, display_name, avatar_url, account_type)
 `;
 
@@ -138,6 +139,9 @@ export type EventInput = {
   capacity?: number | null;
   allow_join_requests?: boolean;
   rsvp_required?: boolean; // Whether RSVP is required to attend
+  // Ticket features
+  is_ticketed?: boolean;
+  ticket_customization?: any; // TicketCustomization type
 };
 
 export async function createEvent(input: EventInput): Promise<Event> {
@@ -215,15 +219,20 @@ export async function createEvent(input: EventInput): Promise<Event> {
         capacity: input.capacity ?? null,
         allow_join_requests: input.allow_join_requests ?? true,
         rsvp_required: input.rsvp_required ?? false,
+        is_ticketed: input.is_ticketed ?? false,
+        ticket_customization: input.ticket_customization ?? null,
       })
-      .select('id,title,description,image_url,image_urls,date_time,end_time,location,latitude,longitude,tags,rsvp_url,created_by,visibility,capacity,allow_join_requests,rsvp_required')
+      .select('id,title,description,image_url,image_urls,date_time,end_time,location,latitude,longitude,tags,rsvp_url,created_by,visibility,capacity,allow_join_requests,rsvp_required,is_ticketed,ticket_customization')
       .single();
     if (error) {
+      console.error('[createEvent] Supabase error:', error);
       // Handle RLS policy rejection
       if (error.message?.includes('can_user_create_events') || error.code === '42501') {
         throw new Error('You are not allowed to create events. Your account may be suspended or banned.');
       }
-      throw error;
+      // Provide more detailed error message
+      const errorMsg = error.message || error.code || 'Unknown error';
+      throw new Error(`Failed to create event: ${errorMsg}`);
     }
     return data as Event;
   });
@@ -240,7 +249,7 @@ export async function updateEvent(eventId: number, input: Partial<EventInput>): 
       .from('events')
       .update(payload)
       .eq('id', eventId)
-      .select('id,title,description,image_url,image_urls,date_time,end_time,location,latitude,longitude,tags,rsvp_url,created_by,visibility,capacity,allow_join_requests,rsvp_required')
+      .select('id,title,description,image_url,image_urls,date_time,end_time,location,latitude,longitude,tags,rsvp_url,created_by,visibility,capacity,allow_join_requests,rsvp_required,is_ticketed,ticket_customization')
       .single();
     if (error) throw error;
     return data as Event;
@@ -248,8 +257,79 @@ export async function updateEvent(eventId: number, input: Partial<EventInput>): 
 }
 
 export async function deleteEventDirect(eventId: number): Promise<void> {
-  const { error } = await supabase.from('events').delete().eq('id', eventId);
-  if (error) throw error;
+  console.log('[deleteEventDirect] Deleting event:', eventId);
+  
+  // Verify user is authenticated
+  const { data: auth, error: authError } = await supabase.auth.getUser();
+  if (authError || !auth.user) {
+    console.error('[deleteEventDirect] Auth error:', authError);
+    throw new Error('Not authenticated');
+  }
+  
+  console.log('[deleteEventDirect] User authenticated:', auth.user.id);
+  
+  // First verify the event exists and user is the creator
+  const { data: eventCheck, error: checkError } = await supabase
+    .from('events')
+    .select('id, created_by')
+    .eq('id', eventId)
+    .single();
+  
+  if (checkError) {
+    console.error('[deleteEventDirect] Error checking event:', checkError);
+    throw new Error('Event not found or access denied');
+  }
+  
+  if (!eventCheck) {
+    throw new Error('Event not found');
+  }
+  
+  // Check if user is admin
+  const { data: userData } = await supabase
+    .from('users')
+    .select('is_admin')
+    .eq('id', auth.user.id)
+    .single();
+  
+  const isAdmin = !!userData?.is_admin;
+  const isCreator = eventCheck.created_by === auth.user.id;
+  
+  if (!isCreator && !isAdmin) {
+    console.error('[deleteEventDirect] Permission denied. Event creator:', eventCheck.created_by, 'Current user:', auth.user.id, 'Is admin:', isAdmin);
+    throw new Error('You do not have permission to delete this event. Only the event creator or an admin can delete it.');
+  }
+  
+  console.log('[deleteEventDirect] Permission verified (creator:', isCreator, ', admin:', isAdmin, '), proceeding with deletion...');
+  
+  // Delete the event
+  const { data, error, count } = await supabase
+    .from('events')
+    .delete()
+    .eq('id', eventId)
+    .select();
+  
+  if (error) {
+    console.error('[deleteEventDirect] Supabase delete error:', error);
+    console.error('[deleteEventDirect] Error code:', error.code);
+    console.error('[deleteEventDirect] Error message:', error.message);
+    console.error('[deleteEventDirect] Error details:', error.details);
+    
+    // Handle RLS policy rejection
+    if (error.code === '42501' || error.message?.includes('permission denied') || error.message?.includes('new row violates row-level security')) {
+      throw new Error('You do not have permission to delete this event. Only the event creator can delete it.');
+    }
+    throw new Error(error.message || 'Failed to delete event');
+  }
+  
+  // Verify deletion succeeded
+  console.log('[deleteEventDirect] Delete response - data:', data, 'count:', count);
+  
+  if (!data || (Array.isArray(data) && data.length === 0)) {
+    console.warn('[deleteEventDirect] No rows were deleted. This might indicate a permission issue.');
+    throw new Error('Event could not be deleted. This may be due to permissions or the event may have already been deleted.');
+  }
+  
+  console.log('[deleteEventDirect] Event deleted successfully');
 }
 
 // Upload one or more local image URIs to Supabase Storage and return public URLs

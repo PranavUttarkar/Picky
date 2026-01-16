@@ -47,6 +47,9 @@ export interface Event {
   capacity?: number | null;
   allow_join_requests?: boolean;
   rsvp_required?: boolean; // Whether RSVP is required to attend
+  // Ticket features
+  is_ticketed?: boolean;
+  ticket_customization?: TicketCustomization | null;
 }
 
 // RSVP-related types
@@ -214,4 +217,65 @@ export interface EventReportWithDetails extends EventReport {
   creator_display_name?: string | null;
   reporter_username?: string | null;
   reporter_display_name?: string | null;
+}
+
+// Stripe and Ticket types
+export interface OrganizationStripeAccount {
+  user_id: string;
+  stripe_account_id: string;
+  stripe_account_status: 'active' | 'pending' | 'restricted' | 'disabled';
+  is_test_mode: boolean;
+  connected_at: string;
+  updated_at: string;
+}
+
+export interface EventTicket {
+  id: number;
+  event_id: number;
+  name: string;
+  description?: string | null;
+  price_cents: number;
+  capacity?: number | null;
+  sold_count: number;
+  is_early_bird: boolean;
+  early_bird_end_date?: string | null;
+  early_bird_price_cents?: number | null;
+  display_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TicketPurchase {
+  id: number;
+  event_id: number;
+  ticket_id: number;
+  user_id: string;
+  stripe_payment_intent_id?: string | null;
+  stripe_checkout_session_id?: string | null;
+  amount_paid_cents: number;
+  quantity: number;
+  status: 'pending' | 'completed' | 'refunded' | 'failed';
+  purchased_at?: string | null;
+  refunded_at?: string | null;
+  created_at: string;
+}
+
+export interface TicketCustomization {
+  primary_color?: string;
+  secondary_color?: string;
+  accent_color?: string;
+  logo_url?: string;
+  ticket_design?: 'standard' | 'minimal' | 'bold';
+  show_organizer_branding?: boolean;
+}
+
+export interface TicketTierInput {
+  name: string;
+  description?: string | null;
+  price_cents: number;
+  capacity?: number | null;
+  is_early_bird?: boolean;
+  early_bird_end_date?: string | null;
+  early_bird_price_cents?: number | null;
+  display_order?: number;
 }
