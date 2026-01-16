@@ -20,6 +20,7 @@ import { joinGroupByCode } from '@/services/groups';
 import HeaderSpacer from '@/components/HeaderSpacer';
 import { WebAnalytics } from '@/components/WebAnalytics';
 import { WebSpeedInsights } from '@/components/WebSpeedInsights';
+import ErrorBoundary from '../components/ErrorBoundary';
 
 export default function RootLayout() {
   const scheme = useColorScheme();
@@ -73,19 +74,21 @@ export default function RootLayout() {
         <SavedNotificationProvider>
           <FriendNotificationProvider>
             <GroupDecisionNotificationProvider>
-              {/* Spacer to avoid status bar overlap on iOS/Android; no-op on web */}
-              <HeaderSpacer />
-              <WebAnalytics />
-              <WebSpeedInsights />
-              <Stack screenOptions={{ headerShown: false }}>
-                <Stack.Screen name="index" />
-                <Stack.Screen name="invite" />
-                <Stack.Screen name="onboarding" />
-                <Stack.Screen name="(tabs)" />
-                <Stack.Screen name="events/[id]" />
-                {/** decisions routed via (tabs) to keep header/tab visible */}
-                {/** Poll routes are under (tabs)/polls now to keep header/tab visible */}
-              </Stack>
+              <ErrorBoundary>
+                {/* Spacer to avoid status bar overlap on iOS/Android; no-op on web */}
+                <HeaderSpacer />
+                <WebAnalytics />
+                <WebSpeedInsights />
+                <Stack screenOptions={{ headerShown: false }}>
+                  <Stack.Screen name="index" />
+                  <Stack.Screen name="invite" />
+                  <Stack.Screen name="onboarding" />
+                  <Stack.Screen name="(tabs)" />
+                  <Stack.Screen name="events/[id]" />
+                  {/** decisions routed via (tabs) to keep header/tab visible */}
+                  {/** Poll routes are under (tabs)/polls now to keep header/tab visible */}
+                </Stack>
+              </ErrorBoundary>
             </GroupDecisionNotificationProvider>
           </FriendNotificationProvider>
         </SavedNotificationProvider>
