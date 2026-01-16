@@ -934,6 +934,8 @@ export default function OrganizerProfile() {
               <Ionicons name="chevron-forward" size={20} color={c.muted} />
             </Pressable>
           </View>
+          {/* Spacer */}
+          <View style={{ height: 100 }} />
         </View>
       </ScrollView>
 
@@ -941,6 +943,7 @@ export default function OrganizerProfile() {
       <FloatingAddButton
         onPress={() => router.push('/(tabs)/my-events')}
         accessibilityLabel="Create Event"
+        size={isWide ? 80 : 56}
       />
 
       {/* Edit About Modal */}

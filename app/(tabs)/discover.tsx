@@ -260,8 +260,8 @@ const AddEventModal = memo(function AddEventModal({ visible, onClose, onSaved }:
     }
 
     const profCheck = checkProfanity(finalTitle + ' ' + (descLocal || desc) + ' ' + finalTagsCsv);
-    if (profCheck.hasProfanity) {
-      Alert.alert('Inappropriate content', `Please remove inappropriate words: ${profCheck.words.join(', ')}`);
+    if (!profCheck.isClean) {
+      Alert.alert('Inappropriate content', `Please remove inappropriate words: ${profCheck.reasons?.join(', ')}`);
       return;
     }
 
@@ -292,13 +292,12 @@ const AddEventModal = memo(function AddEventModal({ visible, onClose, onSaved }:
         rsvp_required: enableRSVP && rsvpRequired,
       };
 
-      const { data: eventData, error: eventError } = await createEvent(payload);
-      if (eventError) throw eventError;
+      const eventData = await createEvent(payload);
       if (!eventData?.id) throw new Error('Event creation failed');
 
       // Upload images if any
       if (pickedUris.length > 0) {
-        await uploadEventImages(eventData.id, pickedUris);
+        await uploadEventImages(pickedUris);
       }
 
       // Update with typed URLs
@@ -2195,8 +2194,9 @@ export default function DiscoverPage() {
           <FloatingAddButton
             onPress={() => setAddEventModalOpen(true)}
             accessibilityLabel="Add Event"
-            bottom={90}
-            right={20}
+            size={isWide ? 80 : 56} // Adjust size dynamically
+            bottom={90} // Move up for desktop screens
+            right={isWide? 45: 20}
           />
         )}
       </SafeAreaView>
