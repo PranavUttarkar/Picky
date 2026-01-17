@@ -1,4 +1,4 @@
-import React, { memo, useMemo } from 'react';
+import React, { memo, useMemo, useState } from 'react';
 import { View, Text, Pressable, Platform } from 'react-native';
 import { useThemeColors } from '@/theme/ThemeProvider';
 import EventImages from '@/components/EventImages';
@@ -49,6 +49,7 @@ export const EventRowCard: React.FC<EventRowCardProps> = memo(
     showVisibilityBadge = false,
   }) => {
     const c = useThemeColors();
+    const [containerWidth, setContainerWidth] = useState<number | null>(null);
     const imgs: string[] = (event as any).image_urls?.length
       ? (event as any).image_urls
       : event.image_url
@@ -107,7 +108,13 @@ export const EventRowCard: React.FC<EventRowCardProps> = memo(
                 </View>
               )}
             </View>
-            <View style={{ flex: 1, minHeight: 96 }}>
+            <View
+              style={{ flex: 1, minHeight: 96 }}
+              onLayout={(e) => {
+                // capture width for tag layout
+                setContainerWidth?.(e.nativeEvent.layout.width);
+              }}
+            >
               {/* Title and badges */}
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                 <Text style={{ 
@@ -343,6 +350,35 @@ export const EventRowCard: React.FC<EventRowCardProps> = memo(
                   ) : null}
                 </View>
               </View>
+              {/* Tag chips: show 2-6 top tags depending on available width */}
+              {(() => {
+                const tags: string[] = (event.tags ?? []) as string[];
+                if (!tags || tags.length === 0) return null;
+                const available = containerWidth ?? 240; // conservative fallback
+                // approximate chip width including margin: 72px; compute fit
+                const approxChip = 72;
+                const fit = Math.max(2, Math.min(6, Math.floor(available / approxChip)));
+                const toShow = tags.slice(0, fit);
+                return (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
+                    {toShow.map((t, i) => (
+                      <View
+                        key={i}
+                        style={{
+                          backgroundColor: '#00000020',
+                          paddingHorizontal: 8,
+                          paddingVertical: 4,
+                          borderRadius: 999,
+                          marginRight: 8,
+                          marginBottom: 6,
+                        }}
+                      >
+                        <Text style={{ color: c.text, fontSize: Typography.scale.caption.fontSize, fontFamily: Typography.fontFamily.body }}>{t}</Text>
+                      </View>
+                    ))}
+                  </View>
+                );
+              })()}
             </View>
           </View>
         </ThreeDCard>

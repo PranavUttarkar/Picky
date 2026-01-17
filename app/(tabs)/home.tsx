@@ -494,7 +494,7 @@ export default function HomeTab() {
                   },
           ]}
         >
-          <Text style={[styles.headerTitle, { color: c.text }]}>Picky!</Text>
+          <Text style={[styles.headerTitle, { color: c.text, marginTop: 10 }]}>Picky!</Text>
           <View style={styles.headerIcons}>
             <Pressable
               onPress={() => router.push('/search-users')}

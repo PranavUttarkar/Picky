@@ -105,7 +105,7 @@ export default function DiscoverPage() {
 
   // Toggle state
   const [mode, setMode] = useState<DiscoverMode>(initialMode);
-  const [view, setView] = useState<'row' | 'grid'>(isWide ? 'grid' : 'row');
+  const [view, setView] = useState<'row' | 'grid'>('grid');
   const [query, setQuery] = useState('');
   const [sortMode, setSortMode] = useState<SortMode>('match');
   const [showSortMenu, setShowSortMenu] = useState(false);
@@ -1154,7 +1154,7 @@ export default function DiscoverPage() {
             onPress={() => setAddEventModalOpen(true)}
             accessibilityLabel="Add Event"
             size={isWide ? 80 : 56} // Adjust size dynamically
-            bottom={90} // Move up for desktop screens
+            bottom={100} // Move up for desktop screens (5px higher)
             right={isWide? 45: 20}
           />
         )}
