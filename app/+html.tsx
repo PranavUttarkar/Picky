@@ -21,10 +21,18 @@ export default function Html({ children }: { children: React.ReactNode }) {
           // eslint-disable-next-line react/no-danger
           dangerouslySetInnerHTML={{
             __html: `
-              /* Ensure navigation containers can size correctly on web */
-              html, body, #root { height: 100%; margin: 0; padding: 0; }
-              /* React Navigation sometimes nests an extra div wrapper; make sure it fills */
-              body > #root > div { height: 100%; }
+              /* Ensure navigation containers size to the visible viewport on mobile browsers.
+                 Prefer dynamic viewport units for Safari iOS (100dvh), fallback to 100svh then 100vh. */
+              html, body, #root {
+                /* Use dynamic viewport height where supported to avoid iOS Safari top/bottom UI issues */
+                min-height: 100dvh;
+                min-height: 100svh;
+                min-height: 100vh;
+                margin: 0;
+                padding: 0;
+              }
+              /* React Navigation sometimes nests an extra div wrapper; ensure it fills its parent */
+              body > #root > div { min-height: inherit; }
               body { 
                 overflow-x: hidden; 
                 -webkit-text-size-adjust: 100%; 
