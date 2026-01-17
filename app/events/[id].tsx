@@ -667,7 +667,6 @@ export default function EventDetails() {
 
   return (
     <SafeAreaView edges={['bottom']} style={{ flex: 1, backgroundColor: c.background }}>
-      <HeaderSpacer />
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: insets.bottom + 16 }}>
         {(() => {
           const imgs: string[] = (event as any).image_urls?.length

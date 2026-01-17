@@ -31,7 +31,7 @@ function CenterPickButton({ onPress, bottom, scheme }: { onPress: () => void; bo
         styles.centerButton,
         {
           transform: [{ scale: isPressed ? 0.92 : 1 }],
-          bottom,
+          bottom: bottom,
         }
       ]}
       accessibilityRole="button"
@@ -70,15 +70,15 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
     ['home', 'discover', 'groups', 'profile'].includes(route.name)
   );
 
-  const TAB_BAR_HEIGHT = 72;
-  const ICON_SIZE = 28;
+  const TAB_BAR_HEIGHT = 95;
+  const ICON_SIZE = 25;
   const CENTER_BUTTON_WIDTH = 100;
-  const CENTER_BUTTON_HEIGHT = 28;
-  const CURVE_HEIGHT = 20;
+  const CENTER_BUTTON_HEIGHT = 25;
+  const CURVE_HEIGHT = 18;
 
   const onPickPress = () => {
     trackCTA('pick_button_pressed').catch(() => {});
-    router.push('/pass');
+    router.push('/QuickPick');
   };
 
   const renderTabButton = (route: any, index: number) => {
@@ -129,16 +129,14 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
   };
 
   return (
-    <View style={[
-      styles.tabBarWrapper,
-      { paddingBottom: insets.bottom }
-    ]}>
+    <View style={styles.tabBarWrapper}>
       {/* Main tab bar container */}
       <View style={[
         styles.tabBarContainer,
         { 
           backgroundColor: scheme === 'dark' ? '#1a1a2e' : '#ffffff',
           height: TAB_BAR_HEIGHT,
+          paddingBottom: insets.bottom,
         }
       ]}>
         {/* Wide curved background for center button - only shows top portion */}
@@ -174,7 +172,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
       {/* Center Pick Icon - positioned on the curved background */}
       <CenterPickButton 
         onPress={onPickPress}
-        bottom={TAB_BAR_HEIGHT - CURVE_HEIGHT - 25}
+        bottom={TAB_BAR_HEIGHT - CURVE_HEIGHT - 25 + insets.bottom/3.5}
         scheme={scheme}
       />
     </View>
@@ -188,6 +186,12 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     alignItems: 'center',
+    ...Platform.select({
+      ios: {
+        // On iOS, ensure the tab bar wrapper stays anchored to the bottom
+        // by using a fixed position approach that respects the safe area
+      },
+    }),
   },
   tabBarContainer: {
     width: '100%',

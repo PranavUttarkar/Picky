@@ -839,8 +839,8 @@ export default function Profile() {
               flexGrow: 1,
               justifyContent: 'center',
               paddingHorizontal: 20,
-              paddingTop: insets.top + 20,
-              paddingBottom: Math.max(insets.bottom, 20),
+              paddingTop: Platform.OS === 'web' ? 20 : 20,
+              paddingBottom: Math.max(insets.bottom, 20) + 80,
             }}
             showsVerticalScrollIndicator={false}
           >
@@ -920,8 +920,8 @@ export default function Profile() {
           style={{ flex: 1 }}
           contentContainerStyle={{ 
             paddingHorizontal: 20,
-            paddingTop: insets.top + 20,
-            paddingBottom: Math.max(insets.bottom, 40),
+            paddingTop: Platform.OS === 'web' ? 20 : 20,
+            paddingBottom: Math.max(insets.bottom, 40) + 80,
           }}
           showsVerticalScrollIndicator={false}
           bounces={true}

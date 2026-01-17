@@ -91,7 +91,7 @@ export default function QuickPickEntry() {
 
   return (
     <GradientBackground variant="dim">
-      <SafeAreaView style={{ flex: 1 }}>
+      <SafeAreaView style={{ flex: 1 }} edges={['bottom']}>
         <Animated.View 
           style={{ 
             flex: 1, 

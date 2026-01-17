@@ -824,8 +824,8 @@ export default function DiscoverPage() {
 
   return (
     <GradientBackground variant="dim">
-      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-        <View style={{ flex: 1, paddingHorizontal: Spacing.md, paddingTop: Math.max(insets.top > 0 ? 12 : 16, 12) }}>
+      <SafeAreaView style={{ flex: 1 }} edges={[]}>
+        <View style={{ flex: 1, paddingHorizontal: Spacing.md, paddingTop: Platform.OS === 'web' ? 16 : 12 }}>
           {/* Toggle Header */}
           <View style={{ 
             flexDirection: 'row', 
@@ -977,11 +977,10 @@ export default function DiscoverPage() {
               renderItem={({ item }) => {
                 if (mode === 'food') {
                   return (
-                    <FoodRowCard
+                      <FoodRowCard
                       item={item as Restaurant}
                       matchPercent={(item as any).match_percent}
                       onOpenDetails={() => router.push(`/foods/${encodeURIComponent(item.id)}`)}
-                      onSelect={() => {}}
                       selected={false}
                       isSaved={savedRestaurantSet.has(item.id)}
                       onToggleSave={toggleSaveRestaurant}
@@ -1038,7 +1037,6 @@ export default function DiscoverPage() {
                         item={item as Restaurant}
                         matchPercent={(item as any).match_percent}
                         onOpenDetails={() => router.push(`/foods/${encodeURIComponent(item.id)}`)}
-                        onSelect={() => {}}
                         selected={false}
                         isSaved={savedRestaurantSet.has(item.id)}
                         onToggleSave={toggleSaveRestaurant}

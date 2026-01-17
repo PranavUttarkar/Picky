@@ -196,9 +196,11 @@ const FoodRowCard: React.FC<FoodRowCardProps> = memo(
                   ) : null}
                   <Pressable
                     onPress={async () => {
-                      const url = item.website || item.page_url || '';
                       try {
-                        await Share.share({ message: url || item.restaurant_name, url });
+                        const deepUrl = `https://usepicky.app/foods/${encodeURIComponent(
+                          String(item.id),
+                        )}`;
+                        await Share.share({ message: deepUrl, url: deepUrl });
                       } catch {}
                     }}
                     accessibilityLabel="Share restaurant"
@@ -241,10 +243,8 @@ const FoodRowCard: React.FC<FoodRowCardProps> = memo(
                           onSelect?.();
                         }}
                         style={{ paddingHorizontal: 10, paddingVertical: 6 }}
-                      >
-                        Poll
-                        {/* <Ionicons name="stats-chart" size={16} color="#001219" /> */}
-                      </ThreeDButton>
+                        textStyle={{ fontSize: 12 }}
+                      />
                     )
                   ) : null}
                 </View>

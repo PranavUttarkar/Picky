@@ -293,9 +293,9 @@ export default function HomeTab() {
           
           if (finalEvents.length > 0) {
             setTopEvents(finalEvents);
-            console.log('Loaded events:', finalEvents.length, finalEvents.map(e => ({ id: e.id, match: e.match_percent })));
+            // events loaded
           } else {
-            console.log('No events found');
+            // no events found
           }
         } catch (e) {
           console.error('Failed to load events:', e);
@@ -488,12 +488,10 @@ export default function HomeTab() {
         <View
           style={[
             styles.header,
-            {
-              paddingTop: insets.top + Spacing.md,
-              marginTop: 0,
-              backgroundColor: c.background,
-              borderBottomColor: c.muted + '30',
-            },
+              {
+                    backgroundColor: c.background,
+                    borderBottomColor: c.muted + '30',
+                  },
           ]}
         >
           <Text style={[styles.headerTitle, { color: c.text }]}>Picky!</Text>
@@ -518,7 +516,7 @@ export default function HomeTab() {
         </View>
 
         <ScrollView
-          contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 16) + 24 }}
+          contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 16) + 96 }}
           style={{ flex: 1 }}
         >
           {/* Row 1: Discover Events */}
@@ -750,12 +748,12 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   headerTitle: {
-    fontSize: Typography.scale.display.fontSize,
-    lineHeight: Typography.scale.display.lineHeight,
+    fontSize: Typography.scale.display.fontSize - 2,
+    lineHeight: Typography.scale.display.lineHeight - 2,
     fontWeight: Typography.fontWeight.regular,
     letterSpacing: 0,
-    // @ts-ignore - font loaded globally
-    fontFamily: Typography.fontFamily.brand,
+    fontFamily: Platform.OS === 'ios' ? 'Pacifico_400Regular' : Typography.fontFamily.brand,
+    // no extra margin; rely on header padding
   },
   headerIcons: {
     flexDirection: 'row',
@@ -829,11 +827,7 @@ const styles = StyleSheet.create({
     top: Spacing.sm,
     right: Spacing.sm,
     zIndex: 10,
-    elevation: 5, // Android shadow
-    shadowColor: '#000', // iOS shadow
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
+    // no shadow: keep chips flat on home cards
   },
   matchBadgeGradient: {
     padding: 2.5,

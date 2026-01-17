@@ -138,44 +138,7 @@ export default function GradientHeader({
               {title}
             </Text>
           </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            {!hideBrand ? (
-              <Text
-                style={{
-                  color: c.muted,
-                  fontSize: Typography.scale.bodySmall.fontSize,
-                  fontFamily: Typography.fontFamily.bodySemibold,
-                  fontWeight: Typography.fontWeight.semibold,
-                  textTransform: 'uppercase',
-                  letterSpacing: 0.5,
-                }}
-                accessibilityLabel="Brand: usePicky dot app"
-              >
-                usePicky.app
-              </Text>
-            ) : null}
-            {shareUrl ? (
-              <Pressable
-                onPress={doShare}
-                accessibilityLabel={copied ? 'Link copied' : 'Share link'}
-                style={{
-                  paddingVertical: 4,
-                  paddingHorizontal: 10,
-                  backgroundColor: '#00000030',
-                  borderRadius: 8,
-                }}
-              >
-                <Text style={{ 
-                  color: c.text, 
-                  fontWeight: Typography.fontWeight.bold,
-                  fontSize: Typography.scale.bodySmall.fontSize,
-                  fontFamily: Typography.fontFamily.bodyBold,
-                }}>
-                  Share
-                </Text>
-              </Pressable>
-            ) : null}
-          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }} />
         </View>
         {copied ? (
           <Animated.View
