@@ -32,8 +32,9 @@ export interface Event {
   description?: string | null;
   image_url?: string | null;
   image_urls?: string[] | null; // up to 3 image URLs (new multi-image support)
-  date_time: string; // ISO string
-  end_time?: string | null; // ISO string (optional end time)
+  date_time: string; // ISO string (start date/time - used for sorting and scoring)
+  end_time?: string | null; // ISO string (optional end time on same day)
+  end_date?: string | null; // ISO string (optional end date for multi-day events)
   location?: string | null;
   latitude?: number | null;
   longitude?: number | null;

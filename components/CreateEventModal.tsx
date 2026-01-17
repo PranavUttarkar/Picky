@@ -20,7 +20,7 @@ import LocationPicker from '@/components/LocationPicker';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { checkProfanity } from '@/utils/profanity';
-import { createEvent, uploadEventImages } from '@/services/events';
+import { createEvent, updateEvent, uploadEventImages } from '@/services/events';
 import { supabase } from '@/services/supabase';
 import dayjs from 'dayjs';
 import type { Event } from '@/types/models';
@@ -71,13 +71,18 @@ type CreateEventModalProps = {
   visible: boolean;
   onClose: () => void;
   onSaved: (newEvent?: Event) => void | Promise<void>;
+  /** If provided, the modal will be in "edit mode" and update the existing event */
+  editEvent?: Event | null;
 };
 
-export default memo(function CreateEventModal({ visible, onClose, onSaved }: CreateEventModalProps) {
+export default memo(function CreateEventModal({ visible, onClose, onSaved, editEvent }: CreateEventModalProps) {
   const c = useThemeColors();
   const { scheme } = useTheme();
   const { width: screenWidth } = useWindowDimensions();
   const isNarrowScreen = screenWidth < 500;
+  
+  // Determine if we're in edit mode
+  const isEditMode = !!editEvent;
 
   const [title, setTitle] = useState('');
   const [desc, setDesc] = useState('');
@@ -116,10 +121,16 @@ export default memo(function CreateEventModal({ visible, onClose, onSaved }: Cre
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [showEndTimePicker, setShowEndTimePicker] = useState(false);
+  const [showEndDatePicker, setShowEndDatePicker] = useState(false);
+
+  // End date state (for multi-day events)
+  const [hasEndDate, setHasEndDate] = useState(false);
+  const [endDateISO, setEndDateISO] = useState<string | null>(null);
+  const [endDateInput, setEndDateInput] = useState<string>('');
 
   const [openSections, setOpenSections] = useState({
     essentials: true,
-    images: false,
+    images: true, // Default expanded
     location: false,
     rsvp: false,
   });
@@ -170,6 +181,9 @@ export default memo(function CreateEventModal({ visible, onClose, onSaved }: Cre
     setEndTimeInput('8:00');
     setStartMeridiem('PM');
     setEndMeridiem('PM');
+    setHasEndDate(false);
+    setEndDateISO(null);
+    setEndDateInput('');
     setLocation('');
     setLatitude(null);
     setLongitude(null);
@@ -191,6 +205,70 @@ export default memo(function CreateEventModal({ visible, onClose, onSaved }: Cre
       resetForm();
     }
   }, [visible]);
+
+  // Populate form when in edit mode
+  useEffect(() => {
+    if (visible && editEvent) {
+      // Populate all fields from the event
+      setTitle(editEvent.title || '');
+      setTitleLocal(editEvent.title || '');
+      setDesc(editEvent.description || '');
+      setDescLocal(editEvent.description || '');
+      setTagsCsv((editEvent.tags || []).join(', '));
+      setTagsCsvLocal((editEvent.tags || []).join(', '));
+      
+      // Images
+      const imgs = editEvent.image_urls || (editEvent.image_url ? [editEvent.image_url] : []);
+      setImage1(imgs[0] || '');
+      setImage2(imgs[1] || '');
+      setImage3(imgs[2] || '');
+      setPickedUris([]);
+      
+      // Date/Time
+      if (editEvent.date_time) {
+        const dt = dayjs(editEvent.date_time);
+        setDateTime(editEvent.date_time);
+        setDateInput(dt.format('YYYY-MM-DD'));
+        setTimeInput(dt.format('h:mm'));
+        setStartMeridiem(dt.hour() >= 12 ? 'PM' : 'AM');
+      }
+      
+      // End time
+      if (editEvent.end_time) {
+        const et = dayjs(editEvent.end_time);
+        setEndTimeISO(editEvent.end_time);
+        setEndTimeInput(et.format('h:mm'));
+        setEndMeridiem(et.hour() >= 12 ? 'PM' : 'AM');
+      } else {
+        setEndTimeISO(null);
+        setEndTimeInput('');
+      }
+      
+      // End date (multi-day events)
+      if (editEvent.end_date) {
+        setHasEndDate(true);
+        setEndDateISO(editEvent.end_date);
+        setEndDateInput(dayjs(editEvent.end_date).format('YYYY-MM-DD'));
+      } else {
+        setHasEndDate(false);
+        setEndDateISO(null);
+        setEndDateInput('');
+      }
+      
+      // Location
+      setLocation(editEvent.location || '');
+      setLatitude(editEvent.latitude ?? null);
+      setLongitude(editEvent.longitude ?? null);
+      
+      // RSVP settings
+      setRsvp(editEvent.rsvp_url || '');
+      const hasRsvpSettings = !!(editEvent.capacity || editEvent.allow_join_requests || editEvent.rsvp_required);
+      setEnableRSVP(hasRsvpSettings);
+      setCapacity(editEvent.capacity?.toString() || '');
+      setAllowWaitlist(editEvent.allow_join_requests ?? true);
+      setRsvpRequired(editEvent.rsvp_required ?? false);
+    }
+  }, [visible, editEvent]);
 
   const submit = async () => {
     console.log('[CreateEventModal] Submit called');
@@ -242,6 +320,7 @@ export default memo(function CreateEventModal({ visible, onClose, onSaved }: Cre
         description: (descLocal || desc || '').trim() || null,
         date_time: dateTime,
         end_time: endTimeISO,
+        end_date: hasEndDate && endDateISO ? endDateISO : null,
         location: location || null,
         latitude,
         longitude,
@@ -282,17 +361,34 @@ export default memo(function CreateEventModal({ visible, onClose, onSaved }: Cre
         console.warn('[CreateEventModal] No image URLs to include');
       }
 
-      // Create event with all data including images
-      console.log('[CreateEventModal] Creating event in Supabase...');
-      const eventData = await createEvent(payload);
-      console.log('[CreateEventModal] Event created:', eventData?.id);
-      
-      if (!eventData?.id) {
-        throw new Error('Event creation failed - no event ID returned');
+      let eventData: Event;
+
+      if (isEditMode && editEvent) {
+        // Update existing event
+        console.log('[CreateEventModal] Updating event in Supabase...', editEvent.id);
+        eventData = await updateEvent(editEvent.id, payload);
+        console.log('[CreateEventModal] Event updated:', eventData?.id);
+        
+        if (!eventData?.id) {
+          throw new Error('Event update failed - no event ID returned');
+        }
+
+        Alert.alert('Success', 'Event updated successfully!');
+      } else {
+        // Create new event
+        console.log('[CreateEventModal] Creating event in Supabase...');
+        eventData = await createEvent(payload);
+        console.log('[CreateEventModal] Event created:', eventData?.id);
+        
+        if (!eventData?.id) {
+          throw new Error('Event creation failed - no event ID returned');
+        }
+
+        Alert.alert('Success', 'Event created successfully!');
       }
 
-      // Fetch the created event with all fields (including creator info)
-      console.log('[CreateEventModal] Fetching created event...');
+      // Fetch the event with all fields (including creator info)
+      console.log('[CreateEventModal] Fetching event...');
       const { data: updatedEvent, error: fetchError } = await supabase
         .from('events')
         .select('*')
@@ -300,13 +396,12 @@ export default memo(function CreateEventModal({ visible, onClose, onSaved }: Cre
         .single();
 
       if (fetchError) {
-        console.error('[CreateEventModal] Error fetching created event:', fetchError);
+        console.error('[CreateEventModal] Error fetching event:', fetchError);
         // Still continue - we have eventData at least
       } else {
         console.log('[CreateEventModal] Event fetched successfully');
       }
 
-      Alert.alert('Success', 'Event created successfully!');
       resetForm();
       if (updatedEvent) {
         await onSaved(updatedEvent as Event);
@@ -316,7 +411,7 @@ export default memo(function CreateEventModal({ visible, onClose, onSaved }: Cre
       onClose();
     } catch (err: any) {
       console.error('[CreateEventModal] Error in submit:', err);
-      const errorMessage = err?.message || err?.toString() || 'Could not create event';
+      const errorMessage = err?.message || err?.toString() || (isEditMode ? 'Could not update event' : 'Could not create event');
       console.error('[CreateEventModal] Error details:', JSON.stringify(err, null, 2));
       Alert.alert('Error', errorMessage);
     } finally {
@@ -330,7 +425,7 @@ export default memo(function CreateEventModal({ visible, onClose, onSaved }: Cre
         <HeaderSpacer />
         <BlurView intensity={30} tint={scheme === 'dark' ? 'dark' : 'light'} style={{ padding: 12 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text style={{ color: c.text, fontSize: 18, fontWeight: '800' }}>Create Event</Text>
+            <Text style={{ color: c.text, fontSize: 18, fontWeight: '800' }}>{isEditMode ? 'Edit Event' : 'Create Event'}</Text>
             <Pressable
               onPress={onClose}
               style={{ backgroundColor: '#00000020', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 }}
@@ -430,6 +525,115 @@ export default memo(function CreateEventModal({ visible, onClose, onSaved }: Cre
             </View>
           </ModalSection>
 
+          {/* Images Section - Right below description */}
+          <ModalSection
+            id="images"
+            title="Images"
+            isOpen={openSections.images}
+            onToggle={toggleImages}
+            cardBg={c.card}
+            textColor={c.text}
+            mutedColor={c.muted}
+            showErrorIndicator={showValidation && pickedUris.length === 0 && [image1, image2, image3].every((s) => !(s && s.trim().length))}
+          >
+            <View style={{ gap: 10 }}>
+              {activeImageInputs >= 1 &&
+                Array.from({ length: activeImageInputs }).map((_, idx) => (
+                  <TextInput
+                    key={idx}
+                    placeholder={idx === 0 ? 'Cover image URL or paste' : `Image ${idx + 1} URL`}
+                    placeholderTextColor={c.muted}
+                    value={imageUrlList[idx]}
+                    onChangeText={(val) => setImageByIndex(idx, val)}
+                    style={{
+                      color: c.text,
+                      backgroundColor: '#00000010',
+                      padding: 12,
+                      borderRadius: 10,
+                      borderWidth: 1,
+                      borderColor:
+                        showValidation && idx === 0 && pickedUris.length === 0 && [image1, image2, image3].every((s) => !(s && s.trim().length))
+                          ? '#ff4444'
+                          : '#00000020',
+                    }}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                ))}
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                {pickedUris.map((u, idx) => (
+                  <View key={`picked-${idx}-${u}`} style={{ position: 'relative' }}>
+                    <Image source={{ uri: u }} style={{ width: 80, height: 80, borderRadius: 10, backgroundColor: '#00000020' }} />
+                    <Pressable
+                      onPress={() => setPickedUris((prev) => prev.filter((x) => x !== u))}
+                      style={{ position: 'absolute', top: 4, right: 4, backgroundColor: '#00000080', borderRadius: 12, padding: 2 }}
+                    >
+                      <Ionicons name="close" color="#fff" size={14} />
+                    </Pressable>
+                  </View>
+                ))}
+                {typedUrls.map((u, i) => (
+                  <View key={`typed-${i}-${u}`} style={{ position: 'relative' }}>
+                    <Image source={{ uri: u }} style={{ width: 80, height: 80, borderRadius: 10, backgroundColor: '#00000020' }} />
+                  </View>
+                ))}
+              </View>
+              <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+                <Pressable
+                  onPress={async () => {
+                    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+                    if (perm.status !== 'granted') {
+                      Alert.alert('Permission needed', 'Enable photo library access to pick images');
+                      return;
+                    }
+                    try {
+                      const result = await ImagePicker.launchImageLibraryAsync({
+                        allowsMultipleSelection: true,
+                        selectionLimit: 3,
+                        quality: 0.9,
+                        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                      });
+                      if (!result.canceled) {
+                        const uris = result.assets.map((a) => a.uri);
+                        setPickedUris((prev) => {
+                          const merged = [...prev, ...uris];
+                          const unique: string[] = [];
+                          for (const m of merged) if (!unique.includes(m)) unique.push(m);
+                          return unique.slice(0, 3);
+                        });
+                      }
+                    } catch (e: any) {
+                      Alert.alert('Pick failed', e?.message || 'Could not pick images');
+                    }
+                  }}
+                  style={{
+                    backgroundColor: c.primary,
+                    paddingHorizontal: 14,
+                    paddingVertical: 10,
+                    borderRadius: 10,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                  }}
+                >
+                  <Ionicons name="image" size={16} color="#000" />
+                  <Text style={{ color: '#000', fontWeight: '700' }}>Pick Photos</Text>
+                </Pressable>
+                {pickedUris.length > 0 ? (
+                  <Pressable
+                    onPress={() => setPickedUris([])}
+                    style={{ backgroundColor: '#00000030', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10 }}
+                  >
+                    <Text style={{ color: c.text }}>Clear Pics</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+              <Text style={{ color: c.muted, fontSize: 11 }}>
+                First image is cover. Up to 3 images (picked + URLs combined, no duplicates).
+              </Text>
+            </View>
+          </ModalSection>
+
           {/* When Section */}
           <View
             style={{ marginBottom: 14, borderRadius: 12, borderWidth: 1, borderColor: '#00000020', backgroundColor: c.card }}
@@ -444,7 +648,22 @@ export default memo(function CreateEventModal({ visible, onClose, onSaved }: Cre
                   style={{ backgroundColor: '#00000010', padding: 12, borderRadius: 10, position: 'relative' }}
                   onPress={() => {
                     const input = (globalThis as any).document?.getElementById?.(datePickerId);
-                    if (input) input.showPicker?.() || input.click?.();
+                    if (!input) return;
+                    try {
+                      // Prefer showPicker when supported, but some browsers require a native
+                      // user gesture and may throw — fall back to click in that case.
+                      if (typeof input.showPicker === 'function') {
+                        input.showPicker();
+                      } else if (typeof input.click === 'function') {
+                        input.click();
+                      }
+                    } catch (err) {
+                      try {
+                        input.click?.();
+                      } catch (e) {
+                        // Swallow errors — opening the native picker failed.
+                      }
+                    }
                   }}
                 >
                   <Text style={{ color: c.text, fontWeight: '700', textAlign: 'center' }}>
@@ -675,7 +894,91 @@ export default memo(function CreateEventModal({ visible, onClose, onSaved }: Cre
                 <Text style={{ color: c.muted, fontSize: 11 }}>
                   Start: {dayjs(dateTime).format('YYYY-MM-DD h:mm A')}{' '}
                   {endTimeISO ? `· End: ${dayjs(endTimeISO).format('h:mm A')}` : ''}
+                  {hasEndDate && endDateISO ? ` · Ends on: ${dayjs(endDateISO).format('MMM D, YYYY')}` : ''}
                 </Text>
+
+                {/* Optional End Date for Multi-Day Events */}
+                <View style={{ marginTop: 8, gap: 8 }}>
+                  <Pressable
+                    onPress={() => {
+                      if (hasEndDate) {
+                        setHasEndDate(false);
+                        setEndDateISO(null);
+                        setEndDateInput('');
+                      } else {
+                        setHasEndDate(true);
+                        const defaultEnd = dayjs(dateTime).add(1, 'day');
+                        setEndDateISO(defaultEnd.toISOString());
+                        setEndDateInput(defaultEnd.format('YYYY-MM-DD'));
+                      }
+                    }}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 8,
+                      backgroundColor: '#00000010',
+                      padding: 10,
+                      borderRadius: 8,
+                    }}
+                  >
+                    <Ionicons
+                      name={hasEndDate ? 'checkbox' : 'square-outline'}
+                      size={20}
+                      color={hasEndDate ? c.primary : c.muted}
+                    />
+                    <Text style={{ color: c.text, fontSize: 13 }}>Multi-day event (add end date)</Text>
+                  </Pressable>
+
+                  {hasEndDate && (
+                    <Pressable
+                      style={{ backgroundColor: '#00000010', padding: 12, borderRadius: 10, position: 'relative' }}
+                      onPress={() => {
+                        const input = (globalThis as any).document?.getElementById?.('end-date-picker');
+                        if (!input) return;
+                        try {
+                          if (typeof input.showPicker === 'function') {
+                            input.showPicker();
+                          } else if (typeof input.click === 'function') {
+                            input.click();
+                          }
+                        } catch (err) {
+                          try {
+                            input.click?.();
+                          } catch (e) {}
+                        }
+                      }}
+                    >
+                      <Text style={{ color: c.text, fontWeight: '700', textAlign: 'center' }}>
+                        End Date: {endDateISO ? dayjs(endDateISO).format('dddd, MMMM D, YYYY') : 'Select end date'}
+                      </Text>
+                      {Platform.OS === 'web' && (
+                        <input
+                          id="end-date-picker"
+                          type="date"
+                          value={endDateInput}
+                          min={dayjs(dateTime).format('YYYY-MM-DD')}
+                          onChange={(e: any) => {
+                            const val = e.target.value;
+                            setEndDateInput(val);
+                            const parsed = dayjs(val, 'YYYY-MM-DD', true);
+                            if (parsed.isValid()) {
+                              setEndDateISO(parsed.hour(23).minute(59).second(59).toISOString());
+                            }
+                          }}
+                          style={{
+                            position: 'absolute',
+                            opacity: 0,
+                            width: '100%',
+                            height: '100%',
+                            top: 0,
+                            left: 0,
+                            cursor: 'pointer',
+                          }}
+                        />
+                      )}
+                    </Pressable>
+                  )}
+                </View>
               </View>
             ) : (
               <View style={{ paddingHorizontal: 14, paddingBottom: 14, gap: 8 }}>
@@ -747,117 +1050,67 @@ export default memo(function CreateEventModal({ visible, onClose, onSaved }: Cre
                     }}
                   />
                 ) : null}
-              </View>
-            )}
-          </View>
 
-          <ModalSection
-            id="images"
-            title="Images"
-            isOpen={openSections.images}
-            onToggle={toggleImages}
-            cardBg={c.card}
-            textColor={c.text}
-            mutedColor={c.muted}
-            showErrorIndicator={showValidation && pickedUris.length === 0 && [image1, image2, image3].every((s) => !(s && s.trim().length))}
-          >
-            <View style={{ gap: 10 }}>
-              {activeImageInputs >= 1 &&
-                Array.from({ length: activeImageInputs }).map((_, idx) => (
-                  <TextInput
-                    key={idx}
-                    placeholder={idx === 0 ? 'Cover image URL or paste' : `Image ${idx + 1} URL`}
-                    placeholderTextColor={c.muted}
-                    value={imageUrlList[idx]}
-                    onChangeText={(val) => setImageByIndex(idx, val)}
-                    style={{
-                      color: c.text,
-                      backgroundColor: '#00000010',
-                      padding: 12,
-                      borderRadius: 10,
-                      borderWidth: 1,
-                      borderColor:
-                        showValidation && idx === 0 && pickedUris.length === 0 && [image1, image2, image3].every((s) => !(s && s.trim().length))
-                          ? '#ff4444'
-                          : '#00000020',
-                    }}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                  />
-                ))}
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                {pickedUris.map((u, idx) => (
-                  <View key={`picked-${idx}-${u}`} style={{ position: 'relative' }}>
-                    <Image source={{ uri: u }} style={{ width: 80, height: 80, borderRadius: 10, backgroundColor: '#00000020' }} />
-                    <Pressable
-                      onPress={() => setPickedUris((prev) => prev.filter((x) => x !== u))}
-                      style={{ position: 'absolute', top: 4, right: 4, backgroundColor: '#00000080', borderRadius: 12, padding: 2 }}
-                    >
-                      <Ionicons name="close" color="#fff" size={14} />
-                    </Pressable>
-                  </View>
-                ))}
-                {typedUrls.map((u, i) => (
-                  <View key={`typed-${i}-${u}`} style={{ position: 'relative' }}>
-                    <Image source={{ uri: u }} style={{ width: 80, height: 80, borderRadius: 10, backgroundColor: '#00000020' }} />
-                  </View>
-                ))}
-              </View>
-              <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+                {/* Optional End Date for Multi-Day Events (Native) */}
                 <Pressable
-                  onPress={async () => {
-                    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-                    if (perm.status !== 'granted') {
-                      Alert.alert('Permission needed', 'Enable photo library access to pick images');
-                      return;
-                    }
-                    try {
-                      const result = await ImagePicker.launchImageLibraryAsync({
-                        allowsMultipleSelection: true,
-                        selectionLimit: 3,
-                        quality: 0.9,
-                        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-                      });
-                      if (!result.canceled) {
-                        const uris = result.assets.map((a) => a.uri);
-                        setPickedUris((prev) => {
-                          const merged = [...prev, ...uris];
-                          const unique: string[] = [];
-                          for (const m of merged) if (!unique.includes(m)) unique.push(m);
-                          return unique.slice(0, 3);
-                        });
-                      }
-                    } catch (e: any) {
-                      Alert.alert('Pick failed', e?.message || 'Could not pick images');
+                  onPress={() => {
+                    if (hasEndDate) {
+                      setHasEndDate(false);
+                      setEndDateISO(null);
+                      setEndDateInput('');
+                    } else {
+                      setHasEndDate(true);
+                      const defaultEnd = dayjs(dateTime).add(1, 'day');
+                      setEndDateISO(defaultEnd.toISOString());
+                      setEndDateInput(defaultEnd.format('YYYY-MM-DD'));
                     }
                   }}
                   style={{
-                    backgroundColor: c.primary,
-                    paddingHorizontal: 14,
-                    paddingVertical: 10,
-                    borderRadius: 10,
                     flexDirection: 'row',
                     alignItems: 'center',
-                    gap: 6,
+                    gap: 8,
+                    backgroundColor: '#00000010',
+                    padding: 10,
+                    borderRadius: 8,
+                    marginTop: 8,
                   }}
                 >
-                  <Ionicons name="image" size={16} color="#000" />
-                  <Text style={{ color: '#000', fontWeight: '700' }}>Pick Photos</Text>
+                  <Ionicons
+                    name={hasEndDate ? 'checkbox' : 'square-outline'}
+                    size={20}
+                    color={hasEndDate ? c.primary : c.muted}
+                  />
+                  <Text style={{ color: c.text, fontSize: 13 }}>Multi-day event (add end date)</Text>
                 </Pressable>
-                {pickedUris.length > 0 ? (
+
+                {hasEndDate && (
                   <Pressable
-                    onPress={() => setPickedUris([])}
-                    style={{ backgroundColor: '#00000030', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10 }}
+                    onPress={() => setShowEndDatePicker(true)}
+                    style={{ backgroundColor: '#00000010', padding: 12, borderRadius: 10, alignItems: 'center', marginTop: 8 }}
                   >
-                    <Text style={{ color: c.text }}>Clear Pics</Text>
+                    <Text style={{ color: c.text, fontWeight: '700' }}>
+                      End Date: {endDateISO ? dayjs(endDateISO).format('MMM D, YYYY') : 'Select end date'}
+                    </Text>
                   </Pressable>
+                )}
+
+                {showEndDatePicker ? (
+                  <DateTimePicker
+                    mode="date"
+                    value={new Date(endDateISO ?? dayjs(dateTime).add(1, 'day').toISOString())}
+                    minimumDate={new Date(dateTime)}
+                    onChange={(evt, selected) => {
+                      setShowEndDatePicker(false);
+                      if (!selected) return;
+                      const parsed = dayjs(selected);
+                      setEndDateISO(parsed.hour(23).minute(59).second(59).toISOString());
+                      setEndDateInput(parsed.format('YYYY-MM-DD'));
+                    }}
+                  />
                 ) : null}
               </View>
-              <Text style={{ color: c.muted, fontSize: 11 }}>
-                First image is cover. Up to 3 images (picked + URLs combined, no duplicates).
-              </Text>
-            </View>
-          </ModalSection>
+            )}
+          </View>
 
           <ModalSection
             id="location"
@@ -1126,7 +1379,7 @@ export default memo(function CreateEventModal({ visible, onClose, onSaved }: Cre
                   cursor: Platform.OS === 'web' ? 'pointer' : undefined,
                 } as any)}
               >
-                <Text style={{ color: '#000', fontWeight: '700' }}>{savingEvent ? 'Saving…' : 'Create Event'}</Text>
+                <Text style={{ color: '#000', fontWeight: '700' }}>{savingEvent ? 'Saving…' : (isEditMode ? 'Update Event' : 'Create Event')}</Text>
               </Pressable>
               <Pressable
                 onPress={() => {

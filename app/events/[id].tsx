@@ -29,6 +29,7 @@ import {
 } from '@/services/organizer';
 import { deleteEventDirect } from '@/services/events';
 import ReportEventModal from '@/components/ReportEventModal';
+import CreateEventModal from '@/components/CreateEventModal';
 
 export default function EventDetails() {
   const c = useThemeColors();
@@ -47,6 +48,7 @@ export default function EventDetails() {
   const [showTicketModal, setShowTicketModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
 
   // Load event and user status
   const loadData = useCallback(async () => {
@@ -373,7 +375,7 @@ export default function EventDetails() {
         {canDelete ? (
           <View style={{ gap: 12 }}>
             <Pressable
-              onPress={() => router.push(`/events/${eventId}/manage`)}
+              onPress={() => setShowEditModal(true)}
               style={{
                 backgroundColor: c.primary,
                 paddingVertical: 14,
@@ -384,9 +386,26 @@ export default function EventDetails() {
                 gap: 8,
               }}
             >
-              <Ionicons name="settings" size={18} color="#000" />
+              <Ionicons name="pencil" size={18} color="#000" />
               <Text style={{ color: '#000', fontWeight: '700', fontSize: 15 }}>
-                Manage Event
+                Edit Event
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => router.push(`/events/${eventId}/manage`)}
+              style={{
+                backgroundColor: '#00000010',
+                paddingVertical: 14,
+                borderRadius: 10,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+              }}
+            >
+              <Ionicons name="people" size={18} color={c.text} />
+              <Text style={{ color: c.text, fontWeight: '700', fontSize: 15 }}>
+                Manage Attendees
               </Text>
             </Pressable>
             <Pressable
@@ -887,6 +906,19 @@ export default function EventDetails() {
         onClose={() => setShowReportModal(false)}
         eventId={eventId}
         eventTitle={event.title}
+      />
+
+      {/* Edit Event Modal */}
+      <CreateEventModal
+        visible={showEditModal}
+        onClose={() => setShowEditModal(false)}
+        onSaved={(updatedEvent) => {
+          if (updatedEvent) {
+            setEvent(updatedEvent);
+          }
+          loadData();
+        }}
+        editEvent={event}
       />
     </SafeAreaView>
   );

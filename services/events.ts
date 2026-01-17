@@ -127,8 +127,9 @@ export type EventInput = {
   image_urls?: string[] | null;
   // Optional storage paths for cleanup; not persisted on Event type by default
   image_storage_paths?: string[] | null;
-  date_time: string; // ISO
-  end_time?: string | null; // ISO optional end time
+  date_time: string; // ISO (start date/time - used for sorting and scoring)
+  end_time?: string | null; // ISO optional end time on same day
+  end_date?: string | null; // ISO optional end date for multi-day events
   location?: string | null;
   latitude?: number | null;
   longitude?: number | null;
