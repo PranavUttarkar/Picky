@@ -44,7 +44,7 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-type DiscoverMode = 'food' | 'events';
+type DiscoverMode = 'events' | 'food';
 type SortMode = 'match' | 'closest' | 'latest' | 'open' | 'upcoming';
 
 // Helper function to check if a restaurant is currently open
@@ -101,7 +101,7 @@ export default function DiscoverPage() {
 
   // Get mode from URL params
   const params = useLocalSearchParams<{ mode?: string }>();
-  const initialMode = (params.mode === 'events' ? 'events' : 'food') as DiscoverMode;
+  const initialMode = (params.mode === 'food' ? 'food' : 'events') as DiscoverMode;
 
   // Toggle state
   const [mode, setMode] = useState<DiscoverMode>(initialMode);

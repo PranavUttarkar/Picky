@@ -1135,7 +1135,7 @@ export default memo(function CreateEventModal({ visible, onClose, onSaved }: Cre
                 }}
                 style={({ pressed }) => ({
                   flex: 1,
-                  backgroundColor: pressed ? '#00000050' : '#00000030',
+                  backgroundColor: pressed ? '#1b1515ea' : '#1b1515c9',
                   paddingVertical: 14,
                   borderRadius: 12,
                   alignItems: 'center',

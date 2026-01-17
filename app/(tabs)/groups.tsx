@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -61,6 +61,23 @@ const parseTabParam = (value: string | string[] | undefined): TabType | null => 
 };
 
 export default function Groups() {
+  // Small helper to emulate CSS `gap` for React Native where not supported.
+  const Row: React.FC<{
+    children?: React.ReactNode;
+    spacing?: number;
+    style?: any;
+  }> = ({ children, spacing = 8, style, ...props }) => {
+    const arr = React.Children.toArray(children as any);
+    return (
+      <View style={[{ flexDirection: 'row', alignItems: 'center' }, style]} {...props}>
+        {arr.map((child, i) => (
+          <View key={i} style={i === 0 ? undefined : { marginLeft: spacing }}>
+            {child}
+          </View>
+        ))}
+      </View>
+    );
+  };
   const c = useThemeColors();
   const { width } = useWindowDimensions();
   const isWide = width >= 768;
@@ -188,8 +205,6 @@ export default function Groups() {
   useEffect(() => {
     loadFriends();
   }, [loadFriends]);
-
-  // Load data based on active tab
   useEffect(() => {
     const checkAuth = async () => {
       const user = (await supabase.auth.getUser()).data.user;
@@ -456,13 +471,15 @@ export default function Groups() {
             borderRadius: 8,
             backgroundColor: activeTab === tab ? c.primary : 'transparent',
             alignItems: 'center',
+            minHeight: 44,
           }}
         >
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Row spacing={6} style={{ alignItems: 'center' }}>
             <Text style={{
               color: activeTab === tab ? 'white' : c.text,
               fontWeight: activeTab === tab ? '600' : '400',
               fontSize: 15,
+              flexShrink: 0,
             }}>
               {TAB_LABELS[tab]}
             </Text>
@@ -476,7 +493,7 @@ export default function Groups() {
                 }}
               />
             )}
-          </View>
+          </Row>
         </Pressable>
       );
       })}
@@ -499,15 +516,17 @@ export default function Groups() {
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'center',
-          gap: 8,
+          minHeight: 44,
         }}
       >
         <Ionicons name="person-add" size={20} color="white" />
         <Text style={{ 
           color: 'white', 
+          marginLeft: 8,
           fontWeight: Typography.fontWeight.semibold,
           fontSize: Typography.scale.bodyLarge.fontSize,
           fontFamily: Typography.fontFamily.bodySemibold,
+          flexShrink: 0,
         }}>
           Add Friends
         </Text>
@@ -561,17 +580,18 @@ export default function Groups() {
                   </Text>
                 </View>
               </View>
-              <View style={{ flexDirection: 'row', gap: 8 }}>
+              <Row spacing={8}>
                 <Pressable
                   onPress={() => handleFriendRequest(request.id, 'accepted')}
                   style={{
                     backgroundColor: c.primary,
                     paddingHorizontal: 16,
                     paddingVertical: 8,
+                    minHeight: 36,
                     borderRadius: 8,
                   }}
                 >
-                  <Text style={{ color: 'white', fontWeight: '600' }}>Accept</Text>
+                  <Text style={{ color: 'white', fontWeight: '600', flexShrink: 0 }}>Accept</Text>
                 </Pressable>
                 <Pressable
                   onPress={() => handleFriendRequest(request.id, 'declined')}
@@ -579,12 +599,13 @@ export default function Groups() {
                     backgroundColor: c.muted,
                     paddingHorizontal: 16,
                     paddingVertical: 8,
+                    minHeight: 36,
                     borderRadius: 8,
                   }}
                 >
-                  <Text style={{ color: c.text, fontWeight: '600' }}>Decline</Text>
+                  <Text style={{ color: c.text, fontWeight: '600', flexShrink: 0 }}>Decline</Text>
                 </Pressable>
-              </View>
+              </Row>
             </View>
           ))}
         </View>
@@ -839,9 +860,10 @@ export default function Groups() {
                       borderRadius: 8,
                       borderWidth: 1,
                       borderColor: c.primary,
+                      minHeight: 36,
                     }}
                   >
-                    <Text style={{ color: c.primary, fontWeight: '600', fontSize: 14 }}>
+                    <Text style={{ color: c.primary, fontWeight: '600', fontSize: 14, flexShrink: 0 }}>
                       Following
                     </Text>
                   </Pressable>
@@ -908,18 +930,18 @@ export default function Groups() {
                   <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
                     <Avatar uri={item.avatar_url} size={48} />
                     <View style={{ marginLeft: 12, flex: 1 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Row spacing={6} style={{ alignItems: 'center' }}>
                         <Text style={{ color: c.text, fontWeight: '600', fontSize: 16 }}>
                           {item.display_name || item.username}
                         </Text>
                         {item.verified && (
                           <Ionicons name="checkmark-circle" size={16} color="#10b981" />
                         )}
-                      </View>
+                      </Row>
                       <Text style={{ color: c.muted, fontSize: 13 }}>
                         @{item.username}
                       </Text>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                      <Row spacing={8} style={{ alignItems: 'center', marginTop: 4 }}>
                         {item.category && (
                           <View style={{
                             backgroundColor: `${c.primary}15`,
@@ -935,7 +957,7 @@ export default function Groups() {
                         <Text style={{ color: c.muted, fontSize: 12 }}>
                           {item.follower_count} follower{item.follower_count !== 1 ? 's' : ''}
                         </Text>
-                      </View>
+                      </Row>
                     </View>
                   </View>
                   <Pressable
@@ -947,12 +969,14 @@ export default function Groups() {
                       borderRadius: 8,
                       borderWidth: isFollowingOrg ? 1 : 0,
                       borderColor: c.primary,
+                      minHeight: 36,
                     }}
                   >
                     <Text style={{ 
                       color: isFollowingOrg ? c.primary : 'white', 
                       fontWeight: '600',
                       fontSize: 14,
+                      flexShrink: 0,
                     }}>
                       {isFollowingOrg ? 'Following' : 'Follow'}
                     </Text>
@@ -972,7 +996,6 @@ export default function Groups() {
       {/* Create/Join Group Buttons */}
       <View style={{
         flexDirection: isWide ? 'row' : 'column',
-        gap: 12,
         marginHorizontal: 16,
         marginBottom: 16,
       }}>
@@ -981,21 +1004,24 @@ export default function Groups() {
           style={{
             backgroundColor: c.primary,
             flex: isWide ? 1 : undefined,
+            marginRight: isWide ? 12 : 0,
+            marginBottom: isWide ? 0 : 12,
             paddingVertical: 12,
             paddingHorizontal: 20,
             borderRadius: 12,
             flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: 8,
           }}
         >
           <Ionicons name="add" size={20} color="white" />
           <Text style={{ 
             color: 'white', 
+            marginLeft: 8,
             fontWeight: Typography.fontWeight.semibold,
             fontSize: Typography.scale.bodyLarge.fontSize,
             fontFamily: Typography.fontFamily.bodySemibold,
+            flexShrink: 0,
           }}>
             Create Group
           </Text>
@@ -1012,13 +1038,12 @@ export default function Groups() {
             flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: 8,
             borderWidth: 1,
             borderColor: c.muted,
           }}
         >
           <Ionicons name="enter" size={20} color={c.text} />
-          <Text style={{ color: c.text, fontWeight: '600', fontSize: 16 }}>
+          <Text style={{ color: c.text, fontWeight: '600', fontSize: 16, marginLeft: 8, flexShrink: 0 }}>
             Join Group
           </Text>
         </Pressable>
@@ -1196,7 +1221,7 @@ export default function Groups() {
                 </View>
               )}
               
-              <View style={{ flexDirection: 'row', gap: 12 }}>
+              <View style={{ flexDirection: isWide ? 'row' : 'column' }}>
                 <Pressable
                   onPress={() => setShowCreate(false)}
                   style={{
@@ -1205,9 +1230,12 @@ export default function Groups() {
                     paddingVertical: 12,
                     borderRadius: 12,
                     alignItems: 'center',
+                    marginRight: isWide ? 12 : 0,
+                    marginBottom: isWide ? 0 : 12,
+                    minHeight: 44,
                   }}
                 >
-                  <Text style={{ color: c.text, fontWeight: '600' }}>Cancel</Text>
+                  <Text style={{ color: c.text, fontWeight: '600', flexShrink: 0 }}>Cancel</Text>
                 </Pressable>
                 
                 <Pressable
@@ -1219,14 +1247,16 @@ export default function Groups() {
                     paddingVertical: 12,
                     borderRadius: 12,
                     alignItems: 'center',
+                    marginLeft: isWide ? 12 : 0,
+                    minHeight: 44,
                   }}
                 >
-                  <Text style={{ color: 'white', fontWeight: '600' }}>
+                  <Text style={{ color: 'white', fontWeight: '600', flexShrink: 0 }}>
                     {creating ? 'Creating...' : 'Create'}
                   </Text>
                 </Pressable>
               </View>
-            </View>
+              </View>
           </KeyboardAvoidingView>
         </Modal>
 
@@ -1275,7 +1305,7 @@ export default function Groups() {
                 }}
               />
               
-              <View style={{ flexDirection: 'row', gap: 12 }}>
+              <View style={{ flexDirection: isWide ? 'row' : 'column' }}>
                 <Pressable
                   onPress={() => setShowJoin(false)}
                   style={{
@@ -1284,9 +1314,12 @@ export default function Groups() {
                     paddingVertical: 12,
                     borderRadius: 12,
                     alignItems: 'center',
+                    marginRight: isWide ? 12 : 0,
+                    marginBottom: isWide ? 0 : 12,
+                    minHeight: 44,
                   }}
                 >
-                  <Text style={{ color: c.text, fontWeight: '600' }}>Cancel</Text>
+                  <Text style={{ color: c.text, fontWeight: '600', flexShrink: 0 }}>Cancel</Text>
                 </Pressable>
                 
                 <Pressable
@@ -1298,9 +1331,11 @@ export default function Groups() {
                     paddingVertical: 12,
                     borderRadius: 12,
                     alignItems: 'center',
+                    marginLeft: isWide ? 12 : 0,
+                    minHeight: 44,
                   }}
                 >
-                  <Text style={{ color: 'white', fontWeight: '600' }}>
+                  <Text style={{ color: 'white', fontWeight: '600', flexShrink: 0 }}>
                     {joining ? 'Joining...' : 'Join'}
                   </Text>
                 </Pressable>
@@ -1328,7 +1363,6 @@ export default function Groups() {
                   padding: 20,
                   borderTopLeftRadius: 24,
                   borderTopRightRadius: 24,
-                  gap: 12,
                 }}
               >
                 <Text
@@ -1350,7 +1384,7 @@ export default function Groups() {
                     borderRadius: 12,
                     flexDirection: 'row',
                     alignItems: 'center',
-                    gap: 12,
+                    marginBottom: 12,
                   }}
                 >
                   <Ionicons name="people-outline" size={20} color={c.text} />
@@ -1359,6 +1393,8 @@ export default function Groups() {
                     fontWeight: Typography.fontWeight.semibold,
                     fontSize: Typography.scale.bodyLarge.fontSize,
                     fontFamily: Typography.fontFamily.bodySemibold,
+                    marginLeft: 12,
+                    flexShrink: 0,
                   }}>
                     Add to existing group
                   </Text>
@@ -1372,11 +1408,12 @@ export default function Groups() {
                     borderRadius: 12,
                     flexDirection: 'row',
                     alignItems: 'center',
-                    gap: 12,
+                    marginBottom: 12,
+                    minHeight: 44,
                   }}
                 >
                   <Ionicons name="add-circle-outline" size={20} color={c.text} />
-                  <Text style={{ color: c.text, fontWeight: '600', fontSize: 16 }}>
+                  <Text style={{ color: c.text, fontWeight: '600', fontSize: 16, marginLeft: 12, flexShrink: 0 }}>
                     Start a new group together
                   </Text>
                 </Pressable>
@@ -1389,11 +1426,11 @@ export default function Groups() {
                     borderRadius: 12,
                     flexDirection: 'row',
                     alignItems: 'center',
-                    gap: 12,
+                    marginBottom: 12,
                   }}
                 >
                   <Ionicons name="person-remove-outline" size={20} color={c.muted} />
-                  <Text style={{ color: c.text, fontWeight: '600', fontSize: 16 }}>
+                  <Text style={{ color: c.text, fontWeight: '600', fontSize: 16, marginLeft: 12, flexShrink: 0 }}>
                     Remove friend
                   </Text>
                 </Pressable>
@@ -1406,11 +1443,11 @@ export default function Groups() {
                     borderRadius: 12,
                     flexDirection: 'row',
                     alignItems: 'center',
-                    gap: 12,
+                    marginBottom: 12,
                   }}
                 >
                   <Ionicons name="ban-outline" size={20} color="#fff" />
-                  <Text style={{ color: '#fff', fontWeight: '600', fontSize: 16 }}>
+                  <Text style={{ color: '#fff', fontWeight: '600', fontSize: 16, marginLeft: 12, flexShrink: 0 }}>
                     Block user
                   </Text>
                 </Pressable>
@@ -1519,9 +1556,10 @@ export default function Groups() {
                     borderRadius: 12,
                     backgroundColor: c.card,
                     alignItems: 'center',
+                    minHeight: 44,
                   }}
                 >
-                  <Text style={{ color: c.text, fontWeight: '600' }}>Done</Text>
+                  <Text style={{ color: c.text, fontWeight: '600', flexShrink: 0 }}>Done</Text>
                 </Pressable>
               </View>
             </View>

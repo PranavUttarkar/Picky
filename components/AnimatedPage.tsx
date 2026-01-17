@@ -89,7 +89,7 @@ export default function AnimatedPage({
 
   return (
     <Animated.View
-      style={[{ opacity, transform: [{ translateX: tx }, { translateY: ty }, { scale }] }, style]}
+      style={[{ flex: 1, opacity, transform: [{ translateX: tx }, { translateY: ty }, { scale }] }, style]}
     >
       {children}
     </Animated.View>
