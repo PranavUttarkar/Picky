@@ -609,7 +609,7 @@ export default function HomeTab() {
           <View style={styles.section}>
             <View style={styles.groupDecideGrid}>
               <Pressable
-                onPress={() => handleGroupDecide('events')}
+                onPress={() => router.push('/QuickPick')}
                 style={[styles.groupDecideCard, { backgroundColor: c.card }]}
               >
                 <Ionicons name="people-outline" size={32} color={c.primary} />
