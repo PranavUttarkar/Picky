@@ -1,11 +1,12 @@
 import { useEffect, useState, useCallback } from 'react';
-import { View, Text, Pressable, Linking, ScrollView, Alert, ActivityIndicator, Modal } from 'react-native';
+import { View, Text, Pressable, Linking, ScrollView, Alert, ActivityIndicator, Modal, Platform } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import HeaderSpacer from '@/components/HeaderSpacer';
 import EventImages from '@/components/EventImages';
 import { useLocalSearchParams } from 'expo-router';
 import dayjs from 'dayjs';
 import * as Calendar from 'expo-calendar';
+
 import { useThemeColors } from '@/theme/ThemeProvider';
 import GradientHeader from '@/components/GradientHeader';
 import Chip from '@/components/Chip';
@@ -176,22 +177,63 @@ export default function EventDetails() {
     }
   };
 
-  // Add to calendar
+  // Add to calendar (native on mobile, Google Calendar link fallback on web)
   const addToCalendar = async () => {
     if (!event) return;
-    const { status } = await Calendar.requestCalendarPermissionsAsync();
-    if (status !== 'granted') return;
-    const calendars = await Calendar.getCalendarsAsync(Calendar.EntityTypes.EVENT);
-    const calendarId = calendars?.[0]?.id;
-    if (!calendarId) return;
-    await Calendar.createEventAsync(calendarId, {
-      title: event.title,
-      startDate: new Date(event.date_time),
-      endDate: new Date(dayjs(event.date_time).add(2, 'hour').toISOString()),
-      location: event.location ?? undefined,
-      notes: event.description ?? undefined,
-    });
-    Alert.alert('Added', 'Event added to your calendar!');
+
+    // Use native calendar on iOS/Android when available
+    if (Platform.OS !== 'web' && Calendar && Calendar.requestCalendarPermissionsAsync) {
+      try {
+        const { status } = await Calendar.requestCalendarPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Calendar', 'Permission to access calendar was not granted.');
+          return;
+        }
+        const calendars = await Calendar.getCalendarsAsync(Calendar.EntityTypes.EVENT);
+        const calendarId = calendars?.[0]?.id;
+        if (!calendarId) {
+          Alert.alert('Calendar', 'No calendar available on this device.');
+          return;
+        }
+
+        const start = new Date(event.date_time);
+        const end = event.end_time ? new Date((event as any).end_time) : new Date(new Date(event.date_time).getTime() + 2 * 60 * 60 * 1000);
+
+        await Calendar.createEventAsync(calendarId, {
+          title: event.title,
+          startDate: start,
+          endDate: end,
+          location: event.location ?? undefined,
+          notes: event.description ?? undefined,
+        });
+        Alert.alert('Added', 'Event added to your calendar!');
+        return;
+      } catch (e: any) {
+        console.warn('addToCalendar (native) error:', e);
+        // fallback to web flow below
+      }
+    }
+
+    // Web and fallback: open Google Calendar create URL
+    try {
+      if (!event?.date_time) return;
+      const startIso = new Date(event.date_time).toISOString();
+      const endIso = event.end_time
+        ? new Date((event as any).end_time).toISOString()
+        : new Date(new Date(event.date_time).getTime() + 2 * 60 * 60 * 1000).toISOString();
+
+      const fmt = (iso: string) => iso.replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+      const params = new URLSearchParams({
+        action: 'TEMPLATE',
+        text: event.title ?? 'Event',
+        details: event.description ?? '',
+        location: event.location ?? '',
+      });
+      const url = `https://calendar.google.com/calendar/render?${params.toString()}&dates=${fmt(startIso)}/${fmt(endIso)}`;
+      await Linking.openURL(url);
+    } catch (e: any) {
+      Alert.alert('Calendar', e?.message ?? 'Unable to open calendar');
+    }
   };
 
   // Check if current user is the organizer or admin
@@ -687,15 +729,6 @@ export default function EventDetails() {
   return (
     <SafeAreaView edges={['bottom']} style={{ flex: 1, backgroundColor: c.background }}>
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: insets.bottom + 16 }}>
-        {(() => {
-          const imgs: string[] = (event as any).image_urls?.length
-            ? (event as any).image_urls
-            : event.image_url
-            ? [event.image_url]
-            : [];
-          if (!imgs.length) return null;
-          return <EventImages images={imgs} variant="detail" />;
-        })()}
         <View style={{ padding: 16 }}>
           <GradientHeader
             title={event.title}
@@ -703,14 +736,25 @@ export default function EventDetails() {
             backLabel="Back to home"
             shareUrl={'https://usepicky.app'}
           />
-          <Text style={{ color: c.muted, marginTop: 4 }}>
-            {dayjs(event.date_time).format('ddd, MMM D • h:mm A')} • {event.location}
-          </Text>
+
+          {(() => {
+            const imgs: string[] = (event as any).image_urls?.length
+              ? (event as any).image_urls
+              : event.image_url
+              ? [event.image_url]
+              : [];
+            if (!imgs.length) return null;
+            return <EventImages images={imgs} variant="detail" />;
+          })()}
+
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
             {(event.tags ?? []).map((t: string) => (
               <Chip key={t} label={t} />
             ))}
           </View>
+          <Text style={{ color: c.muted, marginTop: 8 }}>
+            {dayjs(event.date_time).format('ddd, MMM D • h:mm A')} • {event.location}
+          </Text>
           <Text style={{ color: c.text, marginTop: 12 }}>{event.description}</Text>
 
           {/* Ticket Info for Ticketed Events */}

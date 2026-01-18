@@ -14,7 +14,7 @@ const POPULAR_INTERESTS = [
   'Food',
   'Tech',
   'Hackathons',
-  'Art & Museums',
+  'Arts & Theatre',
   'Careers',
   'Outdoors',
   'Culture',

@@ -96,12 +96,14 @@ const SectionCard = memo(function SectionCard({
   children, 
   title, 
   subtitle,
-  icon 
+  icon,
+  headerAction,
 }: { 
   children: React.ReactNode; 
   title: string;
   subtitle?: string;
   icon?: string;
+  headerAction?: React.ReactNode;
 }) {
   const c = useThemeColors();
   
@@ -120,6 +122,7 @@ const SectionCard = memo(function SectionCard({
       <View style={{ 
         flexDirection: 'row', 
         alignItems: 'center', 
+        justifyContent: 'space-between',
         marginBottom: subtitle ? 8 : 16 
       }}>
         {icon && (
@@ -140,6 +143,7 @@ const SectionCard = memo(function SectionCard({
         }}>
           {title}
         </Text>
+        {headerAction}
       </View>
       {subtitle && (
         <Text style={{ 
@@ -502,6 +506,63 @@ const UsernameEditModal = memo(function UsernameEditModal({
   );
 });
 
+// Compact square card for events (profile)
+function CompactEventCardSmall({ event, onPress }: { event: any; onPress: () => void }) {
+  const c = useThemeColors();
+  const imgs: string[] = (event?.image_urls?.length ? event.image_urls : event.image_url ? [event.image_url] : []) as string[];
+  const cover = imgs[0];
+
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1, width: 160, marginRight: 12 }] }>
+      <View style={{ width: 160, height: 100, borderRadius: 12, overflow: 'hidden', backgroundColor: c.muted + '10' }}>
+        {cover ? (
+          <Image source={{ uri: cover }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+        ) : (
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+            <Ionicons name="calendar-outline" size={28} color={c.muted} />
+          </View>
+        )}
+      </View>
+      <Text style={{ color: c.text, marginTop: 8, fontWeight: '600' }} numberOfLines={2}>{event.title}</Text>
+      <Text style={{ color: c.muted, fontSize: 12 }}>{dayjs(event.date_time).format('MMM D')}</Text>
+    </Pressable>
+  );
+}
+
+// Compact square card for restaurants (profile)
+function CompactFoodCardSmall({ restaurant, onPress }: { restaurant: any; onPress: () => void }) {
+  const c = useThemeColors();
+  const cover = restaurant?.main_image || restaurant?.image_1 || restaurant?.image_2 || null;
+
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1, width: 160, marginRight: 12 }] }>
+      <View style={{ width: 160, height: 100, borderRadius: 12, overflow: 'hidden', backgroundColor: c.muted + '10' }}>
+        {cover ? (
+          <Image source={{ uri: cover }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+        ) : (
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+            <Ionicons name="restaurant-outline" size={28} color={c.muted} />
+          </View>
+        )}
+      </View>
+      <Text style={{ color: c.text, marginTop: 8, fontWeight: '600' }} numberOfLines={2}>{restaurant.restaurant_name || restaurant.name}</Text>
+      <Text style={{ color: c.muted, fontSize: 12 }} numberOfLines={1}>{restaurant.category || restaurant.price_range || ''}</Text>
+    </Pressable>
+  );
+}
+
+// View All compact card used in home; reused here
+function ViewAllCardSmall({ onPress, label = 'View All' }: { onPress: () => void; label?: string }) {
+  const c = useThemeColors();
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => [{ width: 160, marginRight: 12, opacity: pressed ? 0.85 : 1 }] }>
+      <View style={{ width: 160, height: 100, borderRadius: 12, backgroundColor: c.card, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: c.muted + '10' }}>
+        <Ionicons name="arrow-forward" size={28} color={c.primary} />
+      </View>
+      <Text style={{ color: c.primary, marginTop: 8, fontWeight: '700' }}>{label}</Text>
+    </Pressable>
+  );
+}
 export default function Profile() {
   const c = useThemeColors();
   const { scheme, setScheme } = useTheme();
@@ -545,6 +606,13 @@ export default function Profile() {
   const [orgProfile, setOrgProfile] = useState<OrganizationProfile | null>(null);
   const [followerCount, setFollowerCount] = useState<number>(0);
   const isOrganization = userProfile?.account_type === 'organization';
+
+  // Saved items state (for compact preview on profile)
+  const [savedEventIds, setSavedEventIds] = useState<number[]>([]);
+  const [savedEvents, setSavedEvents] = useState<any[]>([]);
+  const [savedRestaurantIds, setSavedRestaurantIds] = useState<string[]>([]);
+  const [savedRestaurants, setSavedRestaurants] = useState<any[]>([]);
+  const [loadingSavedPreview, setLoadingSavedPreview] = useState(false);
 
   // Load user profile and data
   const loadUserData = async () => {
@@ -605,6 +673,48 @@ export default function Profile() {
         } catch (orgError) {
           console.error('Error loading organization data:', orgError);
         }
+      }
+
+      // Load saved items for preview (small subset)
+      try {
+        setLoadingSavedPreview(true);
+        const [sr, se] = await Promise.all([
+          supabase.from('saved_restaurants').select('restaurant_id').eq('user_id', user.id),
+          supabase.from('saved_events').select('event_id').eq('user_id', user.id),
+        ]);
+
+        const restIds = ((sr.data ?? []) as any[]).map((r: any) => String(r.restaurant_id));
+        const evIds = ((se.data ?? []) as any[]).map((e: any) => Number(e.event_id));
+        setSavedRestaurantIds(restIds);
+        setSavedEventIds(evIds);
+
+        // Fetch a small preview set (limit 5)
+        if (evIds.length > 0) {
+          const { data: eventsData } = await supabase
+            .from('events')
+            .select('id,title,image_url,image_urls,date_time')
+            .in('id', evIds)
+            .order('date_time', { ascending: true })
+            .limit(5);
+          setSavedEvents((eventsData ?? []) as any[]);
+        } else {
+          setSavedEvents([]);
+        }
+
+        if (restIds.length > 0) {
+          const { data: rests } = await supabase
+            .from('restaurants')
+            .select('place_id,restaurant_name,main_image,category,price_range')
+            .in('place_id', restIds)
+            .limit(5);
+          setSavedRestaurants((rests ?? []) as any[]);
+        } else {
+          setSavedRestaurants([]);
+        }
+      } catch (err) {
+        console.error('Error loading saved preview:', err);
+      } finally {
+        setLoadingSavedPreview(false);
       }
     } catch (error) {
       console.error('Error loading user data:', error);
@@ -882,7 +992,8 @@ export default function Profile() {
               <Pressable
                 onPress={() => {
                   trackCTA('profile_sign_in_press').catch(() => {});
-                  router.push('/onboarding/welcome');
+                  // Route directly to the welcome page in sign-in mode
+                  router.push('/onboarding/welcome?mode=signIn');
                 }}
                 style={{
                   backgroundColor: c.primary,
@@ -1172,15 +1283,30 @@ export default function Profile() {
               </>
             ) : (
               <>
-                <ActionButton
-                  title="View Saved"
+                <SectionCard
+                  title="Saved"
                   subtitle="Events and restaurants you've saved"
                   icon="heart"
-                  onPress={() => {
-                    trackCTA('profile_view_saved_press').catch(() => {});
-                    router.push('/(tabs)/saved');
-                  }}
-                />
+                  headerAction={(
+                    <Pressable onPress={() => { trackCTA('profile_view_saved_press').catch(() => {}); router.push('/(tabs)/saved'); }} style={{ padding: 6 }}>
+                      <Text style={{ color: c.primary, fontWeight: '700' }}>View All</Text>
+                    </Pressable>
+                  )}
+                >
+                  {loadingSavedPreview ? (
+                    <ActivityIndicator size="small" color={c.primary} />
+                  ) : (
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingVertical: 6 }}>
+                      {savedEvents.slice(0, Math.max(2, isWide ? 5 : 3)).map((e) => (
+                        <CompactEventCardSmall key={`ev-${e.id}`} event={e} onPress={() => router.push(`/events/${e.id}`)} />
+                      ))}
+                      {savedRestaurants.slice(0, Math.max(2, isWide ? 5 : 3)).map((r) => (
+                        <CompactFoodCardSmall key={`r-${r.place_id}`} restaurant={r} onPress={() => router.push(`/food/${r.place_id}`)} />
+                      ))}
+                      <ViewAllCardSmall onPress={() => { trackCTA('profile_view_saved_press').catch(() => {}); router.push('/(tabs)/saved'); }} label="View Saved" />
+                    </ScrollView>
+                  )}
+                </SectionCard>
                 
                 <ActionButton
                   title="My Events"

@@ -105,7 +105,8 @@ export default function DiscoverPage() {
 
   // Toggle state
   const [mode, setMode] = useState<DiscoverMode>(initialMode);
-  const [view, setView] = useState<'row' | 'grid'>('grid');
+  // Default to 'row' for events on smaller screens, otherwise 'grid'
+  const [view, setView] = useState<'row' | 'grid'>(() => (initialMode === 'events' && !isWide ? 'row' : 'grid'));
   const [query, setQuery] = useState('');
   const [sortMode, setSortMode] = useState<SortMode>('match');
   const [showSortMenu, setShowSortMenu] = useState(false);
@@ -138,6 +139,15 @@ export default function DiscoverPage() {
       tension: 100,
     }).start();
   }, [mode]);
+
+  // When switching modes or resizing, prefer row view for events on small screens
+  useEffect(() => {
+    if (mode === 'events' && !isWide) {
+      setView('row');
+    } else if (mode === 'food') {
+      setView('grid');
+    }
+  }, [mode, isWide]);
 
   // Food state
   const [foodRecommended, setFoodRecommended] = useState<Restaurant[]>([]);

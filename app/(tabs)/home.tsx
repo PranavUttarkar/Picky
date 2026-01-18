@@ -605,30 +605,29 @@ export default function HomeTab() {
             )}
           </View>
 
-          {/* Row 3: Group Decide */}
+          {/* Row 3: Quick Actions */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: c.text, marginBottom: 12 }]}>Group Decide</Text>
             <View style={styles.groupDecideGrid}>
               <Pressable
                 onPress={() => handleGroupDecide('events')}
                 style={[styles.groupDecideCard, { backgroundColor: c.card }]}
               >
-                <Ionicons name="calendar-outline" size={32} color={c.primary} />
-                <Text style={[styles.groupDecideText, { color: c.text }]}>Decide Events</Text>
+                <Ionicons name="people-outline" size={32} color={c.primary} />
+                <Text style={[styles.groupDecideText, { color: c.text }]}>Decide with a group</Text>
               </Pressable>
               <Pressable
-                onPress={() => handleGroupDecide('food')}
+                onPress={() => router.push('/groups?tab=organizations')}
                 style={[styles.groupDecideCard, { backgroundColor: c.card }]}
               >
-                <Ionicons name="restaurant-outline" size={32} color={c.primary} />
-                <Text style={[styles.groupDecideText, { color: c.text }]}>Decide Food</Text>
+                <Ionicons name="business-outline" size={32} color={c.primary} />
+                <Text style={[styles.groupDecideText, { color: c.text }]}>View organizations</Text>
               </Pressable>
               <Pressable
-                onPress={() => handleGroupDecide('time')}
+                onPress={() => Linking.openURL('https://forms.gle/xyymx87MoF6WXnBW8')}
                 style={[styles.groupDecideCard, { backgroundColor: c.card }]}
               >
-                <Ionicons name="time-outline" size={32} color={c.primary} />
-                <Text style={[styles.groupDecideText, { color: c.text }]}>Pick a Common Time</Text>
+                <Ionicons name="chatbubble-ellipses-outline" size={32} color={c.primary} />
+                <Text style={[styles.groupDecideText, { color: c.text }]}>Feedback</Text>
               </Pressable>
             </View>
           </View>
