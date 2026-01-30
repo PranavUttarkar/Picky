@@ -102,7 +102,7 @@ export default function OnboardingGroup() {
 
   return (
     <GradientBackground>
-      <AnimatedPage variant="slide-left">
+      <AnimatedPage variant="slide-right">
         <View style={{ flex: 1, padding: Spacing.md }}>
           <Text
             style={{
@@ -201,7 +201,7 @@ export default function OnboardingGroup() {
                 }}
               />
               {error && <Text style={{ 
-                color: Colors.light.accent.warning, 
+                color: Colors.light.accent, 
                 fontSize: Typography.scale.body.fontSize,
                 fontFamily: Typography.fontFamily.body,
                 marginTop: Spacing.sm,
@@ -276,7 +276,7 @@ export default function OnboardingGroup() {
                 }}
               />
               {error && <Text style={{ 
-                color: Colors.light.accent.warning, 
+                color: Colors.light.accent, 
                 fontSize: Typography.scale.body.fontSize,
                 fontFamily: Typography.fontFamily.body,
                 marginTop: Spacing.sm,

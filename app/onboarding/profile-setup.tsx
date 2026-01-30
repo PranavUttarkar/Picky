@@ -169,7 +169,7 @@ export default function ProfileSetup() {
                     paddingRight: 50,
                     borderWidth: 2,
                     borderColor: usernameStatus === 'available' ? Colors.light.secondary[500] : 
-                                usernameStatus === 'taken' ? Colors.light.accent.warning : c.card,
+                                usernameStatus === 'taken' ? Colors.light.accent : c.card,
                   }}
                 />
                 <View style={{
@@ -184,12 +184,12 @@ export default function ProfileSetup() {
                   ) : usernameStatus === 'available' ? (
                     <Ionicons name="checkmark-circle" size={20} color={Colors.light.secondary[500]} />
                   ) : usernameStatus === 'taken' ? (
-                    <Ionicons name="close-circle" size={20} color={Colors.light.accent.warning} />
+                    <Ionicons name="close-circle" size={20} color={Colors.light.accent} />
                   ) : null}
                 </View>
               </View>
               {usernameStatus === 'taken' && (
-                <Text style={{ color: Colors.light.accent.warning, fontSize: Typography.scale.body.fontSize, lineHeight: Typography.scale.body.lineHeight, fontFamily: Typography.fontFamily.body, marginTop: Spacing.xs }}>
+                <Text style={{ color: Colors.light.accent, fontSize: Typography.scale.body.fontSize, lineHeight: Typography.scale.body.lineHeight, fontFamily: Typography.fontFamily.body, marginTop: Spacing.xs }}>
                   Username is already taken
                 </Text>
               )}

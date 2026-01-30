@@ -541,7 +541,7 @@ export default function OrgSetup() {
 
   return (
     <GradientBackground>
-      <AnimatedPage variant="slide-left">
+      <AnimatedPage variant="slide-right">
         <ScrollView 
           style={{ flex: 1 }} 
           contentContainerStyle={{ 
@@ -577,7 +577,7 @@ export default function OrgSetup() {
             </Pressable>
 
             {/* Form Content */}
-            {renderStep1()}
+            {renderForm()}
 
             {/* Continue Button */}
             <Pressable

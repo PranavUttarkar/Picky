@@ -18,7 +18,7 @@ import {
   type DecisionCategory,
   type SessionParticipant,
 } from '@/services/quickPick';
-import { castRating, onPollRealtime, getPoll, suggestLeader, getLatestGroupPoll, closePoll } from '@/services/polls';
+import { castRating, onPollRealtime, getPoll, suggestLeader, getLatestGroupPoll, closePoll, castTextVote } from '@/services/polls';
 import { triggerGroupDecisionNotification } from '@/utils/notifications';
 import { getRestaurantById, restaurantImages } from '@/services/food';
 import type { Event, Restaurant, ScoredRestaurant } from '@/types/models';
@@ -54,6 +54,19 @@ export default function QuickPickVote() {
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<VoteItem[]>([]);
   const [pollId, setPollId] = useState<number | null>(null);
+  const [pollMode, setPollMode] = useState<'default' | 'rating'>('default');
+  const [pollOptions, setPollOptions] = useState<any[]>([]); // Store poll options with proper IDs
+  
+  // For "both" category: track separate polls and phases
+  const [isMegaPoll, setIsMegaPoll] = useState(false);
+  const [currentPhase, setCurrentPhase] = useState<'events' | 'food'>('events');
+  const [eventsPollId, setEventsPollId] = useState<number | null>(null);
+  const [foodPollId, setFoodPollId] = useState<number | null>(null);
+  const [eventsComplete, setEventsComplete] = useState(false);
+  const [showTransition, setShowTransition] = useState(false);
+  const [eventItems, setEventItems] = useState<VoteItem[]>([]);
+  const [foodItems, setFoodItems] = useState<VoteItem[]>([]);
+  
   const [participants, setParticipants] = useState<SessionParticipant[]>([]);
   const [votedCount, setVotedCount] = useState(0);
   const [myVotes, setMyVotes] = useState<Record<string, number>>({});
@@ -110,6 +123,8 @@ export default function QuickPickVote() {
           // Load the existing poll's options
           const pollData = await getPoll(existingPoll.pollId);
           setPollId(existingPoll.pollId);
+          setPollMode(pollData.poll?.mode || 'default');
+          setPollOptions(pollData.options || []);
           setVotedCount(pollData.respondedCount);
           setTotalMembers(pollData.totalMembers);
           
@@ -184,9 +199,38 @@ export default function QuickPickVote() {
       // Get recommendations
       const { events, restaurants } = await getSessionRecommendations(gid, cat, start, end);
       
-      // Convert to VoteItems
-      const voteItems: VoteItem[] = [
-        ...events.map((e): VoteItem => ({
+      // Check if this is a "both" mega poll
+      if (cat === 'both' && events.length > 0 && restaurants.length > 0) {
+        setIsMegaPoll(true);
+        setCurrentPhase('events');
+        
+        // Create separate polls for events and food
+        const eventPollId = await createSessionPoll(
+          gid,
+          'events',
+          events,
+          [],
+          `${groupName || 'Quick Pick'} - Events`
+        );
+        setEventsPollId(eventPollId);
+        
+        const foodPollId = await createSessionPoll(
+          gid,
+          'food',
+          [],
+          restaurants,
+          `${groupName || 'Quick Pick'} - Food`
+        );
+        setFoodPollId(foodPollId);
+        
+        // Set current poll to events poll
+        setPollId(eventPollId);
+        const eventPollData = await getPoll(eventPollId);
+        setPollMode(eventPollData.poll?.mode || 'default');
+        setPollOptions(eventPollData.options || []);
+        
+        // Prepare event items
+        const eventVoteItems: VoteItem[] = events.map((e): VoteItem => ({
           id: `event-${e.id}`,
           type: 'event',
           title: e.title,
@@ -194,8 +238,10 @@ export default function QuickPickVote() {
           image: e.image_url || undefined,
           matchPercent: e.match_percent,
           data: e,
-        })),
-        ...restaurants.map((r): VoteItem => ({
+        }));
+        
+        // Prepare food items (for later)
+        const foodVoteItems: VoteItem[] = restaurants.map((r): VoteItem => ({
           id: `food-${r.id}`,
           type: 'food',
           title: r.restaurant_name,
@@ -203,23 +249,60 @@ export default function QuickPickVote() {
           image: r.main_image || undefined,
           matchPercent: r.match_percent,
           data: r,
-        })),
-      ];
-      
-      // Shuffle for variety
-      shuffleArray(voteItems);
-      
-      setItems(voteItems);
-      
-      // Create poll
-      const newPollId = await createSessionPoll(
-        gid,
-        cat,
-        events,
-        restaurants,
-        groupName || 'Quick Pick'
-      );
-      setPollId(newPollId);
+        }));
+        
+        shuffleArray(eventVoteItems);
+        shuffleArray(foodVoteItems);
+        
+        setEventItems(eventVoteItems);
+        setFoodItems(foodVoteItems);
+        setItems(eventVoteItems); // Start with events
+      } else {
+        // Single category poll (events, food, or both with only one type)
+        setIsMegaPoll(false);
+        
+        // Convert to VoteItems
+        const voteItems: VoteItem[] = [
+          ...events.map((e): VoteItem => ({
+            id: `event-${e.id}`,
+            type: 'event',
+            title: e.title,
+            subtitle: e.location || formatDate(e.date_time),
+            image: e.image_url || undefined,
+            matchPercent: e.match_percent,
+            data: e,
+          })),
+          ...restaurants.map((r): VoteItem => ({
+            id: `food-${r.id}`,
+            type: 'food',
+            title: r.restaurant_name,
+            subtitle: r.category || r.address || '',
+            image: r.main_image || undefined,
+            matchPercent: r.match_percent,
+            data: r,
+          })),
+        ];
+        
+        // Shuffle for variety
+        shuffleArray(voteItems);
+        
+        setItems(voteItems);
+        
+        // Create poll
+        const newPollId = await createSessionPoll(
+          gid,
+          cat,
+          events,
+          restaurants,
+          groupName || 'Quick Pick'
+        );
+        setPollId(newPollId);
+        
+        // Load the created poll to get mode and option IDs
+        const pollData = await getPoll(newPollId);
+        setPollMode(pollData.poll?.mode || 'default');
+        setPollOptions(pollData.options || []);
+      }
       
     } catch (e: any) {
       console.error('Failed to load recommendations:', e);
@@ -239,11 +322,11 @@ export default function QuickPickVote() {
         setVotedCount(pollData.respondedCount);
         setTotalMembers(pollData.totalMembers);
         
-        // Check if everyone has voted - auto-navigate to results
+        // Check if everyone has voted - auto-navigate to group chat
         if (pollData.respondedCount >= pollData.totalMembers && pollData.totalMembers > 0 && waitingForOthers) {
           setIsComplete(true);
           setTimeout(() => {
-            router.replace(`/quick-pick/result?groupId=${groupId}&pollId=${pollId}`);
+            router.replace(`/(tabs)/groups/${groupId}`);
           }, 1000);
         }
       } catch (e) {
@@ -276,17 +359,39 @@ export default function QuickPickVote() {
     if (!pollId) return;
     
     try {
-      // Extract the actual ID for the poll option
-      const optionId = item.type === 'event' 
-        ? (item.data as ScoredEvent).id 
-        : 0; // For text polls, we'd need different handling
-      
-      // For now, just track locally
+      // Track locally
       setMyVotes(prev => ({ ...prev, [item.id]: rating }));
       
-      // If this was a proper event poll with rating mode
-      if (item.type === 'event' && optionId) {
-        await castRating(pollId, optionId, rating as -1 | 0 | 1);
+      // For rating mode polls, cast rating for the event
+      if (pollMode === 'rating' && item.type === 'event') {
+        const eventId = (item.data as ScoredEvent).id;
+        await castRating(pollId, eventId, rating as -1 | 0 | 1);
+      }
+      // For text-based polls or mixed polls with food, find the matching option
+      else if (pollOptions.length > 0) {
+        // Find the poll option that matches this item
+        const matchingOption = pollOptions.find(opt => {
+          if (opt.kind === 'event' && item.type === 'event') {
+            return opt.id === (item.data as ScoredEvent).id;
+          } else if (opt.kind === 'text') {
+            // Match by checking if the option text contains the item title
+            const optText = opt.text || '';
+            return optText.includes(item.title) || optText.includes(String((item.data as any).id || ''));
+          }
+          return false;
+        });
+        
+        if (matchingOption) {
+          // For rating mode with events, use castRating
+          if (pollMode === 'rating' && matchingOption.kind === 'event') {
+            await castRating(pollId, matchingOption.id, rating as -1 | 0 | 1);
+          }
+          // For text options, use castTextVote only if rating is positive (1)
+          // Note: text polls don't have rating system, only single vote
+          else if (matchingOption.kind === 'text' && rating === 1) {
+            await castTextVote(pollId, matchingOption.id);
+          }
+        }
       }
     } catch (e) {
       console.warn('Rating failed:', e);
@@ -294,33 +399,42 @@ export default function QuickPickVote() {
   };
   
   const handleComplete = async () => {
-    // User finished voting - check if everyone else has too
-    if (!pollId) return;
+    // User finished voting - check if we need to transition to food phase or go to group chat
+    if (!pollId || !groupId) return;
     
     try {
+      // For mega polls, handle phase transition
+      if (isMegaPoll && currentPhase === 'events' && !eventsComplete) {
+        // User finished events, show transition screen
+        setEventsComplete(true);
+        setShowTransition(true);
+        return;
+      }
+      
       const pollData = await getPoll(pollId);
       setVotedCount(pollData.respondedCount);
       setTotalMembers(pollData.totalMembers);
       
-      // If everyone has voted, go to results
+      // If everyone has voted, show celebration then go to group
       if (pollData.respondedCount >= pollData.totalMembers && pollData.totalMembers > 0) {
         setIsComplete(true);
         setTimeout(() => {
-          router.replace(`/quick-pick/result?groupId=${groupId}&pollId=${pollId}`);
+          // Go back to group chat - the poll(s) will be displayed there
+          router.replace(`/(tabs)/groups/${groupId}`);
         }, 1500);
       } else {
-        // Show waiting screen
+        // Show waiting screen, but allow user to go back to group
         setWaitingForOthers(true);
       }
     } catch (e) {
-      // Fallback: just show waiting
-      setWaitingForOthers(true);
+      // Fallback: go back to group
+      router.replace(`/(tabs)/groups/${groupId}`);
     }
   };
   
   const handleSeeResultsEarly = () => {
-    // Allow user to see results before everyone votes (won't close poll)
-    router.push(`/quick-pick/result?groupId=${groupId}&pollId=${pollId}&early=true`);
+    // Go back to group chat to see current results
+    router.replace(`/(tabs)/groups/${groupId}`);
   };
   
   const handleEndPoll = async () => {
@@ -331,8 +445,8 @@ export default function QuickPickVote() {
       await closePoll(pollId);
       await triggerGroupDecisionNotification();
       setShowEndPollWarning(false);
-      // Navigate to final results
-      router.replace(`/quick-pick/result?groupId=${groupId}&pollId=${pollId}`);
+      // Navigate to group chat to see final results
+      router.replace(`/(tabs)/groups/${groupId}`);
     } catch (e) {
       console.error('Failed to end poll:', e);
       Alert.alert('Error', 'Failed to end poll. Please try again.');
@@ -547,15 +661,83 @@ export default function QuickPickVote() {
               textAlign: 'center',
               marginBottom: Spacing.sm,
             }}>
-              Everyone voted!
+              {isMegaPoll && currentPhase === 'food' ? 'All Done!' : 'Everyone voted!'}
             </Text>
             <Text style={{
               color: c.muted,
               fontSize: Typography.scale.body.fontSize,
               textAlign: 'center',
             }}>
-              Finding the winner...
+              Heading back to the group...
             </Text>
+          </Animated.View>
+        </SafeAreaView>
+      </GradientBackground>
+    );
+  }
+  
+  // Transition screen between events and food for mega polls
+  if (isMegaPoll && showTransition) {
+    return (
+      <GradientBackground variant="dim">
+        <SafeAreaView style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: Spacing.xl }}>
+          <Animated.View style={{
+            alignItems: 'center',
+            opacity: fadeAnim,
+          }}>
+            <Text style={{ fontSize: 72, marginBottom: Spacing.lg }}>🍕</Text>
+            <Text style={{
+              color: c.text,
+              fontSize: Typography.scale.heading2.fontSize,
+              fontWeight: '700',
+              textAlign: 'center',
+              marginBottom: Spacing.sm,
+            }}>
+              Events Done!
+            </Text>
+            <Text style={{
+              color: c.muted,
+              fontSize: Typography.scale.body.fontSize,
+              textAlign: 'center',
+              marginBottom: Spacing['2xl'],
+              maxWidth: 280,
+            }}>
+              Now let's pick where to eat
+            </Text>
+            
+            <Pressable
+              onPress={async () => {
+                // Transition to food phase
+                setShowTransition(false);
+                setCurrentPhase('food');
+                setCurrentIndex(0);
+                setMyVotes({}); // Reset votes for food phase
+                
+                // Switch to food poll
+                if (foodPollId) {
+                  setPollId(foodPollId);
+                  const foodPollData = await getPoll(foodPollId);
+                  setPollMode(foodPollData.poll?.mode || 'default');
+                  setPollOptions(foodPollData.options || []);
+                  setItems(foodItems);
+                }
+              }}
+              style={({ pressed }) => ({
+                backgroundColor: c.primary,
+                paddingHorizontal: Spacing.xl,
+                paddingVertical: Spacing.md,
+                borderRadius: BorderRadius.lg,
+                opacity: pressed ? 0.7 : 1,
+              })}
+            >
+              <Text style={{
+                color: '#fff',
+                fontSize: Typography.scale.bodyLarge.fontSize,
+                fontWeight: '700',
+              }}>
+                Start Rating Food
+              </Text>
+            </Pressable>
           </Animated.View>
         </SafeAreaView>
       </GradientBackground>
@@ -630,17 +812,17 @@ export default function QuickPickVote() {
               style={({ pressed }) => ({
                 paddingHorizontal: Spacing.xl,
                 paddingVertical: Spacing.md,
-                backgroundColor: scheme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)',
+                backgroundColor: c.primary,
                 borderRadius: BorderRadius.lg,
                 opacity: pressed ? 0.7 : 1,
               })}
             >
               <Text style={{
-                color: c.primary,
+                color: '#fff',
                 fontSize: Typography.scale.body.fontSize,
                 fontWeight: '600',
               }}>
-                See Current Results
+                Back to Chat
               </Text>
             </Pressable>
             
@@ -651,7 +833,7 @@ export default function QuickPickVote() {
               marginTop: Spacing.md,
               maxWidth: 240,
             }}>
-              Results may change as more people vote
+              See live results and votes in the group chat
             </Text>
             
             {/* End Poll section */}
@@ -837,8 +1019,18 @@ export default function QuickPickVote() {
                 fontSize: Typography.scale.bodyLarge.fontSize,
                 fontWeight: '700',
               }}>
-                Rate each option
+                {isMegaPoll ? (currentPhase === 'events' ? '🎉 Rate Events' : '🍕 Rate Food') : 'Rate each option'}
               </Text>
+              {isMegaPoll && eventsComplete && currentPhase === 'food' && (
+                <Text style={{
+                  color: c.primary,
+                  fontSize: Typography.scale.bodySmall.fontSize,
+                  fontWeight: '600',
+                  marginTop: 2,
+                }}>
+                  Phase 2 of 2
+                </Text>
+              )}
             </View>
             
             {/* Participants */}

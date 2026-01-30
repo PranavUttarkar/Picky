@@ -157,7 +157,7 @@ export default function Interests() {
 
   return (
     <GradientBackground>
-      <AnimatedPage variant="slide-left">
+      <AnimatedPage variant="slide-right">
         <ScrollView
           style={{ flex: 1 }}
           contentContainerStyle={{ padding: Spacing.md }}

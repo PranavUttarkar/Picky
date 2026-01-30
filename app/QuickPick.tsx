@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, Pressable, TextInput, Animated, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useThemeColors, useTheme } from '@/theme/ThemeProvider';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import GradientBackground from '@/components/GradientBackground';
@@ -20,6 +20,11 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 export default function QuickPickEntry() {
   const c = useThemeColors();
   const { scheme } = useTheme();
+  const params = useLocalSearchParams<{ groupId?: string; groupName?: string }>();
+  
+  // If coming from a group, pre-select that group
+  const preSelectedGroupId = params.groupId ? Number(params.groupId) : null;
+  const preSelectedGroupName = params.groupName ? decodeURIComponent(params.groupName) : null;
   
   const [mode, setMode] = useState<'choose' | 'join'>('choose');
   const [inviteCode, setInviteCode] = useState('');
@@ -48,7 +53,12 @@ export default function QuickPickEntry() {
     
     // Load user's groups
     loadGroups();
-  }, []);
+    
+    // If coming from a group chat, auto-navigate to the when screen
+    if (preSelectedGroupId && preSelectedGroupName) {
+      router.push(`/quick-pick/when?groupId=${preSelectedGroupId}&groupName=${encodeURIComponent(preSelectedGroupName)}`);
+    }
+  }, [preSelectedGroupId, preSelectedGroupName]);
   
   const loadGroups = async () => {
     try {
@@ -107,7 +117,13 @@ export default function QuickPickEntry() {
             marginBottom: Spacing.xl,
           }}>
             <Pressable
-              onPress={() => router.back()}
+              onPress={() => {
+                if (preSelectedGroupId) {
+                  router.push(`/(tabs)/groups/${preSelectedGroupId}`);
+                } else {
+                  router.back();
+                }
+              }}
               style={{
                 padding: Spacing.sm,
                 marginRight: Spacing.sm,
@@ -116,8 +132,13 @@ export default function QuickPickEntry() {
               }}
               accessibilityLabel="Go back"
             >
-              <Ionicons name="close" size={24} color={c.text} />
+              <Ionicons name="arrow-back" size={24} color={c.text} />
             </Pressable>
+            {preSelectedGroupName && (
+              <Text style={{ color: c.muted, fontSize: Typography.scale.body.fontSize }}>
+                {preSelectedGroupName}
+              </Text>
+            )}
           </View>
 
           {/* Hero Section */}

@@ -674,6 +674,112 @@ export default function PollDetails() {
           </View>
         </View>
 
+        {/* Results Summary Banner - Shows current leader or winner */}
+        {options.length > 0 && (leader || finalEvent) && (
+          <View style={{
+            backgroundColor: finalEvent ? c.primary + '20' : c.card,
+            borderRadius: 12,
+            padding: 12,
+            marginTop: 10,
+            borderWidth: finalEvent ? 2 : 0,
+            borderColor: c.primary,
+          }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <Text style={{ fontSize: 28 }}>{finalEvent ? '🎉' : '👑'}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: c.muted, fontSize: 12, fontWeight: '600' }}>
+                  {finalEvent ? 'WINNER' : 'CURRENT LEADER'}
+                </Text>
+                <Text style={{ color: c.text, fontSize: 16, fontWeight: '800', marginTop: 2 }} numberOfLines={2}>
+                  {finalEvent?.title || (leader?.kind === 'event' ? (leader as any).event?.title : (leader as any)?.text) || 'Unknown'}
+                </Text>
+                {leader && !finalEvent && totalVotes > 0 && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                    <Text style={{ color: c.primary, fontWeight: '700', fontSize: 13 }}>
+                      {leader.votes} vote{leader.votes !== 1 ? 's' : ''}
+                    </Text>
+                    <Text style={{ color: c.muted, fontSize: 13 }}>
+                      ({Math.round((leader.votes / totalVotes) * 100)}%)
+                    </Text>
+                  </View>
+                )}
+                {finalEvent?.date_time && (
+                  <Text style={{ color: c.muted, fontSize: 12, marginTop: 4 }}>
+                    📅 {dayjs(finalEvent.date_time).format('ddd, MMM D [at] h:mm A')}
+                  </Text>
+                )}
+              </View>
+              {finalEvent?.rsvp_url && (
+                <Pressable
+                  onPress={() => Linking.openURL(finalEvent.rsvp_url)}
+                  style={{
+                    backgroundColor: c.primary,
+                    paddingVertical: 8,
+                    paddingHorizontal: 12,
+                    borderRadius: 8,
+                  }}
+                >
+                  <Text style={{ color: '#000', fontWeight: '700', fontSize: 13 }}>RSVP</Text>
+                </Pressable>
+              )}
+            </View>
+            
+            {/* Vote distribution summary (when poll is closed or has significant votes) */}
+            {!poll?.is_active && options.length > 1 && totalVotes > 0 && (
+              <View style={{ marginTop: 12, gap: 6 }}>
+                <Text style={{ color: c.muted, fontSize: 11, fontWeight: '600' }}>RESULTS</Text>
+                {options.slice(0, 4).map((opt) => {
+                  const pct = Math.round((opt.votes / totalVotes) * 100);
+                  const isWinner = opt.id === leader?.id;
+                  return (
+                    <View key={opt.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <View style={{ flex: 1 }}>
+                        <View style={{ 
+                          height: 20, 
+                          backgroundColor: c.background, 
+                          borderRadius: 4, 
+                          overflow: 'hidden',
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                        }}>
+                          <View style={{
+                            width: `${pct}%`,
+                            height: '100%',
+                            backgroundColor: isWinner ? c.primary : c.primary + '40',
+                            position: 'absolute',
+                          }} />
+                          <Text style={{ 
+                            color: c.text, 
+                            fontSize: 11, 
+                            fontWeight: isWinner ? '700' : '500',
+                            paddingLeft: 6,
+                            flex: 1,
+                          }} numberOfLines={1}>
+                            {opt.kind === 'event' ? (opt as any).event?.title : (opt as any).text}
+                          </Text>
+                          <Text style={{ 
+                            color: isWinner ? c.primary : c.muted, 
+                            fontSize: 11, 
+                            fontWeight: '700',
+                            paddingRight: 6,
+                          }}>
+                            {pct}%
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  );
+                })}
+                {options.length > 4 && (
+                  <Text style={{ color: c.muted, fontSize: 11 }}>
+                    +{options.length - 4} more options
+                  </Text>
+                )}
+              </View>
+            )}
+          </View>
+        )}
+
         {/* Mode toggle and Swipe deck */}
         {/* Mode toggle row moved into task bar above */}
 
