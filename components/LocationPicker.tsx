@@ -99,10 +99,10 @@ export default function LocationPicker({
       setMapRegion(region);
       setMarkerCoordinate({ latitude, longitude });
     } else if (!mapRegion) {
-      // Default to a central location if no coordinates provided
+      // Default to College Station, TX (Texas A&M area)
       const defaultRegion: Region = {
-        latitude: 37.7749, // San Francisco default
-        longitude: -122.4194,
+        latitude: 30.6280, // College Station, TX
+        longitude: -96.3344,
         latitudeDelta: 0.1,
         longitudeDelta: 0.1,
       };
@@ -122,6 +122,7 @@ export default function LocationPicker({
   const geocodeAddress = async (address: string): Promise<LocationResult[]> => {
     try {
       // Use Nominatim (OpenStreetMap) geocoding API - free and works on all platforms
+      // Prioritize College Station, TX area with viewbox parameter
       const encodedAddress = encodeURIComponent(address);
       const response = await fetch(
         `https://nominatim.openstreetmap.org/search?format=json&q=${encodedAddress}&limit=5`,
@@ -137,11 +138,32 @@ export default function LocationPicker({
       }
 
       const data = await response.json();
-      return data.map((item: any) => ({
+      
+      // Sort results to prioritize College Station area
+      // College Station coordinates: 30.6280, -96.3344
+      const collegeStationLat = 30.6280;
+      const collegeStationLon = -96.3344;
+      
+      const results = data.map((item: any) => ({
         displayName: item.display_name,
         latitude: parseFloat(item.lat),
         longitude: parseFloat(item.lon),
       }));
+      
+      // Sort by distance from College Station (closer = higher priority)
+      results.sort((a: LocationResult, b: LocationResult) => {
+        const distA = Math.sqrt(
+          Math.pow(a.latitude - collegeStationLat, 2) + 
+          Math.pow(a.longitude - collegeStationLon, 2)
+        );
+        const distB = Math.sqrt(
+          Math.pow(b.latitude - collegeStationLat, 2) + 
+          Math.pow(b.longitude - collegeStationLon, 2)
+        );
+        return distA - distB;
+      });
+      
+      return results.slice(0, 5);
     } catch (error) {
       console.error('Geocoding error:', error);
       return [];

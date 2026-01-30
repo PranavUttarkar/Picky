@@ -25,6 +25,81 @@ import { supabase } from '@/services/supabase';
 import dayjs from 'dayjs';
 import type { Event } from '@/types/models';
 
+// Tag recommendation system - keywords mapped to suggested tags
+const TAG_KEYWORDS: Record<string, string[]> = {
+  // Food related
+  'free food': ['free', 'food', 'pizza', 'lunch', 'dinner', 'breakfast', 'snacks', 'catering', 'refreshments', 'meal'],
+  'food': ['food', 'eat', 'dining', 'restaurant', 'cuisine', 'chef', 'cooking', 'bake', 'culinary'],
+  
+  // Academic / Professional
+  'engineering': ['engineer', 'engineering', 'mechanical', 'electrical', 'civil', 'computer', 'aerospace', 'chemical', 'biomedical', 'industrial'],
+  'workshop': ['workshop', 'hands-on', 'training', 'learn', 'tutorial', 'skill', 'bootcamp', 'class'],
+  'seminar': ['seminar', 'lecture', 'speaker', 'talk', 'presentation', 'keynote', 'panel'],
+  'career': ['career', 'job', 'internship', 'resume', 'interview', 'hiring', 'recruit', 'employment', 'professional'],
+  'research': ['research', 'study', 'lab', 'thesis', 'dissertation', 'academic', 'science', 'experiment'],
+  'networking': ['network', 'connect', 'professional', 'mixer', 'meet', 'mingle', 'business'],
+  
+  // Social / Entertainment
+  'social': ['social', 'hangout', 'party', 'gathering', 'meetup', 'friends', 'community'],
+  'sports': ['sport', 'game', 'match', 'football', 'basketball', 'soccer', 'baseball', 'volleyball', 'tennis', 'athletic', 'fitness', 'gym', 'workout'],
+  'music': ['music', 'concert', 'band', 'live', 'performance', 'sing', 'dance', 'dj', 'festival'],
+  'movie': ['movie', 'film', 'cinema', 'watch', 'screening', 'theater'],
+  'game night': ['game', 'board game', 'video game', 'trivia', 'competition', 'esports'],
+  
+  // Cultural / Arts
+  'cultural': ['culture', 'cultural', 'international', 'diversity', 'heritage', 'tradition'],
+  'art': ['art', 'gallery', 'exhibition', 'creative', 'painting', 'sculpture', 'design'],
+  
+  // Service / Community
+  'volunteer': ['volunteer', 'service', 'charity', 'donate', 'help', 'community service', 'philanthropy', 'nonprofit'],
+  'fundraiser': ['fundrais', 'donate', 'charity', 'benefit', 'cause'],
+  
+  // Tech
+  'tech': ['tech', 'technology', 'coding', 'programming', 'software', 'app', 'hackathon', 'startup', 'ai', 'machine learning', 'data'],
+  'hackathon': ['hackathon', 'hack', 'code', 'build', 'develop', 'pitch'],
+  
+  // Health / Wellness
+  'health': ['health', 'wellness', 'mental', 'fitness', 'yoga', 'meditation', 'self-care', 'mindfulness'],
+  
+  // Campus specific
+  'study': ['study', 'exam', 'finals', 'midterm', 'review', 'tutoring', 'homework'],
+  'club': ['club', 'organization', 'org', 'meeting', 'general meeting', 'info session'],
+  'outdoor': ['outdoor', 'outside', 'nature', 'hike', 'camping', 'picnic', 'park'],
+};
+
+// Popular default tags to always show
+const DEFAULT_TAGS = ['free food', 'social', 'networking', 'workshop', 'sports', 'music', 'career', 'tech', 'volunteer'];
+
+// Function to get recommended tags based on title and description
+function getRecommendedTags(title: string, description: string, existingTags: string[]): string[] {
+  const text = `${title} ${description}`.toLowerCase();
+  const recommended: Set<string> = new Set();
+  
+  // Check each tag's keywords against the text
+  for (const [tag, keywords] of Object.entries(TAG_KEYWORDS)) {
+    for (const keyword of keywords) {
+      if (text.includes(keyword.toLowerCase())) {
+        recommended.add(tag);
+        break; // Found a match for this tag, move to next tag
+      }
+    }
+  }
+  
+  // Filter out already added tags
+  const existingLower = existingTags.map(t => t.toLowerCase());
+  const filteredRecommended = Array.from(recommended).filter(
+    tag => !existingLower.includes(tag.toLowerCase())
+  );
+  
+  // Get default tags that aren't already added or recommended
+  const defaultSuggestions = DEFAULT_TAGS.filter(
+    tag => !existingLower.includes(tag.toLowerCase()) && !recommended.has(tag)
+  );
+  
+  // Return recommended first, then defaults (up to 8 total)
+  return [...filteredRecommended, ...defaultSuggestions].slice(0, 8);
+}
+
 // Modal Section Component
 type ModalSectionProps = {
   id: string;
@@ -111,6 +186,7 @@ export default memo(function CreateEventModal({ visible, onClose, onSaved, editE
   const [rsvp, setRsvp] = useState('');
   const [savingEvent, setSavingEvent] = useState(false);
   const [showValidation, setShowValidation] = useState(false);
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   // RSVP Settings
   const [enableRSVP, setEnableRSVP] = useState(false);
@@ -194,6 +270,7 @@ export default memo(function CreateEventModal({ visible, onClose, onSaved, editE
     setRsvpRequired(false);
     setSavingEvent(false);
     setShowValidation(false);
+    setValidationError(null);
     setLocationStatus('');
     prevLatRef.current = null;
     prevLngRef.current = null;
@@ -273,33 +350,35 @@ export default memo(function CreateEventModal({ visible, onClose, onSaved, editE
   const submit = async () => {
     console.log('[CreateEventModal] Submit called');
     setShowValidation(true);
+    setValidationError(null);
     const finalTitle = titleLocal.trim() || title.trim();
     const finalTagsCsv = tagsCsvLocal.trim() || tagsCsv.trim();
 
     console.log('[CreateEventModal] Validation - Title:', finalTitle, 'Tags:', finalTagsCsv);
 
     if (!finalTitle) {
-      Alert.alert('Missing title', 'Please provide an event title.');
+      setValidationError('Please provide an event title.');
       return;
     }
     if (!finalTagsCsv) {
-      Alert.alert('Missing tags', 'Please add at least one tag to categorize your event.');
+      setValidationError('Please add at least one tag to categorize your event.');
       return;
     }
 
     const allImages = [...pickedUris, image1, image2, image3].filter(Boolean);
     if (allImages.length === 0) {
-      Alert.alert('Add an image', 'Please add at least one image URL or pick a photo.');
+      setValidationError('Please add at least one image URL or pick a photo.');
       return;
     }
 
     const profCheck = checkProfanity(finalTitle + ' ' + (descLocal || desc) + ' ' + finalTagsCsv);
     if (!profCheck.isClean) {
-      Alert.alert('Inappropriate content', `Please remove inappropriate words: ${profCheck.reasons?.join(', ')}`);
+      setValidationError(`Please remove inappropriate words: ${profCheck.reasons?.join(', ')}`);
       return;
     }
 
     setSavingEvent(true);
+    setValidationError(null);
     try {
       console.log('[CreateEventModal] Getting user...');
       const { data: authData, error: authError } = await supabase.auth.getUser();
@@ -309,7 +388,7 @@ export default memo(function CreateEventModal({ visible, onClose, onSaved, editE
       }
       const user = authData?.user;
       if (!user) {
-        Alert.alert('Not authenticated', 'Please sign in to create an event.');
+        setValidationError('Please sign in to create an event.');
         setSavingEvent(false);
         return;
       }
@@ -413,7 +492,7 @@ export default memo(function CreateEventModal({ visible, onClose, onSaved, editE
       console.error('[CreateEventModal] Error in submit:', err);
       const errorMessage = err?.message || err?.toString() || (isEditMode ? 'Could not update event' : 'Could not create event');
       console.error('[CreateEventModal] Error details:', JSON.stringify(err, null, 2));
-      Alert.alert('Error', errorMessage);
+      setValidationError(errorMessage);
     } finally {
       setSavingEvent(false);
     }
@@ -497,29 +576,80 @@ export default memo(function CreateEventModal({ visible, onClose, onSaved, editE
                 }}
                 autoCapitalize="none"
               />
+              
+              {/* Recommended Tags */}
+              {(() => {
+                const existingTags = tagsCsvLocal
+                  .split(',')
+                  .map((t) => t.trim().toLowerCase())
+                  .filter(Boolean);
+                const recommended = getRecommendedTags(titleLocal || title, descLocal || desc, existingTags);
+                
+                if (recommended.length > 0) {
+                  return (
+                    <View style={{ gap: 6 }}>
+                      <Text style={{ color: c.muted, fontSize: 11, fontWeight: '600' }}>
+                        {existingTags.length > 0 || titleLocal.trim() || descLocal.trim() ? '✨ Suggested tags:' : '📌 Popular tags:'}
+                      </Text>
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                        {recommended.map((tag, idx) => (
+                          <Pressable
+                            key={`rec-${tag}-${idx}`}
+                            onPress={() => {
+                              const current = tagsCsvLocal.trim();
+                              if (current) {
+                                setTagsCsvLocal(`${current}, ${tag}`);
+                              } else {
+                                setTagsCsvLocal(tag);
+                              }
+                            }}
+                            style={({ pressed }) => ({
+                              backgroundColor: pressed ? c.primary : `${c.primary}20`,
+                              paddingHorizontal: 10,
+                              paddingVertical: 5,
+                              borderRadius: 999,
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              gap: 4,
+                            })}
+                          >
+                            <Ionicons name="add" size={12} color={c.primary} />
+                            <Text style={{ color: c.primary, fontSize: 11, fontWeight: '600' }}>{tag}</Text>
+                          </Pressable>
+                        ))}
+                      </View>
+                    </View>
+                  );
+                }
+                return null;
+              })()}
+              
               {tagsCsvLocal.trim().length === 0 ? (
                 showValidation ? (
                   <Text style={{ color: '#ff6666', fontSize: 11 }}>Add at least one tag.</Text>
                 ) : null
               ) : (
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-                  {Array.from(
-                    new Set(
-                      tagsCsvLocal
-                        .split(',')
-                        .map((t) => t.trim().toLowerCase())
-                        .filter(Boolean)
+                <View style={{ gap: 4 }}>
+                  <Text style={{ color: c.muted, fontSize: 11, fontWeight: '600' }}>Your tags:</Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                    {Array.from(
+                      new Set(
+                        tagsCsvLocal
+                          .split(',')
+                          .map((t) => t.trim().toLowerCase())
+                          .filter(Boolean)
+                      )
                     )
-                  )
-                    .slice(0, 12)
-                    .map((t, idx) => (
-                      <View
-                        key={`tag-${t}-${idx}`}
-                        style={{ backgroundColor: c.primary, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999 }}
-                      >
-                        <Text style={{ color: '#000', fontSize: 11, fontWeight: '700' }}>#{t}</Text>
-                      </View>
-                    ))}
+                      .slice(0, 12)
+                      .map((t, idx) => (
+                        <View
+                          key={`tag-${t}-${idx}`}
+                          style={{ backgroundColor: c.primary, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999 }}
+                        >
+                          <Text style={{ color: '#000', fontSize: 11, fontWeight: '700' }}>#{t}</Text>
+                        </View>
+                      ))}
+                  </View>
                 </View>
               )}
             </View>
@@ -1352,6 +1482,36 @@ export default memo(function CreateEventModal({ visible, onClose, onSaved, editE
           </View>
         </ScrollView>
         <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: 12, zIndex: 100 }}>
+          {/* Floating Error Warning */}
+          {validationError && (
+            <View style={{
+              backgroundColor: '#ff4444',
+              paddingHorizontal: 16,
+              paddingVertical: 12,
+              borderRadius: 12,
+              marginBottom: 10,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 10,
+              shadowColor: '#ff4444',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.3,
+              shadowRadius: 6,
+              elevation: 4,
+            }}>
+              <Ionicons name="warning" size={20} color="#fff" />
+              <Text style={{ color: '#fff', flex: 1, fontWeight: '600', fontSize: 14 }}>
+                {validationError}
+              </Text>
+              <Pressable 
+                onPress={() => setValidationError(null)} 
+                hitSlop={8}
+                style={{ padding: 4 }}
+              >
+                <Ionicons name="close" size={18} color="#fff" />
+              </Pressable>
+            </View>
+          )}
           <BlurView intensity={30} tint={scheme === 'dark' ? 'dark' : 'light'} style={{ borderRadius: 16, overflow: 'hidden' }}>
             <View style={{ flexDirection: 'row', gap: 12, padding: 12 }}>
               <Pressable

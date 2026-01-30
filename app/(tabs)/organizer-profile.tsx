@@ -13,7 +13,7 @@ import {
   Platform,
 } from 'react-native';
 import { router } from 'expo-router';
-import { useThemeColors } from '@/theme/ThemeProvider';
+import { useThemeColors, useTheme } from '@/theme/ThemeProvider';
 import GradientBackground from '@/components/GradientBackground';
 import GradientHeader from '@/components/GradientHeader';
 import Avatar from '@/components/Avatar';
@@ -37,6 +37,8 @@ import type { UserProfile, Event } from '@/types/models';
 import * as ImagePicker from 'expo-image-picker';
 import { updateUserProfile } from '@/services/friends';
 import CreateEventModal from '@/components/CreateEventModal';
+import LazyImage from '@/components/LazyImage';
+import dayjs from 'dayjs';
 
 // Organization tags
 const ORGANIZATION_TAGS = [
@@ -45,6 +47,72 @@ const ORGANIZATION_TAGS = [
   'Arts & Culture', 'Tech', 'Science', 'Health & Wellness',
   'Environment', 'Diversity & Inclusion', 'Career Fair', 'Music',
 ];
+
+// Compact Event Card Component
+const CompactEventCard = memo(function CompactEventCard({ event, onPress }: { event: Event; onPress: () => void }) {
+  const c = useThemeColors();
+  const imgs: string[] = (event as any).image_urls?.length
+    ? (event as any).image_urls
+    : event.image_url
+    ? [event.image_url]
+    : [];
+  const cover = imgs[0];
+
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => ({
+        borderRadius: BorderRadius.md,
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: Colors.light.neutral[300] + '20',
+        minWidth: 140,
+        maxWidth: 180,
+        backgroundColor: c.card,
+        opacity: pressed ? 0.8 : 1,
+      })}
+    >
+      <View style={{ width: '100%', aspectRatio: 1, position: 'relative' }}>
+        {cover ? (
+          <LazyImage
+            uri={cover}
+            width="100%"
+            height="100%"
+            borderRadius={0}
+            resizeMode="cover"
+          />
+        ) : (
+          <View style={{ width: '100%', height: '100%', backgroundColor: c.muted + '20', alignItems: 'center', justifyContent: 'center' }}>
+            <Ionicons name="calendar-outline" size={24} color={c.muted} />
+          </View>
+        )}
+      </View>
+      <Text style={{
+        fontSize: 13,
+        lineHeight: 16,
+        fontFamily: Typography.fontFamily.body,
+        fontWeight: Typography.fontWeight.semibold,
+        paddingHorizontal: Spacing.sm,
+        paddingTop: Spacing.sm,
+        color: c.text,
+      }} numberOfLines={2}>
+        {event.title}
+      </Text>
+      <Text style={{
+        fontSize: Typography.scale.bodySmall.fontSize,
+        lineHeight: Typography.scale.bodySmall.lineHeight,
+        fontFamily: Typography.fontFamily.body,
+        fontWeight: Typography.fontWeight.regular,
+        paddingHorizontal: Spacing.sm,
+        paddingBottom: Spacing.sm,
+        marginTop: 2,
+        color: c.muted,
+      }} numberOfLines={1}>
+        {dayjs(event.date_time).format('MMM D')}
+      </Text>
+    </Pressable>
+  );
+});
 
 // Section Card Component
 const SectionCard = memo(function SectionCard({ 
@@ -308,6 +376,7 @@ export default function OrganizerProfile() {
   const [followerCount, setFollowerCount] = useState(0);
   const [eventCount, setEventCount] = useState(0);
   const [orgTags, setOrgTags] = useState<string[]>([]);
+  const [recentEvents, setRecentEvents] = useState<Event[]>([]);
 
   // Edit modals state
   const [editAboutVisible, setEditAboutVisible] = useState(false);
@@ -359,9 +428,19 @@ export default function OrganizerProfile() {
       const followers = await getFollowersCount(user.id);
       setFollowerCount(followers);
 
-      // Load event count
+      // Load event count and recent events
       const events = await getAllOrganizationEvents(user.id, 100);
       setEventCount(events.length);
+      
+      // Set 3 most recent events (upcoming first, then past if needed)
+      const now = new Date();
+      const upcoming = events.filter((e: Event) => new Date(e.date_time) >= now);
+      const past = events.filter((e: Event) => new Date(e.date_time) < now);
+      const recent = [...upcoming.slice(0, 3)];
+      if (recent.length < 3) {
+        recent.push(...past.slice(0, 3 - recent.length));
+      }
+      setRecentEvents(recent);
 
       // Load org tags
       const { data: tagsData } = await supabase
@@ -514,8 +593,55 @@ export default function OrganizerProfile() {
 
   const displayName = userProfile?.display_name || userProfile?.username || 'Organization';
 
+  const { scheme, toggleScheme } = useTheme();
+
   return (
     <GradientBackground>
+      {/* Picky! Header Bar */}
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          paddingHorizontal: Spacing.md,
+          paddingBottom: Spacing.md,
+          paddingTop: Spacing.md,
+          borderBottomWidth: 1,
+          backgroundColor: c.background,
+          borderBottomColor: c.muted + '30',
+        }}
+      >
+        <Text style={{
+          fontSize: Typography.scale.display.fontSize - 2,
+          lineHeight: Typography.scale.display.lineHeight - 2,
+          fontWeight: Typography.fontWeight.regular,
+          letterSpacing: 0,
+          fontFamily: Platform.OS === 'ios' ? 'Pacifico_400Regular' : Typography.fontFamily.brand,
+          color: c.text,
+          marginTop: 10,
+        }}>
+          Picky!
+        </Text>
+        <View style={{ flexDirection: 'row', gap: Spacing.md, alignItems: 'center' }}>
+          <Pressable
+            onPress={() => router.push('/search-users')}
+            style={{ padding: Spacing.xs }}
+          >
+            <Ionicons name="person-add-outline" size={24} color={c.text} />
+          </Pressable>
+          <Pressable
+            onPress={toggleScheme}
+            style={{ padding: Spacing.xs }}
+          >
+            <Ionicons
+              name={scheme === 'dark' ? 'sunny-outline' : 'moon-outline'}
+              size={24}
+              color={c.text}
+            />
+          </Pressable>
+        </View>
+      </View>
+
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingBottom: Spacing.xl }}
@@ -526,22 +652,17 @@ export default function OrganizerProfile() {
           alignSelf: 'center', 
           width: '100%' 
         }}>
-          <GradientHeader
-            title="My Profile"
-            onBack={() => router.back()}
-            backLabel="Back"
-          />
-
-          {/* Profile Header */}
+          {/* Profile Header - Instagram Style */}
           <View style={{
-            alignItems: 'center',
-            marginTop: Spacing.md,
+            flexDirection: 'row',
             marginBottom: Spacing.lg,
+            alignItems: 'flex-start',
           }}>
-            <View style={{ position: 'relative' }}>
+            {/* Left: Profile Picture */}
+            <View style={{ position: 'relative', marginRight: Spacing.lg }}>
               <Avatar
                 uri={userProfile?.avatar_url}
-                size={100}
+                size={80}
               />
               <Pressable
                 onPress={() => router.push('/(tabs)/profile')}
@@ -551,104 +672,160 @@ export default function OrganizerProfile() {
                   right: 0,
                   backgroundColor: c.primary,
                   borderRadius: BorderRadius.full,
-                  padding: 8,
-                  borderWidth: 3,
+                  padding: 6,
+                  borderWidth: 2,
                   borderColor: c.background,
                 }}
               >
-                <Ionicons name="camera" size={16} color="#fff" />
+                <Ionicons name="camera" size={14} color="#fff" />
               </Pressable>
             </View>
 
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: Spacing.md }}>
-              <Text style={{
-                fontSize: Typography.scale.heading1.fontSize,
-                fontFamily: Typography.fontFamily.body,
-                fontWeight: Typography.fontWeight.bold,
-                color: c.text,
-              }}>
-                {displayName}
-              </Text>
-              {orgProfile?.verified && (
-                <View style={{
-                  backgroundColor: c.primary,
-                  borderRadius: BorderRadius.full,
-                  padding: 4,
-                  marginLeft: 8,
+            {/* Right: Name, Stats, Category */}
+            <View style={{ flex: 1 }}>
+              {/* Name and verified badge */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                <Text style={{
+                  fontSize: Typography.scale.heading2.fontSize,
+                  fontFamily: Typography.fontFamily.body,
+                  fontWeight: Typography.fontWeight.bold,
+                  color: c.text,
+                  flex: 1,
+                }} numberOfLines={1}>
+                  {displayName}
+                </Text>
+                {orgProfile?.verified && (
+                  <View style={{
+                    backgroundColor: c.primary,
+                    borderRadius: BorderRadius.full,
+                    padding: 3,
+                    marginLeft: 4,
+                  }}>
+                    <Ionicons name="checkmark" size={12} color="#fff" />
+                  </View>
+                )}
+              </View>
+
+              {/* Username */}
+              {userProfile?.username && (
+                <Text style={{
+                  fontSize: Typography.scale.bodySmall.fontSize,
+                  fontFamily: Typography.fontFamily.body,
+                  color: c.muted,
+                  marginBottom: Spacing.sm,
                 }}>
-                  <Ionicons name="checkmark" size={14} color="#fff" />
-                </View>
+                  @{userProfile.username}
+                </Text>
               )}
-            </View>
 
-            {userProfile?.username && (
-              <Text style={{
-                fontSize: Typography.scale.body.fontSize,
-                fontFamily: Typography.fontFamily.body,
-                color: c.muted,
-                marginTop: 4,
-              }}>
-                @{userProfile.username}
-              </Text>
-            )}
-
-            {/* View Public Profile Button */}
-            <Pressable
-              onPress={() => router.push(`/(tabs)/organizations/${userProfile?.id}`)}
-              style={{
-                backgroundColor: c.card,
-                paddingVertical: Spacing.sm,
-                paddingHorizontal: Spacing.lg,
-                borderRadius: BorderRadius.full,
-                marginTop: Spacing.md,
+              {/* Stats Row - Horizontal */}
+              <View style={{
                 flexDirection: 'row',
-                alignItems: 'center',
-                gap: 8,
-                borderWidth: 1,
-                borderColor: `${c.text}20`,
-              }}
-            >
-              <Ionicons name="eye-outline" size={18} color={c.text} />
-              <Text style={{
-                fontSize: Typography.scale.body.fontSize,
-                fontFamily: Typography.fontFamily.body,
-                fontWeight: Typography.fontWeight.medium,
-                color: c.text,
+                gap: Spacing.lg,
+                marginBottom: Spacing.sm,
               }}>
-                View Public Profile
-              </Text>
-            </Pressable>
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{
+                    fontSize: Typography.scale.heading3.fontSize,
+                    fontFamily: Typography.fontFamily.body,
+                    fontWeight: Typography.fontWeight.bold,
+                    color: c.text,
+                  }}>
+                    {eventCount}
+                  </Text>
+                  <Text style={{
+                    fontSize: Typography.scale.bodySmall.fontSize,
+                    fontFamily: Typography.fontFamily.body,
+                    color: c.muted,
+                  }}>
+                    Events
+                  </Text>
+                </View>
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{
+                    fontSize: Typography.scale.heading3.fontSize,
+                    fontFamily: Typography.fontFamily.body,
+                    fontWeight: Typography.fontWeight.bold,
+                    color: c.text,
+                  }}>
+                    {followerCount}
+                  </Text>
+                  <Text style={{
+                    fontSize: Typography.scale.bodySmall.fontSize,
+                    fontFamily: Typography.fontFamily.body,
+                    color: c.muted,
+                  }}>
+                    Followers
+                  </Text>
+                </View>
+              </View>
+
+              {/* Category with edit button */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                {orgProfile?.category && (
+                  <View style={{
+                    backgroundColor: `${c.primary}15`,
+                    paddingHorizontal: 10,
+                    paddingVertical: 4,
+                    borderRadius: BorderRadius.full,
+                  }}>
+                    <Text style={{ 
+                      color: c.primary, 
+                      fontWeight: '600',
+                      fontSize: Typography.scale.bodySmall.fontSize,
+                    }}>
+                      {orgProfile.category}
+                    </Text>
+                  </View>
+                )}
+                <Pressable
+                  onPress={() => setEditCategoryVisible(true)}
+                  hitSlop={8}
+                  style={{
+                    padding: 4,
+                  }}
+                >
+                  <Ionicons name="pencil" size={14} color={c.muted} />
+                </Pressable>
+              </View>
+            </View>
           </View>
 
-          {/* Stats Row */}
-          <View style={{
-            flexDirection: 'row',
-            backgroundColor: c.card,
-            borderRadius: BorderRadius.lg,
-            marginBottom: Spacing.lg,
-          }}>
-            <StatItem icon="people" value={followerCount} label="Followers" />
-            <View style={{ width: 1, backgroundColor: `${c.text}10` }} />
-            <StatItem icon="calendar" value={eventCount} label="Events" />
-          </View>
+          {/* View Public Profile Button */}
+          <Pressable
+            onPress={() => router.push(`/(tabs)/organizations/${userProfile?.id}`)}
+            style={{
+              backgroundColor: c.card,
+              paddingVertical: Spacing.sm,
+              paddingHorizontal: Spacing.lg,
+              borderRadius: BorderRadius.md,
+              marginBottom: Spacing.lg,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              borderWidth: 1,
+              borderColor: `${c.text}20`,
+            }}
+          >
+            <Ionicons name="eye-outline" size={18} color={c.text} />
+            <Text style={{
+              fontSize: Typography.scale.body.fontSize,
+              fontFamily: Typography.fontFamily.body,
+              fontWeight: Typography.fontWeight.medium,
+              color: c.text,
+            }}>
+              View Public Profile
+            </Text>
+          </Pressable>
 
-          {/* Category & Size Section */}
+          {/* Category & Size Section - Keep for editing member count */}
           <SectionCard 
-            title="Category" 
+            title="Organization Size" 
             icon="business-outline"
             onEdit={() => setEditCategoryVisible(true)}
           >
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-              <View style={{
-                backgroundColor: `${c.primary}20`,
-                paddingHorizontal: 14,
-                paddingVertical: 6,
-                borderRadius: BorderRadius.full,
-              }}>
-                <Text style={{ color: c.primary, fontWeight: '600' }}>
-                  {orgProfile?.category || 'Not set'}
-                </Text>
-              </View>
               {orgProfile?.member_count && (
                 <View style={{
                   backgroundColor: `${c.text}10`,
@@ -700,6 +877,59 @@ export default function OrganizerProfile() {
               </Pressable>
             )}
           </SectionCard>
+
+          {/* Recent Events Section */}
+          {recentEvents.length > 0 && (
+            <View style={{ marginBottom: Spacing.md }}>
+              <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: Spacing.md,
+              }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <View style={{
+                    backgroundColor: `${c.primary}15`,
+                    borderRadius: 10,
+                    padding: 8,
+                    marginRight: 12,
+                  }}>
+                    <Ionicons name="calendar" size={20} color={c.primary} />
+                  </View>
+                  <Text style={{
+                    fontSize: Typography.scale.heading3.fontSize,
+                    fontFamily: Typography.fontFamily.body,
+                    fontWeight: Typography.fontWeight.semibold,
+                    color: c.text,
+                  }}>
+                    Recent Events
+                  </Text>
+                </View>
+                <Pressable
+                  onPress={() => router.push('/(tabs)/my-events')}
+                  style={{ flexDirection: 'row', alignItems: 'center' }}
+                >
+                  <Text style={{ color: c.primary, fontSize: Typography.scale.body.fontSize, marginRight: 4 }}>
+                    View All
+                  </Text>
+                  <Ionicons name="chevron-forward" size={16} color={c.primary} />
+                </Pressable>
+              </View>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ gap: Spacing.md }}
+              >
+                {recentEvents.map((event) => (
+                  <CompactEventCard
+                    key={event.id}
+                    event={event}
+                    onPress={() => router.push(`/events/${event.id}`)}
+                  />
+                ))}
+              </ScrollView>
+            </View>
+          )}
 
           {/* Tags Section */}
           <SectionCard 

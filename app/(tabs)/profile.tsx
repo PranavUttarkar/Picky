@@ -918,7 +918,7 @@ export default function Profile() {
 
   if (loadingProfile) {
     return (
-      <GradientBackground>
+      <View style={{ flex: 1, backgroundColor: c.background }}>
         <AnimatedPage style={{ flex: 1 }}>
           <View style={{ 
             flex: 1, 
@@ -935,13 +935,13 @@ export default function Profile() {
             </Text>
           </View>
         </AnimatedPage>
-      </GradientBackground>
+      </View>
     );
   }
 
   if (!authed) {
     return (
-      <GradientBackground>
+      <View style={{ flex: 1, backgroundColor: c.background }}>
         <AnimatedPage style={{ flex: 1 }}>
           <ScrollView 
             style={{ flex: 1 }}
@@ -1015,7 +1015,7 @@ export default function Profile() {
             </View>
           </ScrollView>
         </AnimatedPage>
-      </GradientBackground>
+      </View>
     );
   }
 
@@ -1025,7 +1025,7 @@ export default function Profile() {
   const nextAllowedDate = lastChangedTs ? new Date(lastChangedTs + SEVEN_DAYS_MS) : null;
 
   return (
-    <GradientBackground>
+    <View style={{ flex: 1, backgroundColor: c.background }}>
       <AnimatedPage style={{ flex: 1 }}>
         <ScrollView 
           style={{ flex: 1 }}
@@ -1943,6 +1943,6 @@ export default function Profile() {
           )}
         </ScrollView>
       </AnimatedPage>
-    </GradientBackground>
+    </View>
   );
 }

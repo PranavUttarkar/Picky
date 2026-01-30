@@ -13,7 +13,6 @@ import {
 import { useLocalSearchParams, router } from 'expo-router';
 import { useThemeColors } from '@/theme/ThemeProvider';
 import GradientBackground from '@/components/GradientBackground';
-import GradientHeader from '@/components/GradientHeader';
 import Avatar from '@/components/Avatar';
 import EventRowCard from '@/components/EventRowCard';
 import LazyImage from '@/components/LazyImage';
@@ -426,11 +425,20 @@ export default function OrganizationProfile() {
     return (
       <GradientBackground>
         <View style={{ flex: 1, padding: Spacing.lg }}>
-          <GradientHeader
-            title="Organization"
-            onBack={() => router.back()}
-            backLabel="Back"
-          />
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.md }}>
+            <Pressable onPress={() => router.push('/(tabs)/organizer-profile')} style={{ padding: 8 }}>
+              <Ionicons name="chevron-back" size={20} color={c.text} />
+            </Pressable>
+            <Text style={{
+              color: c.text,
+              fontSize: Typography.scale.heading3.fontSize,
+              fontFamily: Typography.fontFamily.body,
+              fontWeight: Typography.fontWeight.semibold,
+              marginLeft: 8,
+            }}>
+              Organization
+            </Text>
+          </View>
           <EmptyState
             icon="business-outline"
             title="Organization not found"
@@ -453,11 +461,11 @@ export default function OrganizationProfile() {
         }
       >
         <View style={{ padding: Spacing.lg, maxWidth: isWide ? 800 : undefined, alignSelf: 'center', width: '100%' }}>
-          <GradientHeader
-            title=""
-            onBack={() => router.back()}
-            backLabel="Back"
-          />
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.md }}>
+            <Pressable onPress={() => router.push('/(tabs)/organizer-profile')} style={{ padding: 8 }}>
+              <Ionicons name="chevron-back" size={20} color={c.text} />
+            </Pressable>
+          </View>
 
           {/* Profile Header */}
           <View style={{

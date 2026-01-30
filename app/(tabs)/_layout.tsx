@@ -9,6 +9,7 @@ import { useFriendNotification } from '@/utils/FriendNotificationContext';
 import { trackCTA, trackEvent } from '@/utils/analytics';
 import { Typography, Spacing, Colors, BorderRadius } from '@/theme/designTokens';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { supabase } from '@/services/supabase';
 
 // Handshake icons
 const handshakeMuted = require('@/assets/handshake/handshake_muted.png');
@@ -52,10 +53,36 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 function CustomTabBar({ state, descriptors, navigation }: any) {
   const c = useThemeColors();
   const { scheme } = useTheme();
+  const pathname = usePathname();
   const insets = useSafeAreaInsets();
   const { hasNewSavedItems } = useSavedNotification();
   const { hasNewGroupDecisions } = useGroupDecisionNotification();
   const { hasNewFriends } = useFriendNotification();
+  const [isOrganization, setIsOrganization] = useState(false);
+
+  // Check if user is an organization account
+  useEffect(() => {
+    const checkAccountType = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: profile } = await supabase
+          .from('users')
+          .select('account_type')
+          .eq('id', user.id)
+          .single();
+        setIsOrganization(profile?.account_type === 'organization');
+      }
+    };
+    checkAccountType();
+
+    const { data: sub } = supabase.auth.onAuthStateChange(() => {
+      checkAccountType();
+    });
+
+    return () => {
+      try { sub.subscription.unsubscribe(); } catch {}
+    };
+  }, []);
 
   // Tab configuration - icons only, no labels
   const tabConfig: Record<string, { icon: string; activeIcon: string; label: string }> = {
@@ -82,7 +109,11 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
   };
 
   const renderTabButton = (route: any, index: number) => {
-    const isFocused = state.index === state.routes.findIndex((r: any) => r.name === route.name);
+    let isFocused = state.index === state.routes.findIndex((r: any) => r.name === route.name);
+    // If organizer profile is active, treat Home tab as focused for organizer accounts
+    if (route.name === 'home' && pathname && pathname.includes('organizer-profile')) {
+      isFocused = true;
+    }
     const config = tabConfig[route.name];
     
     if (!config) return null;
@@ -101,7 +132,12 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
       });
 
       if (!isFocused && !event.defaultPrevented) {
-        navigation.navigate(route.name);
+        // For organizer accounts, redirect home to organizer-profile
+        if (route.name === 'home' && isOrganization) {
+          router.push('/(tabs)/organizer-profile');
+        } else {
+          navigation.navigate(route.name);
+        }
       }
     };
 
