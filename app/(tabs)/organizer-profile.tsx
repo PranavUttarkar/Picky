@@ -1177,7 +1177,7 @@ export default function OrganizerProfile() {
         accessibilityLabel="Create Event"
         size={isWide ? 80 : 56}
         right={isWide ? 40 : 20}
-        bottom={90}
+        bottom={100}
       />
 
       {/* Create Event Modal */}

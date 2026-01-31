@@ -398,8 +398,7 @@ export default function Welcome() {
 
       {/* Form Container - Responsive Width */}
       <View style={{ width: formWidth, alignItems: 'center' }}>
-        {/* Temporarily hide Google Sign In Button */}
-        {false && (
+        {/* Google Sign In Button */}
           <Pressable
             onPress={signInWithGoogle}
             disabled={loading || socialLoading !== null}
@@ -438,28 +437,25 @@ export default function Welcome() {
               </>
             )}
           </Pressable>
-        )}
 
-        {/* OR Divider hidden for now */}
-        {false && (
-          <View style={{ 
-            flexDirection: 'row', 
-            alignItems: 'center', 
-            width: '100%', 
-            marginVertical: Spacing.lg,
+        {/* OR Divider */}
+        <View style={{ 
+          flexDirection: 'row', 
+          alignItems: 'center', 
+          width: '100%', 
+          marginVertical: Spacing.lg,
+        }}>
+          <View style={{ flex: 1, height: 1, backgroundColor: c.muted, opacity: 0.3 }} />
+          <Text style={{ 
+            color: c.muted, 
+            paddingHorizontal: Spacing.lg, 
+            fontSize: Typography.scale.caption.fontSize,
+            fontFamily: Typography.fontFamily.body,
           }}>
-            <View style={{ flex: 1, height: 1, backgroundColor: c.muted, opacity: 0.3 }} />
-            <Text style={{ 
-              color: c.muted, 
-              paddingHorizontal: Spacing.lg, 
-              fontSize: Typography.scale.caption.fontSize,
-              fontFamily: Typography.fontFamily.body,
-            }}>
-              or
-            </Text>
-            <View style={{ flex: 1, height: 1, backgroundColor: c.muted, opacity: 0.3 }} />
-          </View>
-        )}
+            or
+          </Text>
+          <View style={{ flex: 1, height: 1, backgroundColor: c.muted, opacity: 0.3 }} />
+        </View>
 
         {/* Email Input */}
         <TextInput
