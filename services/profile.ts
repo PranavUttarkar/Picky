@@ -36,6 +36,11 @@ export async function saveOnboarding(payload: OnboardingPayload) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Not signed in');
 
+    // Ensure user exists in users table before inserting into user_onboarding
+    // This is necessary when email confirmation is enabled, as the users row
+    // may not exist yet when the user completes onboarding
+    await ensureProfile();
+
     const row: any = {
       user_id: user.id,
       interests: payload.interests ?? [],

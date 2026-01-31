@@ -398,68 +398,64 @@ export default function Welcome() {
 
       {/* Form Container - Responsive Width */}
       <View style={{ width: formWidth, alignItems: 'center' }}>
-        {/* Temporarily hide Google Sign In Button */}
-        {false && (
-          <Pressable
-            onPress={signInWithGoogle}
-            disabled={loading || socialLoading !== null}
-            style={{
-              width: '100%',
-              backgroundColor: isDark ? '#1F2937' : '#FFFFFF',
-              paddingVertical: Spacing.md,
-              paddingHorizontal: Spacing.lg,
-              borderRadius: BorderRadius.lg,
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: Spacing.md,
-              opacity: loading || socialLoading !== null ? 0.6 : 1,
-              borderWidth: 1,
-              borderColor: isDark ? '#374151' : '#E5E7EB',
-            }}
-          >
-            {socialLoading === 'google' ? (
-              <ActivityIndicator size="small" color="#4285F4" />
-            ) : (
-              <>
-                <Image 
-                  source={{ uri: GOOGLE_LOGO_URL }}
-                  style={{ width: 20, height: 20 }}
-                  resizeMode="contain"
-                />
-                <Text style={{ 
-                  color: isDark ? '#F9FAFB' : '#1F2937', 
-                  fontWeight: '600', 
-                  fontSize: Typography.scale.body.fontSize, 
-                  fontFamily: Typography.fontFamily.body,
-                }}>
-                  Continue with Google
-                </Text>
-              </>
-            )}
-          </Pressable>
-        )}
+        {/* Google Sign In Button */}
+        <Pressable
+          onPress={signInWithGoogle}
+          disabled={loading || socialLoading !== null}
+          style={{
+            width: '100%',
+            backgroundColor: isDark ? '#1F2937' : '#FFFFFF',
+            paddingVertical: Spacing.md,
+            paddingHorizontal: Spacing.lg,
+            borderRadius: BorderRadius.lg,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: Spacing.md,
+            opacity: loading || socialLoading !== null ? 0.6 : 1,
+            borderWidth: 1,
+            borderColor: isDark ? '#374151' : '#E5E7EB',
+          }}
+        >
+          {socialLoading === 'google' ? (
+            <ActivityIndicator size="small" color="#4285F4" />
+          ) : (
+            <>
+              <Image 
+                source={{ uri: GOOGLE_LOGO_URL }}
+                style={{ width: 20, height: 20 }}
+                resizeMode="contain"
+              />
+              <Text style={{ 
+                color: isDark ? '#F9FAFB' : '#1F2937', 
+                fontWeight: '600', 
+                fontSize: Typography.scale.body.fontSize, 
+                fontFamily: Typography.fontFamily.body,
+              }}>
+                Continue with Google
+              </Text>
+            </>
+          )}
+        </Pressable>
 
-        {/* OR Divider hidden for now */}
-        {false && (
-          <View style={{ 
-            flexDirection: 'row', 
-            alignItems: 'center', 
-            width: '100%', 
-            marginVertical: Spacing.lg,
+        {/* OR Divider */}
+        <View style={{ 
+          flexDirection: 'row', 
+          alignItems: 'center', 
+          width: '100%', 
+          marginVertical: Spacing.lg,
+        }}>
+          <View style={{ flex: 1, height: 1, backgroundColor: c.muted, opacity: 0.3 }} />
+          <Text style={{ 
+            color: c.muted, 
+            paddingHorizontal: Spacing.lg, 
+            fontSize: Typography.scale.caption.fontSize,
+            fontFamily: Typography.fontFamily.body,
           }}>
-            <View style={{ flex: 1, height: 1, backgroundColor: c.muted, opacity: 0.3 }} />
-            <Text style={{ 
-              color: c.muted, 
-              paddingHorizontal: Spacing.lg, 
-              fontSize: Typography.scale.caption.fontSize,
-              fontFamily: Typography.fontFamily.body,
-            }}>
-              or
-            </Text>
-            <View style={{ flex: 1, height: 1, backgroundColor: c.muted, opacity: 0.3 }} />
-          </View>
-        )}
+            or
+          </Text>
+          <View style={{ flex: 1, height: 1, backgroundColor: c.muted, opacity: 0.3 }} />
+        </View>
 
         {/* Email Input */}
         <TextInput
