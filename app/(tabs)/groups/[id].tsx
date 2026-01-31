@@ -1,4 +1,5 @@
-import { View, Text, Pressable, FlatList, Alert, Platform, KeyboardAvoidingView, ActivityIndicator } from 'react-native';
+import { View, Text, Pressable, FlatList, Alert, Platform, KeyboardAvoidingView, ActivityIndicator, ActionSheetIOS } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { useThemeColors } from '@/theme/ThemeProvider';
@@ -14,6 +15,17 @@ import { castTextVote, castVote, suggestLeader } from '@/services/polls';
 import type { Event } from '@/types/models';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
+import MessageBubble, { DateSeparator } from '@/components/MessageBubble';
+import MessageInput from '@/components/MessageInput';
+import { 
+  getGroupMessages, 
+  sendMessage, 
+  deleteMessage,
+  toggleMessageReaction,
+  subscribeToGroupMessages,
+  type GroupMessage,
+  type MessageReaction as MessageReactionType 
+} from '@/services/messages';
 
 // Reaction types
 type ReactionType = 'thumbs_up' | 'thumbs_down' | 'love' | 'meh';
@@ -106,19 +118,41 @@ const parseOptionText = (text: string): { displayText: string; type: 'food' | 'e
   return { displayText: text, type: 'text', emoji: '' };
 };
 
+// Combined message/poll item type for rendering
+type ChatItem = 
+  | { type: 'message'; data: GroupMessage }
+  | { type: 'poll'; data: PollMessage }
+  | { type: 'date'; data: string };
+
 export default function GroupChat() {
   const c = useThemeColors();
+  const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const groupId = Number(id);
   const [group, setGroup] = useState<any>(null);
   const [polls, setPolls] = useState<PollMessage[]>([]);
+  const [messages, setMessages] = useState<GroupMessage[]>([]);
   const [members, setMembers] = useState<GroupMember[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [winnersById, setWinnersById] = useState<Record<number, Event>>({});
   const [showSettings, setShowSettings] = useState(false);
   const [regenCooldown, setRegenCooldown] = useState<number>(0);
+  const [replyTo, setReplyTo] = useState<GroupMessage | null>(null);
+  const [selectedMessageId, setSelectedMessageId] = useState<number | null>(null);
   const regenTimerRef = useRef<NodeJS.Timeout | null>(null);
   const flatListRef = useRef<FlatList>(null);
+  const prevItemsCountRef = useRef<number>(0);
+  // Track current scroll offset so we can restore it when reply is clicked
+  const scrollOffsetRef = useRef(0);
+  const userAtBottomRef = useRef(true);
+  const handleListScroll = (e: any) => {
+    try {
+      const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+      scrollOffsetRef.current = contentOffset.y;
+      const distanceFromBottom = (contentSize?.height ?? 0) - (contentOffset.y + (layoutMeasurement?.height ?? 0));
+      userAtBottomRef.current = distanceFromBottom <= 100;
+    } catch {}
+  };
   const [reactingPollId, setReactingPollId] = useState<number | null>(null);
   const [showPollCreator, setShowPollCreator] = useState(false);
   const [votingOptionId, setVotingOptionId] = useState<{ pollId: number; optionId: number } | null>(null);
@@ -363,6 +397,14 @@ export default function GroupChat() {
         setMembers(membersWithProfiles);
       }
 
+      // Fetch messages
+      try {
+        const msgs = await getGroupMessages(groupId, 100);
+        if (mounted) setMessages(msgs);
+      } catch (error) {
+        console.error('Failed to load messages:', error);
+      }
+
       // Set up realtime subscriptions
       const pollChannel = supabase
         .channel(`group-${groupId}-polls-chat`)
@@ -394,9 +436,161 @@ export default function GroupChat() {
         )
         .subscribe();
 
+      // Subscribe to messages
+      const messageChannel = subscribeToGroupMessages(
+        groupId,
+        (newMessage) => {
+          if (mounted) {
+            // Check if this message was sent by us (optimistically added)
+            setMessages(prev => {
+              // Skip if we already have this message (from optimistic update)
+              const existingById = prev.find(m => m.id === newMessage.id);
+              if (existingById) {
+                // Update the existing message with server data (in case we had optimistic)
+                return prev.map(m => m.id === newMessage.id ? { ...newMessage, reactions: m.reactions || [] } : m);
+              }
+              
+              // Check if this is a message we sent (by matching user_id and message content within last 5 seconds)
+              const now = new Date().getTime();
+              const messageTime = new Date(newMessage.created_at).getTime();
+              const isRecent = (now - messageTime) < 5000;
+              
+              // Check for optimistic duplicates (negative IDs from our optimistic updates)
+              const hasOptimisticVersion = prev.some(m => 
+                m.id < 0 && 
+                m.user_id === newMessage.user_id && 
+                m.message === newMessage.message &&
+                isRecent
+              );
+              
+              if (hasOptimisticVersion) {
+                // Replace the optimistic message with the real one
+                return prev.map(m => 
+                  (m.id < 0 && m.user_id === newMessage.user_id && m.message === newMessage.message)
+                    ? { ...newMessage, reactions: [] }
+                    : m
+                );
+              }
+              
+              // This is a new message from another user, add it
+              return [...prev, newMessage];
+            });
+            
+            // Scroll to bottom if user is at bottom or if this is our message
+            setTimeout(() => {
+              try {
+                if (newMessage.user_id === currentUserId || userAtBottomRef.current) {
+                  flatListRef.current?.scrollToEnd({ animated: true });
+                }
+              } catch {}
+            }, 100);
+          }
+        },
+        (reaction) => {
+          if (mounted) {
+            setMessages(prev => prev.map(msg => {
+              if (msg.id === reaction.message_id) {
+                const existingReactions = msg.reactions || [];
+                
+                // Check if we already have this exact reaction (from optimistic update)
+                const hasExactMatch = existingReactions.some(
+                  r => r.user_id === reaction.user_id && r.emoji === reaction.emoji && r.id > 0
+                );
+                
+                // If we have an optimistic version (negative id), replace it with server version
+                const hasOptimisticVersion = existingReactions.some(
+                  r => r.user_id === reaction.user_id && r.emoji === reaction.emoji && r.id < 0
+                );
+                
+                if (hasOptimisticVersion) {
+                  // Replace optimistic with real
+                  return {
+                    ...msg,
+                    reactions: existingReactions.map(r => 
+                      (r.user_id === reaction.user_id && r.emoji === reaction.emoji && r.id < 0)
+                        ? reaction
+                        : r
+                    ),
+                  };
+                }
+                
+                if (hasExactMatch) {
+                  // Already have this reaction, skip
+                  return msg;
+                }
+                
+                // Check if this is a DELETE event (reaction being removed)
+                // We signal deletion with id === 0 from the messages service
+                const existingIndex = existingReactions.findIndex(
+                  r => r.user_id === reaction.user_id && r.emoji === reaction.emoji
+                );
+                
+                if (existingIndex >= 0) {
+                  // Check if this is a deletion signal (id === 0) or just a duplicate
+                  if (reaction.id === 0) {
+                    // This is a DELETE event, remove the reaction
+                    return {
+                      ...msg,
+                      reactions: existingReactions.filter((_, i) => i !== existingIndex),
+                    };
+                  }
+                  // Already have this reaction (maybe from optimistic), skip adding again
+                  return msg;
+                } else {
+                  // This is a new reaction, check it's not a deletion signal
+                  if (reaction.id === 0) {
+                    // Already removed (probably from optimistic update), skip
+                    return msg;
+                  }
+                  // Add reaction from another user
+                  return {
+                    ...msg,
+                    reactions: [...existingReactions, reaction],
+                  };
+                }
+              }
+              return msg;
+            }));
+          }
+        },
+        (deletedId) => {
+          if (mounted) {
+            setMessages(prev => prev.filter(m => m.id !== deletedId));
+          }
+        }
+      );
+
+      // Polling fallback: periodically fetch latest messages and append any missing.
+      // This covers cases where realtime events fail to arrive.
+      const pollInterval = setInterval(async () => {
+        try {
+          const latest = await getGroupMessages(groupId, 100);
+          if (!mounted) return;
+          setMessages(prev => {
+            const existingIds = new Set(prev.map(m => m.id));
+            const toAdd = latest.filter(m => !existingIds.has(m.id));
+            if (toAdd.length === 0) return prev;
+            const next = [...prev, ...toAdd];
+            // If user is at bottom, scroll to show new messages
+            setTimeout(() => {
+              try {
+                if (userAtBottomRef.current) flatListRef.current?.scrollToEnd({ animated: true });
+              } catch {}
+            }, 120);
+            return next;
+          });
+        } catch (e) {
+          // ignore polling errors
+        }
+      }, 3000);
+
       return () => {
         supabase.removeChannel(pollChannel);
         supabase.removeChannel(groupChannel);
+        supabase.removeChannel(messageChannel);
+        try {
+          clearInterval(pollInterval);
+        } catch {}
       };
     })();
     return () => {
@@ -618,6 +812,366 @@ export default function GroupChat() {
       setVotingOptionId(null);
     }
   };
+
+  // Generate a unique optimistic ID for new messages
+  const generateOptimisticId = useCallback(() => {
+    return -(Date.now() + Math.floor(Math.random() * 10000));
+  }, []);
+
+  // Track pending optimistic message IDs to prevent duplicates when realtime fires
+  const pendingMessageIds = useRef<Set<number>>(new Set());
+
+  // Message handlers
+  const handleSendMessage = async (text: string) => {
+    if (!currentUserId || !text.trim()) return;
+
+    // Get current user's profile from members
+    const currentMember = members.find(m => m.user_id === currentUserId);
+    const userProfile = currentMember?.user;
+
+    // Create optimistic message
+    const optimisticId = generateOptimisticId();
+    const optimisticMessage: GroupMessage = {
+      id: optimisticId,
+      group_id: groupId,
+      user_id: currentUserId,
+      message: text.trim(),
+      created_at: new Date().toISOString(),
+      updated_at: null,
+      deleted_at: null,
+      is_edited: false,
+      reply_to_id: replyTo?.id || null,
+      user: userProfile ? {
+        id: userProfile.id,
+        username: userProfile.username,
+        display_name: userProfile.display_name,
+        avatar_url: userProfile.avatar_url,
+      } : {
+        id: currentUserId,
+        username: null,
+        display_name: null,
+        avatar_url: null,
+      },
+      reactions: [],
+      reply_to: replyTo ? {
+        id: replyTo.id,
+        message: replyTo.message,
+        user_id: replyTo.user_id,
+        user: replyTo.user,
+      } : undefined,
+    };
+
+    // Mark this as pending to prevent duplicate from realtime
+    pendingMessageIds.current.add(optimisticId);
+
+    // Optimistically add message to state immediately
+    setMessages(prev => [...prev, optimisticMessage]);
+    setReplyTo(null);
+
+    // Scroll to bottom immediately
+    setTimeout(() => {
+      flatListRef.current?.scrollToEnd({ animated: true });
+    }, 50);
+
+    try {
+      // Send message to server
+      const serverMessage = await sendMessage(groupId, text.trim(), replyTo?.id);
+      
+      // Replace optimistic message with server message
+      setMessages(prev => prev.map(msg => 
+        msg.id === optimisticId ? { ...serverMessage, reactions: [] } : msg
+      ));
+      
+      // Mark the server message ID as "ours" to prevent duplicate from realtime
+      pendingMessageIds.current.add(serverMessage.id);
+      
+      // Clean up pending IDs after a short delay
+      setTimeout(() => {
+        pendingMessageIds.current.delete(optimisticId);
+        pendingMessageIds.current.delete(serverMessage.id);
+      }, 2000);
+    } catch (error: any) {
+      // Rollback: remove the optimistic message on error
+      setMessages(prev => prev.filter(msg => msg.id !== optimisticId));
+      pendingMessageIds.current.delete(optimisticId);
+      Alert.alert('Failed to send message', error.message || String(error));
+    }
+  };
+
+  const handleMessageLongPress = (message: GroupMessage) => {
+    if (Platform.OS === 'ios') {
+      const options = ['Reply', 'Copy', 'Cancel'];
+      if (message.user_id === currentUserId) {
+        options.splice(2, 0, 'Delete');
+      }
+
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options,
+          cancelButtonIndex: options.length - 1,
+          destructiveButtonIndex: message.user_id === currentUserId ? 3 : undefined,
+        },
+        async (buttonIndex) => {
+          if (buttonIndex === 0) {
+            // Reply
+            setReplyTo(message);
+          } else if (buttonIndex === 1) {
+            // Copy
+            if (Platform.OS === 'web' && (globalThis as any).navigator?.clipboard?.writeText) {
+              await (globalThis as any).navigator.clipboard.writeText(message.message);
+            } else {
+              await Clipboard.setStringAsync(message.message);
+            }
+          } else if (buttonIndex === 3 && message.user_id === currentUserId) {
+            // Delete
+            try {
+              await deleteMessage(message.id);
+            } catch (error: any) {
+              Alert.alert('Failed to delete', error.message || String(error));
+            }
+          }
+        }
+      );
+    } else {
+      // Android/Web - show custom action sheet
+      setSelectedMessageId(message.id);
+      Alert.alert(
+        'Message Actions',
+        '',
+        [
+          { text: 'Reply', onPress: () => setReplyTo(message) },
+          {
+            text: 'Copy',
+            onPress: async () => {
+              if (Platform.OS === 'web' && (globalThis as any).navigator?.clipboard?.writeText) {
+                await (globalThis as any).navigator.clipboard.writeText(message.message);
+              } else {
+                await Clipboard.setStringAsync(message.message);
+              }
+            },
+          },
+          ...(message.user_id === currentUserId
+            ? [
+                {
+                  text: 'Delete',
+                  onPress: async () => {
+                    try {
+                      await deleteMessage(message.id);
+                    } catch (error: any) {
+                      Alert.alert('Failed to delete', error.message || String(error));
+                    }
+                  },
+                  style: 'destructive' as const,
+                },
+              ]
+            : []),
+          { text: 'Cancel', style: 'cancel' as const },
+        ]
+      );
+    }
+  };
+
+  const handleMessageReaction = async (messageId: number, emoji: string) => {
+    if (!currentUserId) return;
+
+    // Get current user's profile from members
+    const currentMember = members.find(m => m.user_id === currentUserId);
+    const userProfile = currentMember?.user;
+
+    // Optimistically update reactions
+    let wasRemoved = false;
+    setMessages(prev => prev.map(msg => {
+      if (msg.id !== messageId) return msg;
+      
+      const existingReactions = msg.reactions || [];
+      const existingIndex = existingReactions.findIndex(
+        r => r.user_id === currentUserId && r.emoji === emoji
+      );
+
+      if (existingIndex >= 0) {
+        // Remove reaction optimistically
+        wasRemoved = true;
+        return {
+          ...msg,
+          reactions: existingReactions.filter((_, i) => i !== existingIndex),
+        };
+      } else {
+        // Add reaction optimistically
+        const newReaction = {
+          id: -(Date.now() + Math.floor(Math.random() * 10000)), // Optimistic ID
+          message_id: messageId,
+          user_id: currentUserId,
+          emoji,
+          created_at: new Date().toISOString(),
+          user: userProfile ? {
+            id: userProfile.id,
+            username: userProfile.username,
+            display_name: userProfile.display_name,
+            avatar_url: userProfile.avatar_url,
+          } : undefined,
+        };
+        return {
+          ...msg,
+          reactions: [...existingReactions, newReaction],
+        };
+      }
+    }));
+
+    try {
+      await toggleMessageReaction(messageId, emoji);
+      // Server confirmed - reaction will be updated via realtime if needed
+    } catch (error: any) {
+      // Rollback: revert the optimistic update
+      setMessages(prev => prev.map(msg => {
+        if (msg.id !== messageId) return msg;
+        
+        const existingReactions = msg.reactions || [];
+        
+        if (wasRemoved) {
+          // Re-add the reaction that we optimistically removed
+          return {
+            ...msg,
+            reactions: [...existingReactions, {
+              id: -(Date.now()),
+              message_id: messageId,
+              user_id: currentUserId,
+              emoji,
+              created_at: new Date().toISOString(),
+              user: userProfile ? {
+                id: userProfile.id,
+                username: userProfile.username,
+                display_name: userProfile.display_name,
+                avatar_url: userProfile.avatar_url,
+              } : undefined,
+            }],
+          };
+        } else {
+          // Remove the reaction we optimistically added
+          return {
+            ...msg,
+            reactions: existingReactions.filter(r => !(r.user_id === currentUserId && r.emoji === emoji)),
+          };
+        }
+      }));
+      console.error('Failed to toggle reaction:', error);
+    }
+  };
+
+  // Combine messages and polls into a single sorted list with date separators
+  const combinedItems = useCallback((): ChatItem[] => {
+    const items: Array<{ timestamp: Date; item: ChatItem }> = [];
+
+    // Add polls
+    polls.forEach(poll => {
+      items.push({
+        timestamp: new Date(poll.created_at),
+        item: { type: 'poll', data: poll },
+      });
+    });
+
+    // Add messages
+    messages.forEach(msg => {
+      items.push({
+        timestamp: new Date(msg.created_at),
+        item: { type: 'message', data: msg },
+      });
+    });
+
+    // Sort by timestamp
+    items.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+
+    // Insert date separators
+    const result: ChatItem[] = [];
+    let lastDate: string | null = null;
+
+    items.forEach(({ timestamp, item }) => {
+      const dateStr = timestamp.toDateString();
+      if (dateStr !== lastDate) {
+        result.push({ type: 'date', data: dateStr });
+        lastDate = dateStr;
+      }
+      result.push(item);
+    });
+
+    return result;
+  }, [messages, polls]);
+
+  const handleReplyClick = (msg: GroupMessage) => {
+    const prevOffset = scrollOffsetRef.current;
+    setReplyTo(msg);
+    setTimeout(() => {
+      try {
+        flatListRef.current?.scrollToOffset({ offset: prevOffset, animated: false });
+      } catch {}
+    }, 50);
+  };
+
+  // Keep track of previous combined items count to avoid auto-scrolling on every content change
+  useEffect(() => {
+    try {
+      prevItemsCountRef.current = combinedItems().length;
+    } catch {}
+  }, [messages, polls]);
+
+  const renderChatItem = useCallback(({ item, index }: { item: ChatItem; index: number }) => {
+    if (item.type === 'date') {
+      return <DateSeparator date={item.data} />;
+    }
+
+    if (item.type === 'message') {
+      const message = item.data;
+      const isOwnMessage = message.user_id === currentUserId;
+      
+      // Check if we should show avatar and group messages
+      const allItems = combinedItems();
+      const prevItem = index > 0 ? allItems[index - 1] : null;
+      const nextItem = index < allItems.length - 1 ? allItems[index + 1] : null;
+      
+      // Message grouping logic: messages from same user within 4 minutes are grouped
+      const MESSAGE_GROUP_THRESHOLD_MS = 4 * 60 * 1000; // 4 minutes
+      
+      const prevMessage = prevItem?.type === 'message' ? prevItem.data : null;
+      const nextMessage = nextItem?.type === 'message' ? nextItem.data : null;
+      
+      const prevIsSameUser = prevMessage?.user_id === message.user_id;
+      const prevIsRecent = prevMessage 
+        ? (new Date(message.created_at).getTime() - new Date(prevMessage.created_at).getTime()) < MESSAGE_GROUP_THRESHOLD_MS
+        : false;
+      
+      const nextIsSameUser = nextMessage?.user_id === message.user_id;
+      const nextIsRecent = nextMessage
+        ? (new Date(nextMessage.created_at).getTime() - new Date(message.created_at).getTime()) < MESSAGE_GROUP_THRESHOLD_MS
+        : false;
+      
+      // Show avatar only on the last message in a group (from the same user)
+      const isFirstInGroup = !prevIsSameUser || !prevIsRecent;
+      const isLastInGroup = !nextIsSameUser || !nextIsRecent;
+      const showAvatar = !isOwnMessage && isLastInGroup;
+
+      return (
+        <MessageBubble
+          message={message}
+          isOwnMessage={isOwnMessage}
+          showAvatar={showAvatar}
+          isFirstInGroup={isFirstInGroup}
+          isLastInGroup={isLastInGroup}
+          onLongPress={() => handleMessageLongPress(message)}
+          onReactionPress={(emoji) => handleMessageReaction(message.id, emoji)}
+          onReplyPress={() => handleReplyClick(message)}
+          onAvatarPress={(userId) => {
+            // Navigate to user profile if needed
+            console.log('Avatar pressed:', userId);
+          }}
+        />
+      );
+    }
+
+    if (item.type === 'poll') {
+      return renderPollMessage({ item: item.data });
+    }
+
+    return null;
+  }, [currentUserId, combinedItems, handleMessageLongPress, handleMessageReaction]);
 
   const renderPollMessage = useCallback(({ item: poll }: { item: PollMessage }) => {
     const totalVotes = getTotalVotes(poll);
@@ -1660,84 +2214,108 @@ export default function GroupChat() {
             </View>
           </View>
 
-          {/* Messages list */}
+          {/* Chat list (messages + polls) */}
           <FlatList
             ref={flatListRef}
-            data={polls}
-            keyExtractor={(p) => String(p.id)}
-            renderItem={renderPollMessage}
+            data={combinedItems()}
+            keyExtractor={(item, index) => {
+              if (item.type === 'message') return `msg-${item.data.id}`;
+              if (item.type === 'poll') return `poll-${item.data.id}`;
+              return `date-${index}`;
+            }}
+            renderItem={renderChatItem}
             ListHeaderComponent={renderHeader}
             ListEmptyComponent={renderEmptyState}
             contentContainerStyle={{ 
               flexGrow: 1,
-              paddingBottom: 200, // Increased to account for floating buttons
+              paddingBottom: Math.max(insets.bottom + 80, 170), // Ensure at least 140px bottom padding so messages aren't hidden
             }}
             onContentSizeChange={() => {
-              if (polls.length > 0) {
+              // Only auto-scroll on initial load (when there were no items before).
+              // Avoid forcing scroll for subsequent content changes which can jump the view.
+              const items = combinedItems();
+              if (prevItemsCountRef.current === 0 && items.length > 0) {
                 flatListRef.current?.scrollToEnd({ animated: false });
               }
+              prevItemsCountRef.current = items.length;
+            }}
+            onScroll={handleListScroll}
+            onLayout={() => {
+              // Scroll to bottom on initial layout
+              setTimeout(() => {
+                flatListRef.current?.scrollToEnd({ animated: false });
+              }, 100);
             }}
           />
 
-          {/* Floating Compose area - positioned above bottom tab bar */}
+          {/* Combined action bar with buttons and message input */}
           <View style={{
             position: 'absolute',
-            bottom: Platform.OS === 'ios' ? 100 : 120,
-            left: 12,
-            right: 12,
+            bottom: insets.bottom + 90,
+            left: 8,
+            right: 8,
             backgroundColor: c.card,
-            borderRadius: 16,
-            padding: 12,
+            borderTopLeftRadius: 8,
+            borderTopRightRadius: 8,
+            borderBottomLeftRadius: 0,
+            borderBottomRightRadius: 0,
+            paddingVertical: 10,
+            paddingHorizontal: 12,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 8,
             shadowColor: '#000',
             shadowOffset: { width: 0, height: -2 },
             shadowOpacity: 0.15,
-            shadowRadius: 8,
+            shadowRadius: 12,
             elevation: 8,
           }}>
-            <View style={{ flexDirection: 'row', gap: 8 }}>
-              {/* Quick action: New Poll (opens inline creator) */}
+            {/* Action buttons on the left */}
+            <View style={{ flexDirection: 'row', gap: 6 }}>
+              {/* New Poll button */}
               <Pressable
                 onPress={() => setShowPollCreator(true)}
-                style={{
-                  flex: 1,
-                  flexDirection: 'row',
+                style={({ pressed }) => ({
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
+                  backgroundColor: c.primary,
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: 8,
-                  backgroundColor: c.primary,
-                  paddingVertical: 14,
-                  borderRadius: 12,
-                }}
+                  opacity: pressed ? 0.8 : 1,
+                })}
                 accessibilityLabel="Create a new poll"
               >
-                <Ionicons name="add-circle-outline" size={20} color="#fff" />
-                <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>
-                  New Poll
-                </Text>
+                <Ionicons name="add-circle-outline" size={22} color="#fff" />
               </Pressable>
 
-              {/* Quick action: Quick Pick */}
+              {/* Quick Pick button */}
               <Pressable
                 onPress={() => router.push(`/QuickPick?groupId=${groupId}&groupName=${encodeURIComponent(group?.name || 'Group')}`)}
-                style={{
-                  flex: 1,
-                  flexDirection: 'row',
+                style={({ pressed }) => ({
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
+                  backgroundColor: c.muted + '20',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: 8,
-                  backgroundColor: c.background,
-                  paddingVertical: 14,
-                  borderRadius: 12,
-                  borderWidth: 1,
-                  borderColor: c.primary + '40',
-                }}
+                  opacity: pressed ? 0.8 : 1,
+                })}
                 accessibilityLabel="Start quick pick"
               >
-                <Ionicons name="flash-outline" size={20} color={c.primary} />
-                <Text style={{ color: c.text, fontWeight: '700', fontSize: 15 }}>
-                  Quick Pick
-                </Text>
+                <Ionicons name="flash-outline" size={22} color={c.primary} />
               </Pressable>
+            </View>
+
+            {/* Message input - takes remaining space */}
+            <View style={{ flex: 1, justifyContent: 'center', height: 44 }}>
+              <MessageInput
+                compact
+                onSend={handleSendMessage}
+                replyTo={replyTo}
+                onCancelReply={() => setReplyTo(null)}
+                placeholder="Message"
+              />
             </View>
           </View>
 

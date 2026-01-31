@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { View, Text, TextInput, Pressable, Modal, ScrollView, Platform, ActivityIndicator, Image, useWindowDimensions, KeyboardAvoidingView, Keyboard, TouchableWithoutFeedback } from 'react-native';
+import { View, Text, TextInput, Pressable, Modal, ScrollView, Platform, ActivityIndicator, Image, useWindowDimensions, KeyboardAvoidingView } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { supabase } from '@/services/supabase';
 import { ensureProfile } from '@/services/profile';
@@ -358,18 +358,17 @@ export default function Welcome() {
       keyboardVerticalOffset={Platform.OS === 'ios' ? 40 : 0}
       style={{ flex: 1, backgroundColor: c.background }}
     >
-      <TouchableWithoutFeedback onPress={() => Keyboard.dismiss()}>
-        <ScrollView
-          contentContainerStyle={{
-            flexGrow: 1,
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: Spacing.lg,
-            paddingBottom: Platform.OS === 'ios' ? Spacing['3xl'] : Spacing.lg,
-          }}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
+      <ScrollView
+        contentContainerStyle={{
+          flexGrow: 1,
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: Spacing.lg,
+          paddingBottom: Platform.OS === 'ios' ? Spacing['3xl'] : Spacing.lg,
+        }}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
       {/* Back button to return to Home */}
       <Pressable
         onPress={() => router.replace('/home')}
@@ -863,8 +862,7 @@ export default function Welcome() {
           </View>
         </View>
       </Modal>
-        </ScrollView>
-      </TouchableWithoutFeedback>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
