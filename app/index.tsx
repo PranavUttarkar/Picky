@@ -6,7 +6,6 @@ import { useThemeColors } from '@/theme/ThemeProvider';
 
 /**
  * Default route: checks auth state and onboarding status
- * - If not authenticated -> onboarding/welcome
  * - If authenticated but no username (new user) -> onboarding/profile-setup
  * - If authenticated with username -> home
  */
@@ -21,7 +20,7 @@ export default function Index() {
         
         if (!session) {
           // Not authenticated - go to welcome
-          router.replace('/onboarding/welcome');
+          router.replace('/home');
           return;
         }
 
