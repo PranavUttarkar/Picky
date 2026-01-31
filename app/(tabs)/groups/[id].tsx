@@ -26,6 +26,18 @@ import {
   type GroupMessage,
   type MessageReaction as MessageReactionType 
 } from '@/services/messages';
+// Picky AI Recommendations
+import { parsePickyCommand } from '@/utils/pickyParser';
+import { 
+  getPickyRecommendations, 
+  savePickyRecommendation,
+  getGroupPickyRecommendations,
+  subscribeToPickyRecommendations,
+  rowToResult,
+  type PickyRecommendationResult,
+  type PickyRecommendationRow,
+} from '@/services/pickyRecommendations';
+import PickyRecommendationCard, { PickyLoadingCard } from '@/components/PickyRecommendationCard';
 
 // Reaction types
 type ReactionType = 'thumbs_up' | 'thumbs_down' | 'love' | 'meh';
@@ -118,11 +130,28 @@ const parseOptionText = (text: string): { displayText: string; type: 'food' | 'e
   return { displayText: text, type: 'text', emoji: '' };
 };
 
+// Picky recommendation item with metadata (from database)
+interface PickyRecommendationItem {
+  id: number; // Database ID
+  result: PickyRecommendationResult;
+  timestamp: string;
+  triggerMessageId: number | null; // The message ID that triggered this recommendation
+  triggeredBy: string; // User ID who triggered
+  triggeredByUser?: {
+    id: string;
+    username?: string | null;
+    display_name?: string | null;
+    avatar_url?: string | null;
+  };
+}
+
 // Combined message/poll item type for rendering
 type ChatItem = 
   | { type: 'message'; data: GroupMessage }
   | { type: 'poll'; data: PollMessage }
-  | { type: 'date'; data: string };
+  | { type: 'date'; data: string }
+  | { type: 'picky'; data: PickyRecommendationItem }
+  | { type: 'picky_loading'; data: { id: string; searchType: 'events' | 'food'; timestamp: string } };
 
 export default function GroupChat() {
   const c = useThemeColors();
@@ -145,6 +174,8 @@ export default function GroupChat() {
   // Track current scroll offset so we can restore it when reply is clicked
   const scrollOffsetRef = useRef(0);
   const userAtBottomRef = useRef(true);
+  // Track latest message timestamp for efficient polling
+  const latestMessageTimestampRef = useRef<string | null>(null);
   const handleListScroll = (e: any) => {
     try {
       const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
@@ -157,6 +188,10 @@ export default function GroupChat() {
   const [showPollCreator, setShowPollCreator] = useState(false);
   const [votingOptionId, setVotingOptionId] = useState<{ pollId: number; optionId: number } | null>(null);
   const [myVotes, setMyVotes] = useState<Record<number, number>>({}); // pollId -> optionId
+  
+  // Picky AI Recommendations state
+  const [pickyRecommendations, setPickyRecommendations] = useState<PickyRecommendationItem[]>([]);
+  const [pickyLoading, setPickyLoading] = useState<{ id: string; searchType: 'events' | 'food'; timestamp: string } | null>(null);
 
   // Load group data, polls with creators, and members
   useEffect(() => {
@@ -382,6 +417,7 @@ export default function GroupChat() {
       }
 
       // Fetch member profiles
+      let memberProfileMap = new Map<string, { id: string; username?: string | null; display_name?: string | null; avatar_url?: string | null }>();
       if (membersData && membersData.length > 0) {
         const memberIds = membersData.map(m => m.user_id);
         const { data: memberProfiles } = await supabase
@@ -389,7 +425,7 @@ export default function GroupChat() {
           .select('id, username, display_name, avatar_url')
           .in('id', memberIds);
 
-        const memberProfileMap = new Map(memberProfiles?.map(p => [p.id, p]) || []);
+        memberProfileMap = new Map(memberProfiles?.map(p => [p.id, p]) || []);
         const membersWithProfiles = membersData.map(m => ({
           ...m,
           user: memberProfileMap.get(m.user_id),
@@ -400,9 +436,33 @@ export default function GroupChat() {
       // Fetch messages
       try {
         const msgs = await getGroupMessages(groupId, 100);
-        if (mounted) setMessages(msgs);
+        if (mounted) {
+          setMessages(msgs);
+          // Update ref with latest message timestamp
+          if (msgs.length > 0) {
+            latestMessageTimestampRef.current = msgs[msgs.length - 1].created_at;
+          }
+        }
       } catch (error) {
         console.error('Failed to load messages:', error);
+      }
+      
+      // Fetch existing Picky recommendations from database
+      try {
+        const pickyRows = await getGroupPickyRecommendations(groupId, 50);
+        if (mounted) {
+          const pickyItems: PickyRecommendationItem[] = pickyRows.map(row => ({
+            id: row.id,
+            result: rowToResult(row),
+            timestamp: row.created_at,
+            triggerMessageId: row.trigger_message_id,
+            triggeredBy: row.triggered_by,
+            triggeredByUser: row.triggered_by_user,
+          }));
+          setPickyRecommendations(pickyItems);
+        }
+      } catch (error) {
+        console.error('Failed to load Picky recommendations:', error);
       }
 
       // Set up realtime subscriptions
@@ -473,7 +533,10 @@ export default function GroupChat() {
               }
               
               // This is a new message from another user, add it
-              return [...prev, newMessage];
+              const updated = [...prev, newMessage];
+              // Update ref with latest timestamp
+              latestMessageTimestampRef.current = newMessage.created_at;
+              return updated;
             });
             
             // Scroll to bottom if user is at bottom or if this is our message
@@ -560,16 +623,66 @@ export default function GroupChat() {
         }
       );
 
-      // Polling fallback: periodically fetch latest messages and append any missing.
+      // Polling fallback: periodically fetch ONLY new messages (not all messages)
       // This covers cases where realtime events fail to arrive.
+      // Use a much longer interval (30 seconds) and only fetch messages newer than the latest we have
       const pollInterval = setInterval(async () => {
         try {
-          const latest = await getGroupMessages(groupId, 100);
           if (!mounted) return;
+          
+          // Get the latest message timestamp from ref
+          const latestTimestamp = latestMessageTimestampRef.current;
+          if (!latestTimestamp) {
+            // No messages yet, skip polling
+            return;
+          }
+          
+          // Only fetch messages created after our latest message
+          const { data: newMessages, error } = await supabase
+            .from('group_messages')
+            .select('*')
+            .eq('group_id', groupId)
+            .is('deleted_at', null)
+            .gt('created_at', latestTimestamp)
+            .order('created_at', { ascending: true })
+            .limit(50);
+          
+          if (error) throw error;
+          if (!newMessages || newMessages.length === 0) {
+            // No new messages, nothing to do
+            return;
+          }
+          
+          // Fetch user profiles only for new messages
+          const userIds = [...new Set(newMessages.map(m => m.user_id))];
+          const { data: profiles } = userIds.length > 0
+            ? await supabase
+                .from('users')
+                .select('id, username, display_name, avatar_url')
+                .in('id', userIds)
+            : { data: [] };
+          
+          const profileMap = new Map(profiles?.map(p => [p.id, p]) || []);
+          
+          // Add new messages with profiles
+          const messagesWithProfiles: GroupMessage[] = newMessages.map(m => ({
+            ...m,
+            user: profileMap.get(m.user_id),
+            reactions: [],
+            reply_to: undefined,
+          }));
+          
           setMessages(prev => {
             const existingIds = new Set(prev.map(m => m.id));
-            const toAdd = latest.filter(m => !existingIds.has(m.id));
+            const toAdd = messagesWithProfiles.filter(m => !existingIds.has(m.id));
             if (toAdd.length === 0) return prev;
+            
+            // Update ref with new latest timestamp
+            const newLatest = toAdd[toAdd.length - 1]?.created_at;
+            if (newLatest) {
+              latestMessageTimestampRef.current = newLatest;
+            }
+            
             const next = [...prev, ...toAdd];
             // If user is at bottom, scroll to show new messages
             setTimeout(() => {
@@ -581,13 +694,50 @@ export default function GroupChat() {
           });
         } catch (e) {
           // ignore polling errors
+          console.warn('Polling error (non-critical):', e);
         }
-      }, 3000);
+      }, 30000); // Changed from 3000ms (3s) to 30000ms (30s) - much less frequent
+      
+      // Subscribe to Picky recommendations (so all group members see them)
+      const pickyChannel = subscribeToPickyRecommendations(
+        groupId,
+        (newRec) => {
+          if (mounted) {
+            // Check if we already have this recommendation (from our own trigger)
+            setPickyRecommendations(prev => {
+              const exists = prev.some(p => p.id === newRec.id);
+              if (exists) return prev;
+              
+              // Resolve user profile from cached member profiles (no extra DB query)
+              const userProfile = memberProfileMap.get(newRec.triggered_by);
+              
+              const newItem: PickyRecommendationItem = {
+                id: newRec.id,
+                result: rowToResult(newRec),
+                timestamp: newRec.created_at,
+                triggerMessageId: newRec.trigger_message_id,
+                triggeredBy: newRec.triggered_by,
+                triggeredByUser: userProfile,
+              };
+              
+              return [...prev, newItem];
+            });
+            
+            // Scroll to bottom if user is at bottom
+            setTimeout(() => {
+              try {
+                if (userAtBottomRef.current) flatListRef.current?.scrollToEnd({ animated: true });
+              } catch {}
+            }, 150);
+          }
+        }
+      );
 
       return () => {
         supabase.removeChannel(pollChannel);
         supabase.removeChannel(groupChannel);
         supabase.removeChannel(messageChannel);
+        supabase.removeChannel(pickyChannel);
         try {
           clearInterval(pollInterval);
         } catch {}
@@ -865,7 +1015,12 @@ export default function GroupChat() {
     pendingMessageIds.current.add(optimisticId);
 
     // Optimistically add message to state immediately
-    setMessages(prev => [...prev, optimisticMessage]);
+    setMessages(prev => {
+      const updated = [...prev, optimisticMessage];
+      // Update ref with latest timestamp
+      latestMessageTimestampRef.current = optimisticMessage.created_at;
+      return updated;
+    });
     setReplyTo(null);
 
     // Scroll to bottom immediately
@@ -873,14 +1028,24 @@ export default function GroupChat() {
       flatListRef.current?.scrollToEnd({ animated: true });
     }, 50);
 
+    // Check if this is a Picky command
+    const pickyCommand = parsePickyCommand(text.trim());
+    
     try {
       // Send message to server
       const serverMessage = await sendMessage(groupId, text.trim(), replyTo?.id);
       
       // Replace optimistic message with server message
-      setMessages(prev => prev.map(msg => 
-        msg.id === optimisticId ? { ...serverMessage, reactions: [] } : msg
-      ));
+      setMessages(prev => {
+        const updated = prev.map(msg => 
+          msg.id === optimisticId ? { ...serverMessage, reactions: [] } : msg
+        );
+        // Update ref with latest timestamp
+        if (serverMessage.created_at) {
+          latestMessageTimestampRef.current = serverMessage.created_at;
+        }
+        return updated;
+      });
       
       // Mark the server message ID as "ours" to prevent duplicate from realtime
       pendingMessageIds.current.add(serverMessage.id);
@@ -890,6 +1055,70 @@ export default function GroupChat() {
         pendingMessageIds.current.delete(optimisticId);
         pendingMessageIds.current.delete(serverMessage.id);
       }, 2000);
+      
+      // If this was a Picky command, fetch recommendations and save to database
+      if (pickyCommand) {
+        const loadingId = `picky-loading-${Date.now()}`;
+        const loadingTimestamp = new Date().toISOString();
+        
+        // Show loading state
+        setPickyLoading({
+          id: loadingId,
+          searchType: pickyCommand.type,
+          timestamp: loadingTimestamp,
+        });
+        
+        // Scroll to bottom to show loading
+        setTimeout(() => {
+          flatListRef.current?.scrollToEnd({ animated: true });
+        }, 100);
+        
+        try {
+          // Fetch recommendations
+          const result = await getPickyRecommendations(groupId, pickyCommand);
+          
+          // Save to database (this will trigger realtime for all group members)
+          const savedRow = await savePickyRecommendation(
+            groupId,
+            result,
+            serverMessage.id
+          );
+          
+          // Only add to local state if save succeeded
+          if (savedRow) {
+            // Add the recommendation to local state immediately (realtime will dedupe)
+            const pickyItem: PickyRecommendationItem = {
+              id: savedRow.id,
+              result,
+              timestamp: result.timestamp,
+              triggerMessageId: serverMessage.id,
+              triggeredBy: currentUserId,
+              triggeredByUser: members.find(m => m.user_id === currentUserId)?.user,
+            };
+            
+            setPickyRecommendations(prev => {
+              // Avoid duplicates if realtime already added it
+              if (prev.some(p => p.id === savedRow.id)) return prev;
+              return [...prev, pickyItem];
+            });
+            
+            // Haptic feedback for success
+            if (Platform.OS !== 'web') {
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+            }
+          }
+        } catch (error) {
+          console.error('Failed to fetch/save Picky recommendations:', error);
+        } finally {
+          // Clear loading state
+          setPickyLoading(null);
+          
+          // Scroll to bottom to show results
+          setTimeout(() => {
+            flatListRef.current?.scrollToEnd({ animated: true });
+          }, 150);
+        }
+      }
     } catch (error: any) {
       // Rollback: remove the optimistic message on error
       setMessages(prev => prev.filter(msg => msg.id !== optimisticId));
@@ -1057,7 +1286,7 @@ export default function GroupChat() {
     }
   };
 
-  // Combine messages and polls into a single sorted list with date separators
+  // Combine messages, polls, and Picky recommendations into a single sorted list with date separators
   const combinedItems = useCallback((): ChatItem[] => {
     const items: Array<{ timestamp: Date; item: ChatItem }> = [];
 
@@ -1076,6 +1305,22 @@ export default function GroupChat() {
         item: { type: 'message', data: msg },
       });
     });
+    
+    // Add Picky recommendations (positioned right after their trigger message)
+    pickyRecommendations.forEach(picky => {
+      items.push({
+        timestamp: new Date(picky.timestamp),
+        item: { type: 'picky', data: picky },
+      });
+    });
+    
+    // Add Picky loading state if active
+    if (pickyLoading) {
+      items.push({
+        timestamp: new Date(pickyLoading.timestamp),
+        item: { type: 'picky_loading', data: pickyLoading },
+      });
+    }
 
     // Sort by timestamp
     items.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
@@ -1094,7 +1339,7 @@ export default function GroupChat() {
     });
 
     return result;
-  }, [messages, polls]);
+  }, [messages, polls, pickyRecommendations, pickyLoading]);
 
   const handleReplyClick = (msg: GroupMessage) => {
     const prevOffset = scrollOffsetRef.current;
@@ -1168,6 +1413,21 @@ export default function GroupChat() {
 
     if (item.type === 'poll') {
       return renderPollMessage({ item: item.data });
+    }
+    
+    if (item.type === 'picky') {
+      return (
+        <PickyRecommendationCard
+          result={item.data.result}
+          timestamp={item.data.timestamp}
+        />
+      );
+    }
+    
+    if (item.type === 'picky_loading') {
+      return (
+        <PickyLoadingCard type={item.data.searchType} />
+      );
     }
 
     return null;
@@ -2221,6 +2481,8 @@ export default function GroupChat() {
             keyExtractor={(item, index) => {
               if (item.type === 'message') return `msg-${item.data.id}`;
               if (item.type === 'poll') return `poll-${item.data.id}`;
+              if (item.type === 'picky') return `picky-rec-${item.data.id}`;
+              if (item.type === 'picky_loading') return `picky-loading-${item.data.id}`;
               return `date-${index}`;
             }}
             renderItem={renderChatItem}

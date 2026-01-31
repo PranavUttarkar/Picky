@@ -44,6 +44,8 @@ const MessageInput = memo(function MessageInput({
   const [text, setText] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [height, setHeight] = useState(40);
+  // Track selection to support inserting newlines on web with Shift+Enter
+  const [selection, setSelection] = useState<{ start: number; end: number }>({ start: 0, end: 0 });
   const sendButtonScale = useRef(new Animated.Value(text.trim() ? 1 : 0)).current;
 
   const handleSend = async () => {
@@ -75,6 +77,27 @@ const MessageInput = memo(function MessageInput({
       tension: 200,
       friction: 10,
     }).start();
+  };
+
+  // Web key handling: Enter sends (without Shift), Shift+Enter inserts newline at cursor
+  const handleKeyDownWeb = (e: any) => {
+    if (e.key !== 'Enter') return;
+    if (e.shiftKey) {
+      // Insert newline at current selection
+      e.preventDefault();
+      const start = selection.start ?? text.length;
+      const end = selection.end ?? start;
+      const newText = text.slice(0, start) + '\n' + text.slice(end);
+      const newPos = start + 1;
+      setText(newText);
+      // update selection after inserting newline
+      setTimeout(() => setSelection({ start: newPos, end: newPos }), 0);
+      return;
+    }
+
+    // Enter without shift -> send
+    e.preventDefault();
+    handleSend();
   };
 
   const maxInputHeight = 150;
@@ -121,6 +144,14 @@ const MessageInput = memo(function MessageInput({
                 setHeight(newHeight);
               }
             }}
+            // Maintain selection for newline insertion on web
+            selection={selection}
+            onSelectionChange={(e) => {
+              const sel = e.nativeEvent?.selection;
+              if (sel) setSelection({ start: sel.start, end: sel.end });
+            }}
+            // Attach onKeyDown for web to support Enter vs Shift+Enter behavior
+            {...(Platform.OS === 'web' ? { onKeyDown: handleKeyDownWeb } : {})}
             style={{
               color: c.text,
               fontSize: 15,
@@ -137,9 +168,16 @@ const MessageInput = memo(function MessageInput({
             }}
             returnKeyType="default"
             blurOnSubmit={false}
+            // Keep existing native submit behavior: if the submit event text
+            // doesn't include a newline, treat as send. (Native keyboards
+            // generally don't provide a Shift+Enter combo like desktop.)
             onSubmitEditing={(e) => {
-              if (!e.nativeEvent.text.includes('\n') && Platform.OS !== 'web') {
-                handleSend();
+              try {
+                if (typeof e.nativeEvent.text === 'string' && !e.nativeEvent.text.includes('\n')) {
+                  handleSend();
+                }
+              } catch (err) {
+                // swallow errors from unexpected event shapes
               }
             }}
           />
