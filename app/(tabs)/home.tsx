@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
   Image,
   Alert,
+  TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -25,8 +26,62 @@ import { supabase } from '@/services/supabase';
 import { getTopUserMatches, getUpcomingEvents } from '@/services/events';
 import { getTopUserRestaurantMatches, listRestaurants } from '@/services/food';
 import { getMyGroups } from '@/services/groups';
+import { getOnboarding, saveOnboarding } from '@/services/profile';
 import type { Event, Restaurant } from '@/types/models';
 import LazyImage from '@/components/LazyImage';
+
+// Popular interests for quick selection
+const POPULAR_INTERESTS = [
+  'Live Music',
+  'Sports',
+  'Food',
+  'Tech',
+  'Hackathons',
+  'Arts & Theatre',
+  'Careers',
+  'Outdoors',
+  'Culture',
+  'Fitness',
+  'Business',
+  'Entrepreneurship',
+  'Networking',
+  'Gaming',
+];
+
+// Extended interest categories for recommendations
+const ALL_INTEREST_TAGS: Record<string, string[]> = {
+  'Entertainment': ['Live Music', 'Gaming', 'Movies', 'Comedy', 'Concerts', 'Festivals', 'Theater', 'Dance'],
+  'Sports & Fitness': ['Sports', 'Fitness', 'Yoga', 'Running', 'Basketball', 'Soccer', 'Volleyball', 'Hiking'],
+  'Food & Dining': ['Food', 'Cooking', 'Coffee', 'Brunch', 'Fine Dining', 'Street Food', 'Baking', 'Wine'],
+  'Professional': ['Careers', 'Networking', 'Business', 'Entrepreneurship', 'Leadership', 'Public Speaking'],
+  'Tech & Innovation': ['Tech', 'Hackathons', 'AI', 'Startups', 'Coding', 'Data Science', 'Robotics'],
+  'Arts & Culture': ['Arts & Theatre', 'Culture', 'Photography', 'Design', 'Museums', 'Literature', 'Poetry'],
+  'Outdoors & Travel': ['Outdoors', 'Travel', 'Camping', 'Beach', 'Road Trips', 'Nature', 'Adventure'],
+  'Social & Community': ['Volunteering', 'Community Service', 'Meetups', 'Social', 'Clubs', 'Charity'],
+  'Education & Learning': ['Workshops', 'Seminars', 'Languages', 'Science', 'History', 'Philosophy'],
+  'Wellness': ['Mental Health', 'Meditation', 'Self-Care', 'Wellness', 'Mindfulness', 'Spa'],
+};
+
+// Get all unique tags flattened
+const ALL_TAGS = Array.from(new Set(Object.values(ALL_INTEREST_TAGS).flat()));
+
+// Function to get suggested tags that user hasn't selected yet
+function getSuggestedInterests(selectedInterests: string[], limit: number = 6): string[] {
+  const selectedLower = new Set(selectedInterests.map(i => i.toLowerCase()));
+  
+  // First, prioritize popular interests that aren't selected
+  const unselectedPopular = POPULAR_INTERESTS.filter(
+    i => !selectedLower.has(i.toLowerCase())
+  );
+  
+  // Then add other tags from categories (that aren't already in popular and aren't selected)
+  const otherTags = ALL_TAGS.filter(
+    tag => !selectedLower.has(tag.toLowerCase()) && !POPULAR_INTERESTS.includes(tag)
+  );
+  
+  // Combine popular first, then other tags
+  return [...unselectedPopular, ...otherTags].slice(0, limit);
+}
 import dayjs from 'dayjs';
 import { Spacing, BorderRadius, Typography, Colors, IconSizes, Shadows } from '@/theme/designTokens';
 
@@ -232,13 +287,48 @@ export default function HomeTab() {
   const [groups, setGroups] = useState<Array<{ id: number; name: string }>>([]);
   const [groupModalVisible, setGroupModalVisible] = useState(false);
   const [selectedDecisionType, setSelectedDecisionType] = useState<'events' | 'food' | 'time' | null>(null);
+  
+  // Interests state
+  const [userInterests, setUserInterests] = useState<string[]>([]);
+  const [customInterests, setCustomInterests] = useState<string[]>([]);
+  const [customInterestInput, setCustomInterestInput] = useState('');
+  const [savingInterests, setSavingInterests] = useState(false);
+  const [interestsExpanded, setInterestsExpanded] = useState(false);
+  const [suggestedInterests, setSuggestedInterests] = useState<string[]>(() => getSuggestedInterests([], 6));
+
+  // Refresh suggested interests when user interests change
+  useEffect(() => {
+    const allSelected = [...userInterests, ...customInterests];
+    setSuggestedInterests(getSuggestedInterests(allSelected, 6));
+  }, [userInterests, customInterests]);
 
   useEffect(() => {
     let mounted = true;
-    supabase.auth.getUser().then(({ data }) => {
+    
+    const checkUserAndRedirect = async () => {
+      const { data } = await supabase.auth.getUser();
       if (!mounted) return;
       setSignedIn(Boolean(data.user));
-    });
+      
+      // If user is signed in, check if they are an organizer
+      if (data.user) {
+        const { data: profile } = await supabase
+          .from('users')
+          .select('account_type')
+          .eq('id', data.user.id)
+          .single();
+        
+        if (!mounted) return;
+        
+        // Redirect organizers to organizer-profile
+        if (profile?.account_type === 'organization') {
+          router.replace('/(tabs)/organizer-profile');
+          return;
+        }
+      }
+    };
+    
+    checkUserAndRedirect();
 
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!mounted) return;
@@ -252,6 +342,106 @@ export default function HomeTab() {
       } catch {}
     };
   }, []);
+
+  // Load user interests
+  useEffect(() => {
+    if (!signedIn) return;
+    (async () => {
+      try {
+        const data = await getOnboarding();
+        if (data) {
+          setUserInterests(Array.isArray(data.interests) ? data.interests : []);
+          setCustomInterests(Array.isArray(data.custom_interests) ? data.custom_interests : []);
+        }
+      } catch (e) {
+        console.error('Failed to load interests:', e);
+      }
+    })();
+  }, [signedIn]);
+
+  // Toggle interest selection
+  const toggleInterest = async (interest: string) => {
+    if (savingInterests) return;
+    
+    const isSelected = userInterests.includes(interest);
+    const previousInterests = [...userInterests];
+    const previousCustom = [...customInterests];
+    
+    const newInterests = isSelected
+      ? userInterests.filter((i) => i !== interest)
+      : [...userInterests, interest];
+    
+    // If adding an interest that's not in POPULAR_INTERESTS, also add it to customInterests
+    let newCustom = [...customInterests];
+    if (!isSelected && !POPULAR_INTERESTS.includes(interest) && !customInterests.includes(interest)) {
+      newCustom = [...customInterests, interest];
+      setCustomInterests(newCustom);
+    }
+    
+    setUserInterests(newInterests);
+    setSavingInterests(true);
+    
+    try {
+      // Fetch existing onboarding data to preserve other fields
+      const existingData = await getOnboarding();
+      
+      await saveOnboarding({
+        interests: newInterests,
+        majors: existingData?.majors ?? [],
+        custom_interests: newCustom,
+        food_restrictions: existingData?.food_restrictions ?? [],
+        preferences: existingData?.preferences ?? {},
+      });
+    } catch (e) {
+      console.error('Failed to save interests:', e);
+      // Revert on error using the captured previous state
+      setUserInterests(previousInterests);
+      setCustomInterests(previousCustom);
+    } finally {
+      setSavingInterests(false);
+    }
+  };
+
+  // Add custom interest
+  const addCustomInterest = async () => {
+    const value = customInterestInput.trim();
+    if (!value || savingInterests) return;
+    if (userInterests.includes(value) || customInterests.includes(value)) {
+      setCustomInterestInput('');
+      return;
+    }
+    
+    const previousInterests = [...userInterests];
+    const previousCustom = [...customInterests];
+    
+    const newInterests = [...userInterests, value];
+    const newCustom = [...customInterests, value];
+    
+    setUserInterests(newInterests);
+    setCustomInterests(newCustom);
+    setCustomInterestInput('');
+    setSavingInterests(true);
+    
+    try {
+      // Fetch existing onboarding data to preserve other fields
+      const existingData = await getOnboarding();
+      
+      await saveOnboarding({
+        interests: newInterests,
+        majors: existingData?.majors ?? [],
+        custom_interests: newCustom,
+        food_restrictions: existingData?.food_restrictions ?? [],
+        preferences: existingData?.preferences ?? {},
+      });
+    } catch (e) {
+      console.error('Failed to save custom interest:', e);
+      // Revert on error using the captured previous state
+      setUserInterests(previousInterests);
+      setCustomInterests(previousCustom);
+    } finally {
+      setSavingInterests(false);
+    }
+  };
 
   useEffect(() => {
     if (signedIn) {
@@ -632,6 +822,218 @@ export default function HomeTab() {
             </View>
           </View>
 
+          {/* Row 4: Interests & Tags Section */}
+          {signedIn && (
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Ionicons name="heart-outline" size={20} color={c.primary} />
+                  <Text style={[styles.sectionTitle, { color: c.text }]}>Your Interests</Text>
+                </View>
+                <Pressable
+                  onPress={() => setInterestsExpanded(!interestsExpanded)}
+                  style={styles.viewAllButton}
+                >
+                  <Text style={[styles.viewAllText, { color: c.primary }]}>
+                    {interestsExpanded ? 'Show Less' : 'Edit'}
+                  </Text>
+                  <Ionicons 
+                    name={interestsExpanded ? 'chevron-up' : 'chevron-down'} 
+                    size={16} 
+                    color={c.primary} 
+                  />
+                </Pressable>
+              </View>
+
+              {/* Selected interests summary */}
+              {userInterests.length > 0 && !interestsExpanded && (
+                <View style={styles.interestsChipContainer}>
+                  {userInterests.slice(0, 5).map((interest) => (
+                    <Pressable
+                      key={interest}
+                      onPress={() => toggleInterest(interest)}
+                      style={[styles.interestChip, styles.interestChipSelected, { backgroundColor: `${c.primary}20`, borderColor: c.primary }]}
+                    >
+                      <Text style={[styles.interestChipText, { color: c.primary }]}>{interest}</Text>
+                      <Ionicons name="close" size={14} color={c.primary} style={{ marginLeft: 4 }} />
+                    </Pressable>
+                  ))}
+                  {userInterests.length > 5 && (
+                    <Pressable
+                      onPress={() => setInterestsExpanded(true)}
+                      style={[styles.interestChip, { backgroundColor: c.card, borderColor: c.muted + '40' }]}
+                    >
+                      <Text style={[styles.interestChipText, { color: c.muted }]}>+{userInterests.length - 5} more</Text>
+                    </Pressable>
+                  )}
+                </View>
+              )}
+
+              {/* Suggested interests - always visible when collapsed and has selected interests */}
+              {!interestsExpanded && suggestedInterests.length > 0 && (
+                <View style={{ marginTop: userInterests.length > 0 ? Spacing.md : 0 }}>
+                  <Text style={[styles.suggestedLabel, { color: c.muted }]}>
+                    <Ionicons name="sparkles" size={12} color={c.muted} /> Suggested for you
+                  </Text>
+                  <View style={styles.interestsChipContainer}>
+                    {suggestedInterests.slice(0, 4).map((interest) => (
+                      <Pressable
+                        key={interest}
+                        onPress={() => toggleInterest(interest)}
+                        style={[styles.interestChip, styles.suggestedChip, { backgroundColor: c.card, borderColor: c.primary + '40' }]}
+                      >
+                        <Ionicons name="add" size={14} color={c.primary} style={{ marginRight: 4 }} />
+                        <Text style={[styles.interestChipText, { color: c.text }]}>{interest}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              {/* Empty state */}
+              {userInterests.length === 0 && !interestsExpanded && suggestedInterests.length === 0 && (
+                <Pressable
+                  onPress={() => setInterestsExpanded(true)}
+                  style={[styles.emptyInterestsCard, { backgroundColor: c.card, borderColor: c.muted + '30' }]}
+                >
+                  <Ionicons name="add-circle-outline" size={24} color={c.primary} />
+                  <Text style={[styles.emptyInterestsText, { color: c.text }]}>
+                    Add your interests to get better recommendations
+                  </Text>
+                </Pressable>
+              )}
+
+              {/* Expanded view with all interests */}
+              {interestsExpanded && (
+                <View style={{ marginTop: Spacing.sm }}>
+                  {/* Suggested interests at the top */}
+                  {suggestedInterests.length > 0 && (
+                    <>
+                      <View style={styles.suggestedHeaderRow}>
+                        <Ionicons name="sparkles" size={16} color={c.primary} />
+                        <Text style={[styles.interestsCategoryLabel, { color: c.primary, marginBottom: 0, marginLeft: 6 }]}>
+                          Suggested for you
+                        </Text>
+                      </View>
+                      <View style={[styles.interestsChipContainer, { marginBottom: Spacing.lg }]}>
+                        {suggestedInterests.map((interest) => (
+                          <Pressable
+                            key={interest}
+                            onPress={() => toggleInterest(interest)}
+                            style={[styles.interestChip, styles.suggestedChip, { backgroundColor: `${c.primary}10`, borderColor: c.primary + '60' }]}
+                          >
+                            <Ionicons name="add" size={14} color={c.primary} style={{ marginRight: 4 }} />
+                            <Text style={[styles.interestChipText, { color: c.primary }]}>{interest}</Text>
+                          </Pressable>
+                        ))}
+                      </View>
+                    </>
+                  )}
+
+                  {/* Your selected interests */}
+                  {userInterests.length > 0 && (
+                    <>
+                      <Text style={[styles.interestsCategoryLabel, { color: c.muted }]}>Your Interests</Text>
+                      <View style={[styles.interestsChipContainer, { marginBottom: Spacing.lg }]}>
+                        {userInterests.map((interest) => (
+                          <Pressable
+                            key={interest}
+                            onPress={() => toggleInterest(interest)}
+                            style={[
+                              styles.interestChip,
+                              styles.interestChipSelected,
+                              { backgroundColor: `${c.primary}20`, borderColor: c.primary },
+                            ]}
+                          >
+                            <Ionicons name="checkmark" size={14} color={c.primary} style={{ marginRight: 4 }} />
+                            <Text style={[styles.interestChipText, { color: c.primary }]}>{interest}</Text>
+                            <Ionicons name="close" size={14} color={c.primary} style={{ marginLeft: 4 }} />
+                          </Pressable>
+                        ))}
+                      </View>
+                    </>
+                  )}
+
+                  {/* Browse all interests by category */}
+                  <Text style={[styles.interestsCategoryLabel, { color: c.muted }]}>Browse All</Text>
+                  {Object.entries(ALL_INTEREST_TAGS).map(([category, tags]) => (
+                    <View key={category} style={{ marginBottom: Spacing.md }}>
+                      <Text style={[styles.categorySubLabel, { color: c.text }]}>{category}</Text>
+                      <View style={styles.interestsChipContainer}>
+                        {tags.map((interest) => {
+                          const isSelected = userInterests.includes(interest);
+                          return (
+                            <Pressable
+                              key={interest}
+                              onPress={() => toggleInterest(interest)}
+                              style={[
+                                styles.interestChip,
+                                isSelected && styles.interestChipSelected,
+                                {
+                                  backgroundColor: isSelected ? `${c.primary}20` : c.card,
+                                  borderColor: isSelected ? c.primary : c.muted + '40',
+                                },
+                              ]}
+                            >
+                              {isSelected ? (
+                                <Ionicons name="checkmark" size={14} color={c.primary} style={{ marginRight: 4 }} />
+                              ) : (
+                                <Ionicons name="add" size={14} color={c.muted} style={{ marginRight: 4 }} />
+                              )}
+                              <Text
+                                style={[
+                                  styles.interestChipText,
+                                  { color: isSelected ? c.primary : c.text },
+                                ]}
+                              >
+                                {interest}
+                              </Text>
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  ))}
+
+                  {/* Add custom interest input */}
+                  <View style={[styles.customInterestInputContainer, { backgroundColor: c.card, borderColor: c.muted + '40' }]}>
+                    <TextInput
+                      value={customInterestInput}
+                      onChangeText={setCustomInterestInput}
+                      placeholder="Add a custom interest..."
+                      placeholderTextColor={c.muted}
+                      style={[styles.customInterestInput, { color: c.text }]}
+                      onSubmitEditing={addCustomInterest}
+                      returnKeyType="done"
+                    />
+                    <Pressable
+                      onPress={addCustomInterest}
+                      disabled={!customInterestInput.trim() || savingInterests}
+                      style={[
+                        styles.addInterestButton,
+                        {
+                          backgroundColor: customInterestInput.trim() ? c.primary : c.muted + '40',
+                          opacity: savingInterests ? 0.6 : 1,
+                        },
+                      ]}
+                    >
+                      <Ionicons name="add" size={20} color={customInterestInput.trim() ? '#fff' : c.muted} />
+                    </Pressable>
+                  </View>
+
+                  {savingInterests && (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: Spacing.sm }}>
+                      <ActivityIndicator size="small" color={c.primary} />
+                      <Text style={{ marginLeft: 8, color: c.muted, fontSize: Typography.scale.bodySmall.fontSize }}>
+                        Saving...
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              )}
+            </View>
+          )}
+
           <View style={{ paddingHorizontal: Spacing.md, marginTop: Spacing.xl }}>
             
               <Text
@@ -968,5 +1370,97 @@ const styles = StyleSheet.create({
     lineHeight: Typography.scale.bodyLarge.lineHeight,
     fontFamily: Typography.fontFamily.body,
     fontWeight: Typography.fontWeight.semibold,
+  },
+  // Interests section styles
+  interestsChipContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.sm,
+  },
+  interestChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+  },
+  interestChipSelected: {
+    // Styles applied dynamically via inline styles
+  },
+  interestChipText: {
+    fontSize: Typography.scale.body.fontSize,
+    lineHeight: Typography.scale.body.lineHeight,
+    fontFamily: Typography.fontFamily.body,
+    fontWeight: Typography.fontWeight.medium,
+  },
+  interestsCategoryLabel: {
+    fontSize: Typography.scale.bodySmall.fontSize,
+    lineHeight: Typography.scale.bodySmall.lineHeight,
+    fontFamily: Typography.fontFamily.body,
+    fontWeight: Typography.fontWeight.semibold,
+    marginBottom: Spacing.sm,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  suggestedLabel: {
+    fontSize: Typography.scale.bodySmall.fontSize,
+    lineHeight: Typography.scale.bodySmall.lineHeight,
+    fontFamily: Typography.fontFamily.body,
+    fontWeight: Typography.fontWeight.semibold,
+    marginBottom: Spacing.sm,
+  },
+  suggestedHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: Spacing.sm,
+  },
+  suggestedChip: {
+    // Additional styles for suggested chips
+  },
+  categorySubLabel: {
+    fontSize: Typography.scale.body.fontSize,
+    lineHeight: Typography.scale.body.lineHeight,
+    fontFamily: Typography.fontFamily.body,
+    fontWeight: Typography.fontWeight.semibold,
+    marginBottom: Spacing.xs,
+    marginTop: Spacing.xs,
+  },
+  emptyInterestsCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    gap: Spacing.sm,
+  },
+  emptyInterestsText: {
+    flex: 1,
+    fontSize: Typography.scale.body.fontSize,
+    lineHeight: Typography.scale.body.lineHeight,
+    fontFamily: Typography.fontFamily.body,
+    fontWeight: Typography.fontWeight.regular,
+  },
+  customInterestInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    marginTop: Spacing.md,
+    paddingLeft: Spacing.md,
+    overflow: 'hidden',
+  },
+  customInterestInput: {
+    flex: 1,
+    fontSize: Typography.scale.body.fontSize,
+    fontFamily: Typography.fontFamily.body,
+    paddingVertical: Spacing.sm + 2,
+  },
+  addInterestButton: {
+    padding: Spacing.sm + 2,
+    marginLeft: Spacing.sm,
+    borderRadius: BorderRadius.sm,
+    marginRight: 4,
   },
 });

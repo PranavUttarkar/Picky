@@ -1185,11 +1185,21 @@ export default function OrganizerProfile() {
         visible={createEventModalVisible}
         onClose={() => setCreateEventModalVisible(false)}
         onSaved={async () => {
-          // Refresh event count after creating event
+          // Refresh event count and recent events after creating event
           const { data: { user } } = await supabase.auth.getUser();
           if (user) {
             const events = await getAllOrganizationEvents(user.id, 100);
             setEventCount(events.length);
+            
+            // Update recent events to show the new event
+            const now = new Date();
+            const upcoming = events.filter((e: Event) => new Date(e.date_time) >= now);
+            const past = events.filter((e: Event) => new Date(e.date_time) < now);
+            const recent = [...upcoming.slice(0, 3)];
+            if (recent.length < 3) {
+              recent.push(...past.slice(0, 3 - recent.length));
+            }
+            setRecentEvents(recent);
           }
         }}
       />
