@@ -31,7 +31,6 @@ export function ThemeProvider({ children }: PropsWithChildren) {
   // Prefer user-selected theme; fallback to system if none stored
   const systemScheme = useColorScheme() ?? 'light';
   const [scheme, setSchemeState] = useState<Scheme>(systemScheme === 'dark' ? 'dark' : 'light');
-  const [ready, setReady] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -40,9 +39,7 @@ export function ThemeProvider({ children }: PropsWithChildren) {
         if (stored === 'light' || stored === 'dark') {
           setSchemeState(stored);
         }
-      } finally {
-        setReady(true);
-      }
+      } catch {}
     })();
   }, []);
 
