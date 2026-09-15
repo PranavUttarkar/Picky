@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { router } from 'expo-router';
 import { supabase } from '@/services/supabase';
@@ -11,46 +11,48 @@ import { useThemeColors } from '@/theme/ThemeProvider';
  */
 export default function Index() {
   const c = useThemeColors();
-  const [checking, setChecking] = useState(true);
 
   useEffect(() => {
     const checkAuthAndOnboarding = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        
+
         if (!session) {
-          // Not authenticated - go to welcome
+          // There is no remote work on the signed-out path.
           router.replace('/home');
           return;
         }
 
-        // User is authenticated - check if they completed onboarding (have a username)
-        const { data: userProfile } = await supabase
+        // Do not keep the launch screen up while this network request is in flight.
+        // On a cold launch this was the only thing preventing the app from rendering,
+        // so a slow/unavailable Supabase connection looked like the app had frozen.
+        // Home already renders a loading state for its own data, and we redirect new
+        // accounts as soon as this check completes.
+        router.replace('/(tabs)/home');
+
+        const { data: userProfile, error: profileError } = await supabase
           .from('users')
           .select('username')
           .eq('id', session.user.id)
           .maybeSingle();
 
-        if (userProfile?.username) {
-          // Existing user with completed profile - go to home
-          router.replace('/(tabs)/home');
-        } else {
-          // User never completed onboarding - send to profile setup
+        if (!profileError && !userProfile?.username) {
+          // New users still continue straight to profile setup once the profile
+          // result arrives; existing users never wait on this request to see UI.
           router.replace('/onboarding/profile-setup');
         }
       } catch (error) {
         console.error('Auth check error:', error);
-        // On error, default to welcome screen
-        router.replace('/onboarding/welcome');
-      } finally {
-        setChecking(false);
+        // Auth state could not be restored. Keep the app usable instead of
+        // trapping the user on the launch spinner.
+        router.replace('/home');
       }
     };
 
     checkAuthAndOnboarding();
   }, []);
 
-  // Show loading while checking auth state
+  // This is displayed only while the persisted session is read from local storage.
   return (
     <View style={{ flex: 1, backgroundColor: c.background, justifyContent: 'center', alignItems: 'center' }}>
       <ActivityIndicator size="large" color={c.primary} />
