@@ -341,7 +341,11 @@ def collect() -> list[dict[str, Any]]:
     source = "tamu_getinvolved"
     listing_url = SOURCES[source]
     print(f"Reading {source}: {listing_url}")
-    links = listing_links(listing_url, source)
+    try:
+        links = listing_links(listing_url, source)
+    except requests.RequestException as exc:
+        print(f"WARNING: unable to read Get Involved; its events were skipped this run: {exc}", file=sys.stderr)
+        links = set()
     print(f"Found {len(links)} event pages")
     for url in sorted(links):
         try:
