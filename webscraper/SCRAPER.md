@@ -1,5 +1,35 @@
 # Texas A&M Calendar Web Scraper
 
+## Automatic TAMU event sync
+
+`sync_tamu_events.py` imports upcoming events from the public LiveWhale JSON API
+for the university calendar and from Get Involved's paginated event listings.
+It follows event detail pages to retain source descriptions, dates, locations,
+registration links, and image URLs. Times are saved in the `America/Chicago`
+timezone; source images remain linked at their official TAMU URLs.
+
+The importer writes directly to the existing `events` schema. It maps the
+primary image to both `image_url` and `image_urls`, keeps coordinates when
+provided by LiveWhale, records multi-day endings in `end_date`, and stores each
+source's stable ID and URL for repeatable upserts. Imported events are public
+and have no user creator. The sync runs every four hours through GitHub Actions
+and can also be started manually from the Actions tab.
+
+### One-time setup
+
+1. Apply `supabase/migrations/0048_external_event_sources.sql` to the Supabase
+   project before running the importer.
+2. In the GitHub repository, add Actions secrets named `SUPABASE_URL` and
+   `SUPABASE_SERVICE_ROLE_KEY`. Use the project URL and service role key from
+   Supabase project settings. The key is only consumed by the scheduled server
+   workflow and must not be placed in the app or committed to the repository.
+3. Run **Sync TAMU events** once from GitHub Actions to populate the catalog.
+
+The importer skips events that ended more than a day ago, refreshes matching
+source records on each run, and leaves user-created events untouched. If a
+source removes an event, its previously imported row is retained for saved
+event references and moderation history.
+
 This folder contains a Selenium-based scraper that collects event details from Texas A&M calendars and writes results to JSON, with optional CSV conversion.
 
 Key files:

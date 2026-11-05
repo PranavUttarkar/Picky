@@ -40,6 +40,9 @@ export interface Event {
   longitude?: number | null;
   tags?: string[];
   rsvp_url?: string | null;
+  external_source?: 'tamu_calendar' | 'tamu_getinvolved' | null;
+  external_id?: string | null;
+  source_url?: string | null;
   created_by?: string;
   // Creator info (populated via join)
   creator?: EventCreator | null;
