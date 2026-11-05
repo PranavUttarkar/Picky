@@ -50,13 +50,13 @@ def reader_markdown_to_soup(markdown: str) -> BeautifulSoup:
         line = line.strip()
         if not line or line.startswith(("Title:", "URL Source:", "Final URL:", "Markdown Content:")):
             continue
+        # Convert Markdown links and images so listing links and event images remain discoverable.
+        line = re.sub(r'!\[([^\]]*)\]\((https?://[^\s)]+)(?:\s+"[^"]*")?\)', r'<img alt="\1" src="\2">', line)
+        line = re.sub(r'\[([^\]]+)\]\((https?://[^\s)]+)(?:\s+"[^"]*")?\)', r'<a href="\2">\1</a>', line)
         heading = re.match(r"^#{1,6}\s+(.+)$", line)
         if heading:
             html.append(f"<h2>{heading.group(1)}</h2>")
             continue
-        # Convert Markdown links and images so listing links and event images remain discoverable.
-        line = re.sub(r"!\[([^\]]*)\]\((https?://[^)]+)\)", r'<img alt="\1" src="\2">', line)
-        line = re.sub(r"\[([^\]]+)\]\((https?://[^)]+)\)", r'<a href="\2">\1</a>', line)
         line = re.sub(r"^\s*[*-]\s+", "", line)
         html.append(f"<p>{line}</p>")
     return BeautifulSoup("\n".join(html), "html.parser")
@@ -75,9 +75,11 @@ def fetch(url: str) -> BeautifulSoup:
         pause = 3.1 - (time.monotonic() - LAST_READER_REQUEST_AT)
         if pause > 0:
             time.sleep(pause)
-        reader_response = SESSION.get(reader_url, timeout=60)
+        reader_response = SESSION.get(reader_url, headers={"x-return-format": "html"}, timeout=60)
         LAST_READER_REQUEST_AT = time.monotonic()
         reader_response.raise_for_status()
+        if reader_response.text.lstrip().lower().startswith("<html"):
+            return BeautifulSoup(reader_response.text, "html.parser")
         return reader_markdown_to_soup(reader_response.text)
     response.raise_for_status()
     return BeautifulSoup(response.text, "html.parser")
@@ -146,9 +148,14 @@ def image_value(item: dict[str, Any], soup: BeautifulSoup, base: str) -> str | N
         image = image.get("url")
     raw_url = abs_url(str(image), base) if image else abs_url(meta(soup, "og:image", "twitter:image"), base)
     if not raw_url and "getinvolved.tamu.edu" in urlparse(base).netloc.lower():
-        for candidate in soup.select("img[src]"):
+        candidates = list(soup.select("img[src]"))
+        candidates.sort(key=lambda candidate: 0 if "/storage/events/images/" in str(candidate.get("src") or "") else 1)
+        for candidate in candidates:
             candidate_url = abs_url(candidate.get("src"), base)
-            if candidate_url and "/storage/organizations/" in candidate_url and "logo" not in urlparse(candidate_url).path.lower():
+            if candidate_url and (
+                "/storage/events/images/" in candidate_url
+                or ("/storage/organizations/" in candidate_url and "logo" not in urlparse(candidate_url).path.lower())
+            ):
                 raw_url = candidate_url
                 break
     return full_resolution_livewhale_image(raw_url) if raw_url else None
@@ -192,7 +199,9 @@ def canonical_identity(record: dict[str, Any]) -> tuple[str, str, str]:
 
 def event_record(url: str, source: str, soup: BeautifulSoup) -> dict[str, Any] | None:
     item = jsonld_event(soup)
-    title = str(item.get("name") or meta(soup, "og:title") or text(soup.find("h1"))).strip()
+    heading = soup.select("main h1") or soup.find_all("h1")
+    fallback_title = text(heading[-1]) if source == "tamu_getinvolved" and heading else text(soup.find("h1"))
+    title = str(item.get("name") or meta(soup, "og:title") or fallback_title).strip()
     if not title:
         return None
     description = item.get("description") or meta(soup, "og:description", "description")
