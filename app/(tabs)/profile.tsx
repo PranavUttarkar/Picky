@@ -26,6 +26,8 @@ import * as ImagePicker from 'expo-image-picker';
 import { updateUserProfile, checkUsernameAvailability, updateUsername } from '@/services/friends';
 import { checkProfanity } from '@/utils/profanity';
 import Avatar from '@/components/Avatar';
+import LazyImage from '@/components/LazyImage';
+import EventImagePlaceholder from '@/components/EventImagePlaceholder';
 import type { UserProfile } from '@/types/models';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { 
@@ -516,11 +518,15 @@ function CompactEventCardSmall({ event, onPress }: { event: any; onPress: () => 
     <Pressable onPress={onPress} style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1, width: 160, marginRight: 12 }] }>
       <View style={{ width: 160, height: 100, borderRadius: 12, overflow: 'hidden', backgroundColor: c.muted + '10' }}>
         {cover ? (
-          <Image source={{ uri: cover }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+          <LazyImage
+            uri={cover}
+            width="100%"
+            height="100%"
+            resizeMode="contain"
+            fallback={<EventImagePlaceholder />}
+          />
         ) : (
-          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-            <Ionicons name="calendar-outline" size={28} color={c.muted} />
-          </View>
+          <EventImagePlaceholder />
         )}
       </View>
       <Text style={{ color: c.text, marginTop: 8, fontWeight: '600' }} numberOfLines={2}>{event.title}</Text>

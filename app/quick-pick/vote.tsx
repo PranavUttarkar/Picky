@@ -8,6 +8,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import GradientBackground from '@/components/GradientBackground';
 import SwipeDeck from '@/components/SwipeDeck';
 import LazyImage from '@/components/LazyImage';
+import EventImagePlaceholder from '@/components/EventImagePlaceholder';
 import Avatar from '@/components/Avatar';
 import { Typography, Spacing, BorderRadius, Gradients } from '@/theme/designTokens';
 import { 
@@ -477,19 +478,15 @@ export default function QuickPickVote() {
             uri={item.image}
             width="100%"
             height="100%"
-            resizeMode="cover"
+            resizeMode={item.type === 'event' ? 'contain' : 'cover'}
+            fallback={item.type === 'event' ? <EventImagePlaceholder /> : undefined}
           />
         ) : (
-          <View style={{ 
-            flex: 1, 
-            alignItems: 'center', 
-            justifyContent: 'center',
-            backgroundColor: scheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
-          }}>
-            <Text style={{ fontSize: 64 }}>
-              {item.type === 'event' ? '🎉' : '🍕'}
-            </Text>
-          </View>
+          item.type === 'event' ? <EventImagePlaceholder /> : (
+            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: scheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)' }}>
+              <Text style={{ fontSize: 64 }}>🍕</Text>
+            </View>
+          )
         )}
         
         {/* Match badge */}

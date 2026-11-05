@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   ScrollView,
@@ -7,6 +7,7 @@ import {
   Pressable,
   Platform,
   Text,
+  ImageResizeMode,
 } from 'react-native';
 import LazyImage from '@/components/LazyImage';
 
@@ -25,6 +26,8 @@ export type ImageGalleryProps = {
    * Optional handler when an image is tapped (e.g., to open fullscreen later)
    */
   onPressImage?: (index: number) => void;
+  resizeMode?: ImageResizeMode;
+  fallback?: ReactNode;
 };
 
 export default function ImageGallery({
@@ -39,6 +42,8 @@ export default function ImageGallery({
   autoPlayOnHover = false,
   autoPlayIntervalMs = 1400,
   onPressImage,
+  resizeMode = 'cover',
+  fallback,
 }: ImageGalleryProps) {
   const clean = useMemo(() => (images || []).filter(Boolean), [images]);
   // Maintain a local list that can drop images that fail to load
@@ -97,7 +102,7 @@ export default function ImageGallery({
   ]);
 
   // If all images failed, render nothing
-  if (!items.length) return null;
+  if (!items.length) return fallback ?? null;
 
   return (
     <Pressable
@@ -143,6 +148,8 @@ export default function ImageGallery({
                 width={w}
                 height={h}
                 borderRadius={0}
+                resizeMode={resizeMode}
+                fallback={fallback}
                 onError={() => {
                   // Drop this URI from local list and advance if needed
                   setItems((prev) => {

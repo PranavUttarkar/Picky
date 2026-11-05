@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import GradientBackground from '@/components/GradientBackground';
 import LazyImage from '@/components/LazyImage';
+import EventImagePlaceholder from '@/components/EventImagePlaceholder';
 import Avatar from '@/components/Avatar';
 import { Typography, Spacing, BorderRadius, Gradients } from '@/theme/designTokens';
 import { getPoll, suggestLeader, toggleCommitment, type PollOptionView } from '@/services/polls';
@@ -373,19 +374,15 @@ export default function QuickPickResult() {
                     uri={winnerDetails.image}
                     width="100%"
                     height="100%"
-                    resizeMode="cover"
+                    resizeMode={winnerDetails.type === 'event' ? 'contain' : 'cover'}
+                    fallback={winnerDetails.type === 'event' ? <EventImagePlaceholder /> : undefined}
                   />
                 ) : (
-                  <View style={{ 
-                    flex: 1, 
-                    alignItems: 'center', 
-                    justifyContent: 'center',
-                    backgroundColor: scheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
-                  }}>
-                    <Text style={{ fontSize: 64 }}>
-                      {winnerDetails?.type === 'event' ? '🎉' : '🍕'}
-                    </Text>
-                  </View>
+                  winnerDetails?.type === 'event' ? <EventImagePlaceholder /> : (
+                    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: scheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)' }}>
+                      <Text style={{ fontSize: 64 }}>🍕</Text>
+                    </View>
+                  )
                 )}
                 
                 {/* Crown badge */}

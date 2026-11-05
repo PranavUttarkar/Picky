@@ -3,6 +3,7 @@ import { View, Text, Image } from 'react-native';
 import dayjs from 'dayjs';
 import { Ionicons } from '@expo/vector-icons';
 import LazyImage from '@/components/LazyImage';
+import EventImagePlaceholder from '@/components/EventImagePlaceholder';
 import Chip from '@/components/Chip';
 import type { PollOptionView } from '@/services/polls';
 import type { Restaurant } from '@/types/models';
@@ -142,15 +143,19 @@ export const PollCard: React.FC<PollCardProps> = ({
             width={'100%'}
             height={'100%'}
             borderRadius={12}
+            resizeMode={isFood ? 'cover' : 'contain'}
+            fallback={isFood ? undefined : <EventImagePlaceholder borderRadius={12} />}
             accessibilityLabel={`Image for ${title}`}
             onError={() => setImageFailed(true)}
           />
-        ) : (
+        ) : isFood ? (
           <Image
             source={require('../assets/NoImageRestaurant.jpg')}
             style={{ width: '100%', height: '100%', borderRadius: 12 }}
             resizeMode="cover"
           />
+        ) : (
+          <EventImagePlaceholder borderRadius={12} />
         )}
       </View>
 

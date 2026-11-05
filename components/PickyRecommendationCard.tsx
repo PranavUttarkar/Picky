@@ -13,6 +13,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useThemeColors } from '@/theme/ThemeProvider';
 import { router } from 'expo-router';
 import type { PickyRecommendationResult, PickyRecommendation } from '@/services/pickyRecommendations';
+import LazyImage from '@/components/LazyImage';
+import EventImagePlaceholder from '@/components/EventImagePlaceholder';
 
 // Picky bot branding
 const PICKY_AVATAR = require('@/assets/branding/P.png');
@@ -337,11 +339,19 @@ const RecommendationItem = memo(function RecommendationItem({
         backgroundColor: c.muted + '30',
       }}>
         {imageUrl ? (
-          <Image
-            source={{ uri: imageUrl }}
-            style={{ width: 72, height: 72 }}
-            resizeMode="cover"
-          />
+          isEvent ? (
+            <LazyImage
+              uri={imageUrl}
+              width={72}
+              height={72}
+              resizeMode="contain"
+              fallback={<EventImagePlaceholder />}
+            />
+          ) : (
+            <Image source={{ uri: imageUrl }} style={{ width: 72, height: 72 }} resizeMode="cover" />
+          )
+        ) : isEvent ? (
+          <EventImagePlaceholder />
         ) : (
           <View style={{ 
             width: 72, 

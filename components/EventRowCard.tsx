@@ -2,6 +2,7 @@ import React, { memo, useMemo, useState } from 'react';
 import { View, Text, Pressable, Platform } from 'react-native';
 import { useThemeColors } from '@/theme/ThemeProvider';
 import EventImages from '@/components/EventImages';
+import EventImagePlaceholder from '@/components/EventImagePlaceholder';
 import Avatar from '@/components/Avatar';
 import dayjs from 'dayjs';
 import { ThreeDCard, ThreeDButton } from '@/components/ThreeD';
@@ -86,26 +87,12 @@ export const EventRowCard: React.FC<EventRowCardProps> = memo(
                   width={'100%'}
                   height={'100%'}
                   borderRadius={12}
+                  resizeMode="contain"
+                  fallback={<EventImagePlaceholder borderRadius={12} />}
                   accessibilityLabel={`Image for ${event.title}`}
                 />
               ) : (
-                <View
-                  style={{
-                    flex: 1,
-                    backgroundColor: '#00000015',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    borderRadius: 12,
-                  }}
-                >
-                  <Text style={{ 
-                    color: c.muted, 
-                    fontSize: Typography.scale.caption.fontSize,
-                    fontFamily: Typography.fontFamily.body,
-                  }}>
-                    No Image
-                  </Text>
-                </View>
+                <EventImagePlaceholder borderRadius={12} />
               )}
             </View>
             <View

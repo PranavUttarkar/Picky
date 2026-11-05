@@ -16,6 +16,7 @@ import { useThemeColors } from '@/theme/ThemeProvider';
 import GradientBackground from '@/components/GradientBackground';
 import AnimatedPage from '@/components/AnimatedPage';
 import LazyImage from '@/components/LazyImage';
+import EventImagePlaceholder from '@/components/EventImagePlaceholder';
 import { supabase } from '@/services/supabase';
 import {
   getMyRSVPs,
@@ -61,17 +62,16 @@ const RSVPCard = memo(function RSVPCard({ rsvp, onPress, onCancel }: RSVPCardPro
         {/* Event image */}
         <View style={{ width: 100, height: 100 }}>
           {image ? (
-            <LazyImage uri={image} width={100} height={100} borderRadius={0} />
+            <LazyImage
+              uri={image}
+              width={100}
+              height={100}
+              borderRadius={0}
+              resizeMode="contain"
+              fallback={<EventImagePlaceholder />}
+            />
           ) : (
-            <View style={{
-              width: 100,
-              height: 100,
-              backgroundColor: c.muted + '20',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}>
-              <Ionicons name="calendar" size={32} color={c.muted} />
-            </View>
+            <EventImagePlaceholder />
           )}
         </View>
 

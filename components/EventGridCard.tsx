@@ -4,6 +4,7 @@ import { useThemeColors } from '@/theme/ThemeProvider';
 import { ThreeDCard, ThreeDButton } from '@/components/ThreeD';
 import LazyImage from '@/components/LazyImage';
 import ImageGallery from '@/components/ImageGallery';
+import EventImagePlaceholder from '@/components/EventImagePlaceholder';
 import Avatar from '@/components/Avatar';
 import dayjs from 'dayjs';
 import { Ionicons } from '@expo/vector-icons';
@@ -97,26 +98,13 @@ export const EventGridCard: React.FC<EventGridCardProps> = memo(
                 <ImageGallery
                   images={imgs}
                   height={imageHeight}
+                  resizeMode="contain"
+                  fallback={<EventImagePlaceholder />}
                   autoPlayOnHover={Platform.OS === 'web'}
                   onPressImage={() => onOpenDetails()}
                 />
               ) : (
-                <View
-                  style={{
-                    flex: 1,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    backgroundColor: '#00000010',
-                  }}
-                >
-                  <Text style={{ 
-                    color: c.muted, 
-                    fontSize: Typography.scale.bodySmall.fontSize,
-                    fontFamily: Typography.fontFamily.body,
-                  }}>
-                    No Image
-                  </Text>
-                </View>
+                <EventImagePlaceholder />
               )}
             </View>
 

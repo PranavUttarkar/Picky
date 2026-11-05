@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { ReactNode, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Image,
@@ -22,6 +22,7 @@ interface LazyImageProps {
   accessibilityLabel?: string;
   onError?: () => void;
   onLoad?: () => void;
+  fallback?: ReactNode;
 }
 
 /**
@@ -39,9 +40,14 @@ const LazyImageBase: React.FC<LazyImageProps> = ({
   accessibilityLabel,
   onError,
   onLoad,
+  fallback,
 }) => {
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    setLoaded(false);
+    setFailed(false);
+  }, [uri]);
   const proxied = useMemo(() => {
     // Try to pass numeric width/height when available to help proxy resize & cache
     const wNum = typeof width === 'number' ? width : undefined;
@@ -63,7 +69,7 @@ const LazyImageBase: React.FC<LazyImageProps> = ({
           <ActivityIndicator size="small" color={Platform.OS === 'ios' ? '#888' : '#ccc'} />
         </View>
       ) : null}
-      {!failed ? (
+      {failed ? fallback : (
         <Image
           source={{ uri: proxied }}
           onError={() => {
@@ -98,5 +104,6 @@ const propsAreEqual = (prev: LazyImageProps, next: LazyImageProps) =>
   prev.borderRadius === next.borderRadius &&
   prev.resizeMode === next.resizeMode &&
   prev.accessibilityLabel === next.accessibilityLabel &&
+  prev.fallback === next.fallback &&
   prev.skeletonColor === next.skeletonColor;
 export default React.memo(LazyImageBase, propsAreEqual);

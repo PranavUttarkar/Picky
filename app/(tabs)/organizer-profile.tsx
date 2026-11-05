@@ -38,6 +38,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { updateUserProfile } from '@/services/friends';
 import CreateEventModal from '@/components/CreateEventModal';
 import LazyImage from '@/components/LazyImage';
+import EventImagePlaceholder from '@/components/EventImagePlaceholder';
 import dayjs from 'dayjs';
 
 // Organization tags
@@ -79,12 +80,11 @@ const CompactEventCard = memo(function CompactEventCard({ event, onPress }: { ev
             width="100%"
             height="100%"
             borderRadius={0}
-            resizeMode="cover"
+            resizeMode="contain"
+            fallback={<EventImagePlaceholder />}
           />
         ) : (
-          <View style={{ width: '100%', height: '100%', backgroundColor: c.muted + '20', alignItems: 'center', justifyContent: 'center' }}>
-            <Ionicons name="calendar-outline" size={24} color={c.muted} />
-          </View>
+          <EventImagePlaceholder />
         )}
       </View>
       <Text style={{

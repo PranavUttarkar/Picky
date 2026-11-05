@@ -107,7 +107,27 @@ def image_value(item: dict[str, Any], soup: BeautifulSoup, base: str) -> str | N
         image = image[0] if image else None
     if isinstance(image, dict):
         image = image.get("url")
-    return abs_url(str(image), base) if image else abs_url(meta(soup, "og:image", "twitter:image"), base)
+    raw_url = abs_url(str(image), base) if image else abs_url(meta(soup, "og:image", "twitter:image"), base)
+    return full_resolution_livewhale_image(raw_url) if raw_url else None
+
+
+def full_resolution_livewhale_image(url: str) -> str:
+    """Drop LiveWhale's tiny/cropped thumbnail transforms and use the original."""
+    parsed = urlparse(url)
+    if "calendar.tamu.edu" not in parsed.netloc.lower() or "/live/image/" not in parsed.path:
+        return url
+    segments = parsed.path.split("/")
+    try:
+        gid_index = segments.index("gid")
+        gid = segments[gid_index + 1]
+        filename = segments[-1]
+    except (ValueError, IndexError):
+        return url
+    if not filename or not gid:
+        return url
+    # A width-only transform keeps the source aspect ratio while avoiding the
+    # tiny 80px square thumbnails and avoiding downloads of huge originals.
+    return f"{parsed.scheme}://{parsed.netloc}/live/image/gid/{gid}/width/1600/{filename}"
 
 
 def normalize_identity_part(value: Any) -> str:
@@ -287,6 +307,8 @@ def calendar_api_records() -> list[dict[str, Any]]:
         if isinstance(image, dict):
             image = image.get("url") or image.get("src")
         image_url = abs_url(str(image), url) if image else None
+        if image_url:
+            image_url = full_resolution_livewhale_image(image_url)
         description = item.get("description") or item.get("summary")
         if description:
             description = BeautifulSoup(str(description), "html.parser").get_text("\n", strip=True)

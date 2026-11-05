@@ -29,6 +29,7 @@ import { getMyGroups } from '@/services/groups';
 import { getOnboarding, saveOnboarding } from '@/services/profile';
 import type { Event, Restaurant } from '@/types/models';
 import LazyImage from '@/components/LazyImage';
+import EventImagePlaceholder from '@/components/EventImagePlaceholder';
 
 // Popular interests for quick selection
 const POPULAR_INTERESTS = [
@@ -127,12 +128,11 @@ function CompactEventCard({ event, onPress }: { event: Event & { match_percent?:
             width="100%"
             height="100%"
             borderRadius={0}
-            resizeMode="cover"
+            resizeMode="contain"
+            fallback={<EventImagePlaceholder />}
           />
         ) : (
-          <View style={[styles.compactImage, { backgroundColor: c.muted + '20', alignItems: 'center', justifyContent: 'center' }]}>
-            <Ionicons name="calendar-outline" size={24} color={c.muted} />
-          </View>
+          <EventImagePlaceholder />
         )}
         {(event as any).match_percent && (
           <View style={styles.matchBadgeContainer}>

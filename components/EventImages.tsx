@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text } from 'react-native';
 import LazyImage from '@/components/LazyImage';
+import EventImagePlaceholder from '@/components/EventImagePlaceholder';
 
 export interface EventImagesProps {
   images: string[];
@@ -31,9 +32,9 @@ export const EventImages: React.FC<EventImagesProps> = ({
   borderRadius = 16,
   variant = 'detail',
 }) => {
-  if (!images || !images.length) return null;
+  if (!images || !images.length) return <EventImagePlaceholder style={{ height: height ?? (variant === 'card' ? 160 : 220) }} borderRadius={borderRadius} />;
   const clean = images.filter(Boolean);
-  if (!clean.length) return null;
+  if (!clean.length) return <EventImagePlaceholder style={{ height: height ?? (variant === 'card' ? 160 : 220) }} borderRadius={borderRadius} />;
 
   const h = height ?? (variant === 'card' ? 160 : 220);
   const count = clean.length;
@@ -43,13 +44,17 @@ export const EventImages: React.FC<EventImagesProps> = ({
   // Single image straightforward
   if (display.length === 1) {
     return (
-      <LazyImage
-        uri={display[0]}
-        width={'100%'}
-        height={h}
-        borderRadius={borderRadius}
-        accessibilityLabel="Event image"
-      />
+      <View style={{ width: '100%', height: h, backgroundColor: '#500000', borderRadius, overflow: 'hidden' }}>
+        <LazyImage
+          uri={display[0]}
+          width="100%"
+          height="100%"
+          borderRadius={borderRadius}
+          resizeMode="contain"
+          fallback={<EventImagePlaceholder borderRadius={borderRadius} />}
+          accessibilityLabel="Event image"
+        />
+      </View>
     );
   }
 
@@ -58,13 +63,14 @@ export const EventImages: React.FC<EventImagesProps> = ({
     return (
       <View style={{ flexDirection: 'row', width: '100%', height: h, gap: 6 }}>
         {display.map((u, i) => (
-          <View key={i} style={{ flex: 1 }}>
+          <View key={i} style={{ flex: 1, backgroundColor: '#500000', borderRadius, overflow: 'hidden' }}>
             <LazyImage
               uri={u}
               width={'100%'}
               height={h}
               borderRadius={borderRadius}
-              style={{}}
+              resizeMode="contain"
+              fallback={<EventImagePlaceholder borderRadius={borderRadius} />}
               accessibilityLabel={`Event image ${i + 1}`}
             />
           </View>
@@ -77,32 +83,38 @@ export const EventImages: React.FC<EventImagesProps> = ({
   // Left large (2/3 width), right column two stacked (1/3 width)
   return (
     <View style={{ flexDirection: 'row', width: '100%', height: h, gap: 6 }}>
-      <View style={{ flex: 2, height: h }}>
+      <View style={{ flex: 2, height: h, backgroundColor: '#500000', borderRadius, overflow: 'hidden' }}>
         <LazyImage
           uri={display[0]}
           width={'100%'}
           height={h}
           borderRadius={borderRadius}
+          resizeMode="contain"
+          fallback={<EventImagePlaceholder borderRadius={borderRadius} />}
           accessibilityLabel={`Event image 1`}
         />
       </View>
       <View style={{ flex: 1, height: h, gap: 6, justifyContent: 'space-between' }}>
-        <View style={{ flex: 1 }}>
+        <View style={{ flex: 1, backgroundColor: '#500000', borderRadius, overflow: 'hidden' }}>
           <LazyImage
             uri={display[1]}
             width={'100%'}
             height={'100%'}
             borderRadius={borderRadius}
+            resizeMode="contain"
+            fallback={<EventImagePlaceholder borderRadius={borderRadius} />}
             accessibilityLabel={`Event image 2`}
           />
         </View>
         <View style={{ flex: 1 }}>
-          <View style={{ flex: 1 }}>
+          <View style={{ flex: 1, backgroundColor: '#500000', borderRadius, overflow: 'hidden' }}>
             <LazyImage
               uri={display[2]}
               width={'100%'}
               height={'100%'}
               borderRadius={borderRadius}
+              resizeMode="contain"
+              fallback={<EventImagePlaceholder borderRadius={borderRadius} />}
               accessibilityLabel={`Event image 3`}
             />
             {overflow > 0 && showOverflowIndicator ? (

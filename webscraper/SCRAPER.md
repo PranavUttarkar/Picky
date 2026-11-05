@@ -7,6 +7,8 @@ for the university calendar and from Get Involved's paginated event listings.
 It follows event detail pages to retain source descriptions, dates, locations,
 registration links, and image URLs. Times are saved in the `America/Chicago`
 timezone; source images remain linked at their official TAMU URLs.
+For LiveWhale events, the importer replaces the 80-pixel cropped thumbnail URL
+with a width-limited 1600-pixel image URL that preserves the original aspect ratio.
 
 The importer writes directly to the existing `events` schema. It maps the
 primary image to both `image_url` and `image_urls`, keeps coordinates when
