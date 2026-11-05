@@ -11,6 +11,29 @@ const updateEventLimiter = createRateLimiter({ maxRequests: 10, windowMs: 60000,
 export type ScoredEvent = Event & { match_percent?: number };
 // ... rest of imports/types ...
 
+const IMAGELESS_EVENT_PENALTY = 15;
+
+function rankScoredEvents(
+  scores: any[],
+  events: Event[],
+  limit: number,
+): ScoredEvent[] {
+  const scoreMap = new Map<number, number>(
+    scores.map((score) => [Number(score.event_id), Number(score.match_percent ?? 0)]),
+  );
+  return events
+    .map((event) => {
+      const hasImage = Boolean(event.image_url || (event.image_urls?.length ?? 0) > 0);
+      const rawScore = scoreMap.get(Number(event.id)) ?? 0;
+      return {
+        ...event,
+        match_percent: Math.max(0, rawScore - (hasImage ? 0 : IMAGELESS_EVENT_PENALTY)),
+      };
+    })
+    .sort((a, b) => (b.match_percent ?? 0) - (a.match_percent ?? 0))
+    .slice(0, limit);
+}
+
 // Standard event select with creator info
 const EVENT_SELECT_WITH_CREATOR = `
   id, title, description, image_url, image_urls, date_time, end_time, location, tags,
@@ -26,7 +49,7 @@ export async function getTopUserMatches(limit = 4): Promise<ScoredEvent[]> {
   const filtered = (scores ?? [])
     .filter((s: any) => (s.match_percent ?? 0) > 0)
     .sort((a: any, b: any) => (b.match_percent ?? 0) - (a.match_percent ?? 0))
-    .slice(0, limit);
+    .slice(0, Math.max(limit * 5, limit));
   const ids = filtered.map((s: any) => Number(s.event_id));
   if (ids.length === 0) return [];
   const { data: events, error: evErr } = await supabase
@@ -35,13 +58,7 @@ export async function getTopUserMatches(limit = 4): Promise<ScoredEvent[]> {
     .in('id', ids)
     .gte('date_time', nowIso);
   if (evErr) throw evErr;
-  const scoreMap = new Map<number, number>(filtered.map((s: any) => [Number(s.event_id), Number(s.match_percent ?? 0)]));
-  const byId = new Map<number, Event>((events ?? []).map((e: any) => [Number(e.id), e as Event]));
-  const ordered: ScoredEvent[] = ids
-    .map((id: number) => byId.get(id))
-    .filter(Boolean)
-    .map((e: any) => ({ ...(e as Event), match_percent: scoreMap.get(Number(e!.id)) }));
-  return ordered;
+  return rankScoredEvents(filtered, (events ?? []) as Event[], limit);
 }
 
 export async function getTopGroupMatches(groupId: number, limit = 4): Promise<ScoredEvent[]> {
@@ -51,7 +68,7 @@ export async function getTopGroupMatches(groupId: number, limit = 4): Promise<Sc
   const filtered = (scores ?? [])
     .filter((s: any) => (s.match_percent ?? 0) > 0)
     .sort((a: any, b: any) => (b.match_percent ?? 0) - (a.match_percent ?? 0))
-    .slice(0, limit);
+    .slice(0, Math.max(limit * 5, limit));
   const ids = filtered.map((s: any) => Number(s.event_id));
   if (ids.length === 0) return [];
   const { data: events, error: evErr } = await supabase
@@ -60,13 +77,7 @@ export async function getTopGroupMatches(groupId: number, limit = 4): Promise<Sc
     .in('id', ids)
     .gte('date_time', nowIso);
   if (evErr) throw evErr;
-  const scoreMap = new Map<number, number>(filtered.map((s: any) => [Number(s.event_id), Number(s.match_percent ?? 0)]));
-  const byId = new Map<number, Event>((events ?? []).map((e: any) => [Number(e.id), e as Event]));
-  const ordered: ScoredEvent[] = ids
-    .map((id: number) => byId.get(id))
-    .filter(Boolean)
-    .map((e: any) => ({ ...(e as Event), match_percent: scoreMap.get(Number(e!.id)) }));
-  return ordered;
+  return rankScoredEvents(filtered, (events ?? []) as Event[], limit);
 }
 
 export async function searchEvents(query: string, offset = 0, limit = 20): Promise<Event[]> {

@@ -34,6 +34,32 @@ HEADERS = {
 }
 SESSION = requests.Session()
 SESSION.headers.update(HEADERS)
+GETINVOLVED_READER = "https://r.jina.ai/http://"
+LAST_READER_REQUEST_AT = 0.0
+
+
+def reader_markdown_to_soup(markdown: str) -> BeautifulSoup:
+    """Turn the public reader's Markdown response into parseable page text."""
+    lines = markdown.splitlines()
+    html: list[str] = []
+    title_match = re.search(r"(?m)^Title:\s*(.+)$", markdown)
+    if title_match:
+        page_title = title_match.group(1).split(" | Events | ", 1)[0].strip()
+        html.append(f"<h1>{page_title}</h1>")
+    for line in lines:
+        line = line.strip()
+        if not line or line.startswith(("Title:", "URL Source:", "Final URL:", "Markdown Content:")):
+            continue
+        heading = re.match(r"^#{1,6}\s+(.+)$", line)
+        if heading:
+            html.append(f"<h2>{heading.group(1)}</h2>")
+            continue
+        # Convert Markdown links and images so listing links and event images remain discoverable.
+        line = re.sub(r"!\[([^\]]*)\]\((https?://[^)]+)\)", r'<img alt="\1" src="\2">', line)
+        line = re.sub(r"\[([^\]]+)\]\((https?://[^)]+)\)", r'<a href="\2">\1</a>', line)
+        line = re.sub(r"^\s*[*-]\s+", "", line)
+        html.append(f"<p>{line}</p>")
+    return BeautifulSoup("\n".join(html), "html.parser")
 
 
 def text(node: Any) -> str:
@@ -41,7 +67,18 @@ def text(node: Any) -> str:
 
 
 def fetch(url: str) -> BeautifulSoup:
+    global LAST_READER_REQUEST_AT
     response = SESSION.get(url, timeout=30)
+    if response.status_code == 403 and "getinvolved.tamu.edu" in urlparse(url).netloc.lower():
+        reader_url = GETINVOLVED_READER + url.removeprefix("https://").removeprefix("http://")
+        print(f"Get Involved blocked direct access; retrying through public text reader: {url}", file=sys.stderr)
+        pause = 3.1 - (time.monotonic() - LAST_READER_REQUEST_AT)
+        if pause > 0:
+            time.sleep(pause)
+        reader_response = SESSION.get(reader_url, timeout=60)
+        LAST_READER_REQUEST_AT = time.monotonic()
+        reader_response.raise_for_status()
+        return reader_markdown_to_soup(reader_response.text)
     response.raise_for_status()
     return BeautifulSoup(response.text, "html.parser")
 
@@ -108,6 +145,12 @@ def image_value(item: dict[str, Any], soup: BeautifulSoup, base: str) -> str | N
     if isinstance(image, dict):
         image = image.get("url")
     raw_url = abs_url(str(image), base) if image else abs_url(meta(soup, "og:image", "twitter:image"), base)
+    if not raw_url and "getinvolved.tamu.edu" in urlparse(base).netloc.lower():
+        for candidate in soup.select("img[src]"):
+            candidate_url = abs_url(candidate.get("src"), base)
+            if candidate_url and "/storage/organizations/" in candidate_url and "logo" not in urlparse(candidate_url).path.lower():
+                raw_url = candidate_url
+                break
     return full_resolution_livewhale_image(raw_url) if raw_url else None
 
 
@@ -177,7 +220,7 @@ def event_record(url: str, source: str, soup: BeautifulSoup) -> dict[str, Any] |
             if range_match:
                 end = parse_datetime(range_match.group(2), default_date=start.date() if start else None)
     if not location:
-        where_match = re.search(r"Where\s+(.+?)(?:\s+Description\b|$)", page_text, re.I)
+        where_match = re.search(r"Where\s+(.+?)(?:\s+View All Occurrences\b|\s+All Occurrences\b|\s+Description\b|$)", page_text, re.I)
         if where_match:
             location = where_match.group(1).strip()
     if not start:
@@ -233,8 +276,9 @@ def listing_links(url: str, source: str) -> set[str]:
     page_url = url
     for page_number in range(1, 51):
         if source == "tamu_getinvolved":
-            query = urlencode({"page": page_number})
-            page_url = f"{url}?{query}" if page_number > 1 else url
+            # The site paginates with Livewire; the ordinary page= query is ignored.
+            # A larger supported page size returns the entire current upcoming list.
+            page_url = f"{url}?{urlencode({'limit': 100})}"
         if page_url in seen_pages:
             break
         seen_pages.add(page_url)
@@ -249,7 +293,7 @@ def listing_links(url: str, source: str) -> set[str]:
                 if parsed.netloc.endswith("calendar.tamu.edu") and re.search(r"/events?/", parsed.path):
                     links.add(href.split("#")[0])
             else:
-                if parsed.netloc.endswith("getinvolved.tamu.edu") and re.search(r"/events?/\d+", parsed.path):
+                if parsed.netloc.endswith("getinvolved.tamu.edu") and re.search(r"/events?/\d+(?:/\d+)?/?$", parsed.path):
                     links.add(href.split("#")[0].rstrip("/"))
         if source == "tamu_getinvolved":
             if len(links) == prior_count:
