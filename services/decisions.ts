@@ -1,6 +1,7 @@
 import { supabase } from '@/services/supabase';
 import type { Event } from '@/types/models';
 import { createRateLimiter } from '@/utils/rateLimiter';
+import { eventHasImage } from '@/utils/eventImages';
 
 // Rate limiter for decision preferences
 const upsertDecisionLimiter = createRateLimiter({ maxRequests: 10, windowMs: 60000, key: 'decisions:upsert' });
@@ -62,7 +63,7 @@ export async function getRecommendationsForPoll(pollId: number): Promise<(Event 
   const filtered = (scores ?? [])
     .filter((s: any) => (s.match_percent ?? 0) > 0)
     .sort((a: any, b: any) => (b.match_percent ?? 0) - (a.match_percent ?? 0))
-    .slice(0, 5);
+    .slice(0, 50);
   const ids = filtered.map((s: any) => Number(s.event_id));
   if (ids.length === 0) return [];
   const nowIso = new Date().toISOString();
@@ -72,5 +73,8 @@ export async function getRecommendationsForPoll(pollId: number): Promise<(Event 
     .in('id', ids)
     .gte('date_time', nowIso);
   const scoreMap = new Map<number, number>(filtered.map((s: any) => [Number(s.event_id), Number(s.match_percent ?? 0)]));
-  return ((events ?? []) as Event[]).map((e: any) => ({ ...e, match_percent: scoreMap.get(Number(e.id)) }));
+  return ((events ?? []) as Event[])
+    .filter(eventHasImage)
+    .map((e: any) => ({ ...e, match_percent: scoreMap.get(Number(e.id)) }))
+    .slice(0, 5);
 }
