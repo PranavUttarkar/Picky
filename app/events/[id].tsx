@@ -743,7 +743,6 @@ export default function EventDetails() {
               : event.image_url
               ? [event.image_url]
               : [];
-            if (!imgs.length) return null;
             return <EventImages images={imgs} variant="detail" />;
           })()}
 
