@@ -92,7 +92,7 @@ const LazyImageBase: React.FC<LazyImageProps> = ({
             style as any,
           ]}
         />
-      ) : null}
+      )}
     </View>
   );
 };
